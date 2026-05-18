@@ -1,0 +1,13 @@
+{
+  "appId": "com.taskappcrm.app",
+  "appName": "Task App CRM",
+  "webDir": "../../dist/offline",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Camera": {
+      "presentationStyle": "fullscreen"
+    }
+  }
+}

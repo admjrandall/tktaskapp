@@ -1,0 +1,8 @@
+packages:
+  - 'packages/*'
+  - 'apps/*'
+allowBuilds:
+  esbuild: false
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false

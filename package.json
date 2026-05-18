@@ -1,0 +1,23 @@
+{
+  "name": "taskapp-crm",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Offline-first AES-256-GCM encrypted CRM — monorepo",
+  "scripts": {
+    "build:offline": "vite build --config apps/offline/vite.config.ts && node generate-csp.mjs dist/offline/index.html",
+    "build:sync": "vite build --config apps/sync/vite.config.ts    && node generate-csp.mjs dist/sync/index.html",
+    "build:dataverse": "vite build --config apps/dataverse/vite.config.ts",
+    "build:all": "pnpm run build:offline && pnpm run build:sync && pnpm run build:dataverse",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "typescript": "^5.5.3",
+    "vite": "^5.4.0",
+    "vite-plugin-singlefile": "^2.0.1"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0"
+  },
+  "packageManager": "pnpm@11.1.2+sha512.415a1cc25974731e75455c1468371be74c5aa5fb7621b50d4056d222451609f11412f23fd602e6169f1e060466641f798597e1be961a10688836a67b16569499"
+}
