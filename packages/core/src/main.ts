@@ -12,7 +12,7 @@ import {
 import type { AppState } from './state.js';
 import { dbInit, checkDueDates, markNotificationRead, markAllNotificationsRead, softDelete, getAdapter, getStore } from './db.js';
 import { _migrateLocalStorageToIDB, verifyPassword } from './vault.js';
-import { loadSessionKey, cacheSessionKey } from './session.js';
+import { loadSessionKey, cacheSessionKey, clearSessionKey, hasSessionSentinel } from './session.js';
 import { fsInit, isFsReady, getFsLastSave, fsPickFile, fsWriteVault, fsUnlink } from './fs.js';
 
 // ── View imports ──────────────────────────────────────────────────────────────
@@ -403,13 +403,12 @@ export async function init(): Promise<void> {
         const toastEl = document.querySelector('.toast-container');
         const newToast = state.toast ? renderToast(state.toast) : '';
         if (toastEl) {
-          if (newToast) {
-            toastEl.insertAdjacentHTML('afterend', _rawPolicy ? _rawPolicy.createHTML(newToast) as unknown as string : newToast);
+          if (newToast && _rawPolicy) {
+            toastEl.insertAdjacentHTML('afterend', _rawPolicy.createHTML(newToast) as unknown as string);
           }
           toastEl.remove();
-        } else if (newToast) {
-          if (_rawPolicy) appEl.insertAdjacentHTML('beforeend', _rawPolicy.createHTML(newToast) as unknown as string);
-          else appEl.insertAdjacentHTML('beforeend', newToast);
+        } else if (newToast && _rawPolicy) {
+          appEl.insertAdjacentHTML('beforeend', _rawPolicy.createHTML(newToast) as unknown as string);
         }
         _prevState = state;
         return;
@@ -472,6 +471,13 @@ export async function init(): Promise<void> {
       }
     }
   };
+
+  // Discard the IDB-persisted key if the tab was closed between sessions.
+  // sessionStorage is cleared on tab close but preserved across F5 reloads,
+  // so a missing sentinel means this is a fresh session, not a page refresh.
+  if (!hasSessionSentinel()) {
+    await clearSessionKey().catch(() => {});
+  }
 
   // Try session-cached key first (survives F5, clears on tab close)
   const cached = await loadSessionKey();

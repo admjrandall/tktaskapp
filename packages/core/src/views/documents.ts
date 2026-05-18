@@ -1,6 +1,7 @@
 // ── DOCUMENTS ─────────────────────────────────────────────────────────────────
 
 import { escH, formatRelative, formatFileSize, readFileAsBase64, downloadText } from '../utils.js';
+import { sanitizeDocHtml, sanitizeUrl } from '../sanitize.js';
 import { Icons } from '../icons.js';
 import { renderEmpty } from '../components.js';
 import { dbGetAll, dbGetById, dbCreate, dbUpdate, dbDelete, softDelete, nowISO } from '../db.js';
@@ -143,7 +144,7 @@ export function renderDocumentEditor(state: AppState): string {
 
   const tabs = `<div style="display:flex;gap:0;border-bottom:1px solid var(--border-subtle);background:var(--bg-surface);flex-shrink:0;padding:0 1rem"><button class="detail-tab ${_docActiveTab === 'write' ? 'active' : ''}" id="doc-tab-write">✏️ Write</button><button class="detail-tab ${_docActiveTab === 'files' ? 'active' : ''}" id="doc-tab-files">📎 Files ${docFiles.length ? `<span style="background:var(--accent);color:#fff;font-size:.6rem;padding:.1rem .35rem;border-radius:999px;margin-left:.25rem">${docFiles.length}</span>` : ''}</button></div>`;
 
-  const writeTab = `<div style="display:flex;flex:1;overflow:hidden;position:relative" id="doc-write-tab"><div class="doc-content-area" style="flex:1" id="doc-content-area-wrap"><div class="doc-content-editable" id="doc-editor" contenteditable="true" spellcheck="true">${content}</div></div>${versionPanel}</div>`;
+  const writeTab = `<div style="display:flex;flex:1;overflow:hidden;position:relative" id="doc-write-tab"><div class="doc-content-area" style="flex:1" id="doc-content-area-wrap"><div class="doc-content-editable" id="doc-editor" contenteditable="true" spellcheck="true">${sanitizeDocHtml(content)}</div></div>${versionPanel}</div>`;
 
   const aiEditBtn = _isAIReady()
     ? `<button class="btn btn-ghost btn-sm" id="doc-ai-edit-btn" title="AI Edit — rewrite this document with AI">${Icons.AI(14)} AI Edit</button>`
@@ -273,7 +274,7 @@ function _bindAIEditModal(editor: HTMLElement | null, titleInput: HTMLInputEleme
         signal: _aiEditAbort.signal,
         onToken: (full: string) => {
           accumulated = full;
-          editor.innerHTML = _mdToHtml(full);
+          editor.innerHTML = sanitizeDocHtml(_mdToHtml(full));
           // scroll to bottom as content grows
           const wrap = editor.closest('.doc-content-area') as HTMLElement | null;
           if (wrap) wrap.scrollTop = wrap.scrollHeight;
@@ -411,7 +412,7 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
         onToken: (full: string) => {
           accumulated = full;
           _lastPreview = full;
-          if (previewContent) previewContent.innerHTML = _mdToHtml(full);
+          if (previewContent) previewContent.innerHTML = sanitizeDocHtml(_mdToHtml(full));
         },
       });
       _lastPreview = accumulated;
@@ -468,7 +469,7 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
     if (!_savedRange || !_lastPreview) return;
     const sel2 = window.getSelection();
     if (sel2) { sel2.removeAllRanges(); sel2.addRange(_savedRange); }
-    document.execCommand('insertHTML', false, _mdToHtml(_lastPreview));
+    document.execCommand('insertHTML', false, sanitizeDocHtml(_mdToHtml(_lastPreview)));
     markDirty();
     _removeInlineToolbar();
   });
@@ -483,7 +484,7 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
     endRange.collapse(false);
     sel2?.removeAllRanges();
     sel2?.addRange(endRange);
-    document.execCommand('insertHTML', false, `<br>${_mdToHtml(_lastPreview)}`);
+    document.execCommand('insertHTML', false, `<br>${sanitizeDocHtml(_mdToHtml(_lastPreview))}`);
     markDirty();
     _removeInlineToolbar();
   });
@@ -558,7 +559,12 @@ export function bindDocumentEditor(): void {
       e.preventDefault();
       const cmd = (btn.dataset as DOMStringMap & { cmd: string }).cmd;
       const val = (btn.dataset as DOMStringMap & { val?: string }).val || null;
-      if (cmd === 'createLink') { const url = prompt('Enter URL:', 'https://'); if (url) document.execCommand('createLink', false, url); }
+      if (cmd === 'createLink') {
+        const raw = prompt('Enter URL:', 'https://');
+        const safeUrl = raw ? sanitizeUrl(raw) : null;
+        if (!safeUrl) { if (raw) showToast('Only http, https, and mailto links are allowed', 'error'); return; }
+        document.execCommand('createLink', false, safeUrl);
+      }
       else document.execCommand(cmd, false, val ?? undefined);
       markDirty();
     });
@@ -589,7 +595,7 @@ export function bindDocumentEditor(): void {
       const versionIdx = parseInt((item.dataset as DOMStringMap & { veridx: string }).veridx);
       const ver = (doc.versions as AnyRecord[])[versionIdx]; if (!ver) return;
       showConfirm(`Restore this version from ${formatRelative(String(ver.savedAt || ''))}?`, async () => {
-        if (editor) editor.innerHTML = String(ver.content || ''); markDirty(); showToast('Version loaded — click Save to apply', 'info');
+        if (editor) editor.innerHTML = sanitizeDocHtml(String(ver.content || '')); markDirty(); showToast('Version loaded — click Save to apply', 'info');
       });
     });
   });
@@ -650,11 +656,37 @@ export function bindDocumentEditor(): void {
   document.getElementById('doc-export-pdf')?.addEventListener('click', () => {
     const doc = _docOpenId ? dbGetById('documents', _docOpenId) as AnyRecord | null : null;
     const t = titleInput?.value || String(doc?.title || 'document');
-    const bodyContent = editor?.innerHTML || String(doc?.content || '');
-    const printWin = window.open('', '_blank');
-    if (!printWin) { showToast('Allow popups to export PDF', 'error'); return; }
-    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escH(t)}</title><style>body{font-family:system-ui,sans-serif;max-width:800px;margin:2rem auto;line-height:1.7;color:#111}h1,h2,h3{margin-top:1.5rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:.5rem}@media print{body{margin:0}}</style></head><body><h1>${escH(t)}</h1>${bodyContent}</body></html>`);
-    printWin.document.close(); printWin.focus(); setTimeout(() => { printWin.print(); printWin.close(); }, 500);
+    const safeContent = sanitizeDocHtml(editor?.innerHTML || String(doc?.content || ''));
+
+    // Build a hidden print-only overlay inside the current window instead of an
+    // unsandboxed popup — avoids document.write and allows CSP to apply.
+    const styleEl = document.createElement('style');
+    styleEl.id = 'nexus-print-style';
+    styleEl.textContent = [
+      '@media print{body>*:not(#nexus-print-root){display:none!important}',
+      '#nexus-print-root{display:block!important;position:static!important}}',
+      '@media screen{#nexus-print-root{display:none!important}}',
+      '#nexus-print-root{font-family:system-ui,sans-serif;max-width:800px;margin:2rem auto;line-height:1.7;color:#111}',
+      '#nexus-print-root h1,#nexus-print-root h2,#nexus-print-root h3{margin-top:1.5rem}',
+      '#nexus-print-root table{border-collapse:collapse;width:100%}',
+      '#nexus-print-root th,#nexus-print-root td{border:1px solid #ccc;padding:.5rem}',
+    ].join('');
+
+    const printRoot = document.createElement('div');
+    printRoot.id = 'nexus-print-root';
+
+    const h1El = document.createElement('h1');
+    h1El.textContent = t;
+    printRoot.appendChild(h1El);
+
+    const contentEl = document.createElement('div');
+    contentEl.innerHTML = safeContent; // DOMPurify-sanitized; rawPolicy routes via patchInnerHTML
+    printRoot.appendChild(contentEl);
+
+    document.head.appendChild(styleEl);
+    document.body.appendChild(printRoot);
+    window.print();
+    setTimeout(() => { printRoot.remove(); styleEl.remove(); }, 1000);
     showToast('Print dialog opened — save as PDF', 'info');
   });
 

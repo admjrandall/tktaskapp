@@ -7,6 +7,16 @@
 
 import { KEYS_DB_NAME, SESSION_CRYPTOKEY_STORE } from './constants.js';
 
+// sessionStorage sentinel: set when a key is cached, cleared on explicit logout.
+// Because sessionStorage is cleared when the tab is closed (but preserved on F5),
+// a missing sentinel at startup means the previous session tab was closed and the
+// IDB-persisted CryptoKey must be discarded before we try to use it.
+const _SESSION_SENTINEL = 'nexus_session_active';
+
+export function hasSessionSentinel(): boolean {
+  return sessionStorage.getItem(_SESSION_SENTINEL) === '1';
+}
+
 function _keysDbOpen(): Promise<IDBDatabase> {
   return new Promise((res, rej) => {
     const req = indexedDB.open(KEYS_DB_NAME, 1);
@@ -25,6 +35,7 @@ export async function cacheSessionKey(key: CryptoKey): Promise<void> {
       tx.oncomplete = () => res();
       tx.onerror = () => rej(tx.error);
     });
+    sessionStorage.setItem(_SESSION_SENTINEL, '1');
   } catch (e) { console.warn('[auth] cacheSessionKey failed:', (e as Error).message); }
 }
 
@@ -50,4 +61,5 @@ export async function clearSessionKey(): Promise<void> {
       tx.onerror = () => rej(tx.error);
     });
   } catch (e) { console.warn('[auth] clearSessionKey failed:', (e as Error).message); }
+  sessionStorage.removeItem(_SESSION_SENTINEL);
 }

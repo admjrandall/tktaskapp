@@ -12,9 +12,18 @@ import { fsInit, fsSetHandle } from './fs.js';
 import { SALT_KEY, VERIFY_KEY, VAULT_KEY } from './constants.js';
 import { _vaultMetaSet } from './vault.js';
 
-// ── Brute-force lockout state ─────────────────────────────────────────────
-let _authFailCount = 0;
-let _authLockedUntil = 0;
+// ── Brute-force lockout state (sessionStorage — persists across F5, cleared on tab close) ─
+const _SS_FAIL_COUNT  = 'nexus_auth_fail_count';
+const _SS_LOCKED_UNTIL = 'nexus_auth_locked_until';
+
+function _getFailCount(): number  { return parseInt(sessionStorage.getItem(_SS_FAIL_COUNT)  || '0', 10) || 0; }
+function _getLockedUntil(): number { return parseInt(sessionStorage.getItem(_SS_LOCKED_UNTIL) || '0', 10) || 0; }
+function _setFailCount(n: number): void  { sessionStorage.setItem(_SS_FAIL_COUNT,  String(n)); }
+function _setLockedUntil(n: number): void { sessionStorage.setItem(_SS_LOCKED_UNTIL, String(n)); }
+function _resetLockout(): void {
+  sessionStorage.removeItem(_SS_FAIL_COUNT);
+  sessionStorage.removeItem(_SS_LOCKED_UNTIL);
+}
 
 export async function renderAuth(): Promise<string> {
   const fr = await isFirstRun();
@@ -157,27 +166,27 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
         onSuccess(key);
       } else {
         // Check lockout before attempting verify
-        if (Date.now() < _authLockedUntil) {
-          const secs = Math.ceil((_authLockedUntil - Date.now()) / 1000);
+        if (Date.now() < _getLockedUntil()) {
+          const secs = Math.ceil((_getLockedUntil() - Date.now()) / 1000);
           showErr(`Too many failed attempts. Try again in ${secs}s.`);
           if (btn) btn.disabled = false;
           if (lbl) lbl.textContent = 'Unlock';
           return;
         }
         if (!(await verifyPassword(key))) {
-          _authFailCount++;
-          const delay = Math.min(30000, 500 * Math.pow(2, _authFailCount - 1));
-          _authLockedUntil = Date.now() + delay;
+          const newCount = _getFailCount() + 1;
+          _setFailCount(newCount);
+          const delay = Math.min(30000, 500 * Math.pow(2, newCount - 1));
+          _setLockedUntil(Date.now() + delay);
           const secs = Math.ceil(delay / 1000);
-          showErr(`Incorrect password.${_authFailCount >= 3 ? ` Next attempt allowed in ${secs}s.` : ''}`);
+          showErr(`Incorrect password.${newCount >= 3 ? ` Next attempt allowed in ${secs}s.` : ''}`);
           if (btn) btn.disabled = false;
           if (lbl) lbl.textContent = 'Unlock';
           const pwEl = document.getElementById('auth-password') as HTMLInputElement | null;
           if (pwEl) { pwEl.value = ''; pwEl.focus(); }
           return;
         }
-        _authFailCount = 0;
-        _authLockedUntil = 0;
+        _resetLockout();
         onSuccess(key);
       }
     } catch (_err) {
