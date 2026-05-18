@@ -8,7 +8,7 @@ import {
   getState, setState, showToast, showConfirm, reloadData, setTheme,
 } from '../state.js';
 import type { AppState } from '../state.js';
-import { changePassword, exportEncryptedBackup, importEncryptedBackup, exportJSON, importJSON } from '../vault.js';
+import { changePassword, exportEncryptedBackup, importEncryptedBackup, exportJSON, importJSON, initCrypto, verifyPassword } from '../vault.js';
 import { cacheSessionKey, clearSessionKey } from '../session.js';
 import { _idbClearStore } from '../idb-data.js';
 import { _vaultDbOpen } from '../vault.js';
@@ -495,9 +495,48 @@ export function renderSettings(state: AppState): string {
       </div>
       <div class="card" style="padding:.25rem 1.25rem">${items}</div>`;
   } else {
-    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">About</h2><div class="card" style="padding:1.5rem;text-align:center"><div style="font-size:2rem;font-weight:700;letter-spacing:-.04em;margin-bottom:.25rem">taskapp <span style="color:var(--accent)">CRM</span></div><div style="color:var(--text-tertiary);font-size:.875rem;margin-bottom:1rem">v2.0 · Offline · Encrypted</div><div style="font-size:.8rem;color:var(--text-secondary);line-height:1.8"><div>Vanilla JS · No dependencies</div>${isOTOnlyMode() ? '<div>AI: Gemini Nano (Chrome Built-in AI)</div>' : '<div>AI: Gemma 4 E4B via Transformers.js</div>'}<div>Encryption: AES-256-GCM (Web Crypto)</div></div></div>`;
+    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">About</h2>
+      <div class="card" style="padding:1.5rem;text-align:center;margin-bottom:1rem">
+        <div style="font-size:2rem;font-weight:700;letter-spacing:-.04em;margin-bottom:.25rem">taskapp <span style="color:var(--accent)">CRM</span></div>
+        <div style="color:var(--text-tertiary);font-size:.875rem;margin-bottom:1rem">v2.0 · Offline · Encrypted</div>
+        <div style="font-size:.8rem;color:var(--text-secondary);line-height:1.8">
+          <div>Vanilla JS · No dependencies</div>
+          ${isOTOnlyMode() ? '<div>AI: Gemini Nano (Chrome Built-in AI)</div>' : '<div>AI: Gemma 4 E4B via Transformers.js</div>'}
+          <div>Encryption: AES-256-GCM (Web Crypto)</div>
+        </div>
+      </div>
+      <div class="card" style="padding:1.25rem">
+        <div style="font-weight:600;margin-bottom:.75rem">Privacy Notice</div>
+        <div style="font-size:.875rem;color:var(--text-secondary);line-height:1.7">
+          <p style="margin:0 0 .625rem">Task App CRM is a fully <strong>offline, local-only</strong> application. All data you enter is stored exclusively in your browser's IndexedDB, encrypted with AES-256-GCM using a key derived from your master password (PBKDF2-HMAC-SHA-256, 600,000 iterations).</p>
+          <p style="margin:0 0 .625rem"><strong>No data is transmitted to any server.</strong> No telemetry, analytics, crash reports, or usage data is collected or sent anywhere.</p>
+          <p style="margin:0 0 .625rem">If you use the optional AI features with a local Ollama server or cloud AI provider, queries are sent to that endpoint only. Queries are not logged by this application except in the encrypted audit log you control.</p>
+          <p style="margin:0 0 .625rem">Your data is protected by your master password and lives entirely on your device. Clearing browser data or using a different browser will result in data loss unless you have linked a vault file or exported a backup.</p>
+          <p style="margin:0"><strong>Your rights (GDPR/CCPA):</strong> You have full control — export, import, or permanently delete all your data at any time from Settings → Data &amp; Backup and Settings → Security → Danger Zone.</p>
+        </div>
+      </div>`;
   }
   return `<div style="display:flex;flex-direction:column;height:100%"><div class="workspace-toolbar"><span style="font-weight:600">Settings</span></div><div style="flex:1;display:flex;overflow:hidden"><div style="padding:1rem .75rem;border-right:1px solid var(--border-subtle);background:var(--bg-base);flex-shrink:0"><div class="settings-nav">${nav}</div></div><div style="flex:1;overflow-y:auto;padding:1.5rem;max-width:640px">${body}</div></div></div>`;
+}
+
+async function requireReauth(): Promise<boolean> {
+  return new Promise(resolve => {
+    showConfirm(
+      '<div style="margin-bottom:.75rem;font-weight:600">Re-enter your master password to continue</div>' +
+      '<input class="input" type="password" id="reauth-pw" placeholder="Master password" autocomplete="current-password" style="width:100%;margin-top:.25rem">',
+      async () => {
+        const pw = (document.getElementById('reauth-pw') as HTMLInputElement | null)?.value || '';
+        if (!pw) { resolve(false); return; }
+        try {
+          const key = await initCrypto(pw);
+          const ok = await verifyPassword(key);
+          resolve(ok);
+          if (!ok) showToast('Incorrect password', 'error');
+        } catch { resolve(false); showToast('Incorrect password', 'error'); }
+      },
+      () => resolve(false),
+    );
+  });
 }
 
 export function bindSettings(state: AppState): void {
@@ -541,9 +580,11 @@ export function bindSettings(state: AppState): void {
   document.getElementById('export-encrypted')?.addEventListener('click', async () => {
     const pw = (document.getElementById('backup-pw') as HTMLInputElement | null)?.value;
     if (!pw) { showToast('Enter backup password', 'error'); return; }
+    if (!(await requireReauth())) return;
     try { const b = await exportEncryptedBackup(_state.cryptoKey!, pw); downloadText(`taskapp-backup-${new Date().toISOString().split('T')[0]}.taskappbak`, b); showToast('Backup exported', 'success'); } catch { showToast('Export failed', 'error'); }
   });
   document.getElementById('export-json')?.addEventListener('click', async () => {
+    if (!(await requireReauth())) return;
     try { const j = await exportJSON(_state.cryptoKey!); downloadText('taskapp-data.json', j, 'application/json'); showToast('JSON exported', 'success'); } catch { showToast('Export failed', 'error'); }
   });
   document.getElementById('import-file')?.addEventListener('change', async (e) => {

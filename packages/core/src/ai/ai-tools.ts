@@ -73,7 +73,7 @@ export const AI_TOOLS: Record<string, { desc: string; args: string[] }> = {
   start_timer:      { desc: 'Start a time-tracking timer. taskId_or_name optional. description optional.', args: ['taskId_or_name?', 'description?'] },
   stop_timer:       { desc: 'Stop the currently running timer.', args: [] },
   get_running_timer:{ desc: 'Return info about the currently running timer.', args: [] },
-  navigate:         { desc: 'Switch the UI to a view: dashboard|clients|departments|projects|tasks|people|calendar|time|reports|settings|trash|ai.', args: ['view'] },
+  navigate:         { desc: 'Switch the UI to a view: dashboard|clients|departments|projects|tasks|people|calendar|time|reports|ai. Do NOT navigate to settings or trash.', args: ['view'] },
   log_communication:{ desc: 'Log a communication. type: Email|Call|Meeting|Note|Other. relatedTo: optional {store, id_or_name}. body: text.', args: ['type', 'body', 'relatedTo?', 'subject?'] },
   attach_file:      { desc: 'Register a file reference on a record. name + optional url/path + relatedTo {store, id_or_name}.', args: ['name', 'relatedTo', 'url?'] },
   list_files:       { desc: 'List files, optionally filtered by relatedTo {store, id_or_name}.', args: ['relatedTo?'] },
@@ -304,8 +304,8 @@ export async function execTool(tool: string, args: AnyRecord): Promise<unknown> 
       return { running: true, since: r['startedAt'], task: task ? task['title'] : null, description: r['description'] };
     }
     case 'navigate': {
-      const valid = ['dashboard', 'clients', 'departments', 'projects', 'tasks', 'people', 'calendar', 'time', 'reports', 'settings', 'trash', 'ai'];
-      if (!valid.includes(String(args['view']))) throw new Error(`Unknown view: ${args['view']}`);
+      const ALLOWED_VIEWS = ['dashboard', 'clients', 'departments', 'projects', 'tasks', 'people', 'calendar', 'time', 'reports', 'ai'];
+      if (!ALLOWED_VIEWS.includes(String(args['view']))) throw new Error(`Cannot navigate to "${args['view']}"`);
       setTimeout(() => navigate(String(args['view'])), 50);
       return { navigated: args['view'] };
     }

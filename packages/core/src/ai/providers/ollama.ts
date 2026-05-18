@@ -89,7 +89,9 @@ export async function probeOllama(
   url: string,
 ): Promise<{ state: string; version?: string; models?: string[]; error?: string }> {
   const u = (url || '').replace(/\/$/, '');
-  try { new URL(u); } catch { return { state: 'badurl' }; }
+  let parsed: URL;
+  try { parsed = new URL(u); } catch { return { state: 'badurl' }; }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return { state: 'badurl' };
   try {
     const r = await fetch(u + '/api/version', { signal: AbortSignal.timeout(2000) });
     if (!r.ok) return { state: 'down', error: 'HTTP ' + r.status };
@@ -118,6 +120,7 @@ export async function pullOllamaModel(
   signal?: AbortSignal,
 ): Promise<void> {
   const u = (url || '').replace(/\/$/, '');
+  try { const p = new URL(u); if (p.protocol !== 'http:' && p.protocol !== 'https:') throw new Error('bad protocol'); } catch { throw new Error('Invalid Ollama URL'); }
   const resp = await fetch(u + '/api/pull', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: tag, stream: true }), signal: signal ?? null,
@@ -148,6 +151,7 @@ export async function pullOllamaModel(
 
 export async function deleteOllamaModel(tag: string, url: string): Promise<void> {
   const u = (url || '').replace(/\/$/, '');
+  try { const p = new URL(u); if (p.protocol !== 'http:' && p.protocol !== 'https:') throw new Error('bad protocol'); } catch { throw new Error('Invalid Ollama URL'); }
   const r = await fetch(u + '/api/delete', {
     method: 'DELETE', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: tag }),

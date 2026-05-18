@@ -211,6 +211,11 @@ export async function exportJSON(key: CryptoKey): Promise<string> {
   return JSON.stringify(await loadVault(key), null, 2);
 }
 
+// Stores that must never be overwritten via JSON import:
+// - trash: GDPR erasure — re-importing would restore deliberately deleted records
+// - notifications: internal state, not user-managed data
+const IMPORT_BLOCKED_STORES = new Set(['trash', 'notifications']);
+
 export async function importJSON(json: string, key: CryptoKey): Promise<unknown> {
   let v: unknown;
   try { v = JSON.parse(json); }
@@ -221,6 +226,7 @@ export async function importJSON(json: string, key: CryptoKey): Promise<unknown>
   const validStores = new Set([...STORES, ...IDB_STORES]);
   for (const [k, arr] of Object.entries(v as Record<string, unknown>)) {
     if (!validStores.has(k)) throw new Error(`Unknown store in import: "${k}"`);
+    if (IMPORT_BLOCKED_STORES.has(k)) throw new Error(`Store "${k}" cannot be imported (GDPR / internal state).`);
     if (!Array.isArray(arr)) throw new Error(`Store "${k}" must be an array`);
   }
   // IDB-backed stores (documents, conversations) are individually encrypted in
@@ -228,9 +234,9 @@ export async function importJSON(json: string, key: CryptoKey): Promise<unknown>
   const vaultData: Record<string, unknown[]> = {};
   const skippedIdb: string[] = [];
   for (const [k, arr] of Object.entries(v as Record<string, unknown[]>)) {
-    if (STORES.includes(k)) {
+    if (STORES.includes(k) && !IMPORT_BLOCKED_STORES.has(k)) {
       vaultData[k] = arr;
-    } else {
+    } else if (!STORES.includes(k)) {
       skippedIdb.push(k);
     }
   }
