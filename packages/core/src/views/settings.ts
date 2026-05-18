@@ -14,6 +14,8 @@ import { _idbClearStore } from '../idb-data.js';
 import { _vaultDbOpen } from '../vault.js';
 import { VAULT_META_STORE, TAG_COLORS } from '../constants.js';
 import { assertLocalAIEndpointAllowed, deploymentPolicy, isAITierAllowed, isOTOnlyMode } from '../deployment-policy.js';
+import { isWebAuthnAvailable } from '../webauthn.js';
+import { generateQRCodeSVG, buildOTPAuthURI, totpSecondsRemaining } from '../totp.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -108,8 +110,81 @@ export function setSettingsFsHooks(hooks: {
   _fsUnlink = hooks.fsUnlink;
 }
 
+// Security hooks — injected by main.ts
+let _lockApp: () => void = () => {};
+let _setLockTimeout: (mins: number) => void = () => {};
+let _getLockTimeout: () => number = () => 15;
+let _loadAuditLog: () => Promise<Array<{ id: string; ts: string; event: string; details: Record<string, string>; ua: string }>> = async () => [];
+let _exportAuditCSV: () => Promise<string> = async () => '';
+let _exportAuditJSON: () => Promise<string> = async () => '';
+let _purgeAuditLog: (days: number | null) => Promise<void> = async () => {};
+let _loadMFAStatus: () => Promise<{ totpEnabled: boolean; totpSecret: string }> = async () => ({ totpEnabled: false, totpSecret: '' });
+let _enableTOTP: (secret: string) => Promise<void> = async () => {};
+let _disableTOTP: () => Promise<void> = async () => {};
+let _generateNewTOTPSecret: () => Promise<string> = async () => '';
+let _loadPasskeys: () => Promise<Array<{ id: string; deviceHint?: string; createdAt: string }>> = async () => [];
+let _addPasskey: (pw: string) => Promise<unknown> = async () => null;
+let _removePasskey: (id: string) => Promise<void> = async () => {};
+let _getLastActivityAt: () => number = () => Date.now();
+
+export function setSettingsSecurityHooks(hooks: {
+  lockApp: () => void;
+  setLockTimeout: (mins: number) => void;
+  getLockTimeout: () => number;
+  loadAuditLog: typeof _loadAuditLog;
+  exportAuditCSV: typeof _exportAuditCSV;
+  exportAuditJSON: typeof _exportAuditJSON;
+  purgeAuditLog: typeof _purgeAuditLog;
+  loadMFAStatus: typeof _loadMFAStatus;
+  enableTOTP: typeof _enableTOTP;
+  disableTOTP: typeof _disableTOTP;
+  generateNewTOTPSecret: typeof _generateNewTOTPSecret;
+  loadPasskeys: typeof _loadPasskeys;
+  addPasskey: typeof _addPasskey;
+  removePasskey: typeof _removePasskey;
+  getLastActivityAt: () => number;
+}): void {
+  _lockApp = hooks.lockApp;
+  _setLockTimeout = hooks.setLockTimeout;
+  _getLockTimeout = hooks.getLockTimeout;
+  _loadAuditLog = hooks.loadAuditLog;
+  _exportAuditCSV = hooks.exportAuditCSV;
+  _exportAuditJSON = hooks.exportAuditJSON;
+  _purgeAuditLog = hooks.purgeAuditLog;
+  _loadMFAStatus = hooks.loadMFAStatus;
+  _enableTOTP = hooks.enableTOTP;
+  _disableTOTP = hooks.disableTOTP;
+  _generateNewTOTPSecret = hooks.generateNewTOTPSecret;
+  _loadPasskeys = hooks.loadPasskeys;
+  _addPasskey = hooks.addPasskey;
+  _removePasskey = hooks.removePasskey;
+  _getLastActivityAt = hooks.getLastActivityAt;
+}
+
+// Async security state — loaded lazily when section is rendered
+let _secMFAStatus: { totpEnabled: boolean; totpSecret: string } | null = null;
+let _secPasskeys: Array<{ id: string; deviceHint?: string; createdAt: string }> | null = null;
+let _secAuditEntries: Array<{ id: string; ts: string; event: string; details: Record<string, string>; ua: string }> | null = null;
+let _secAuditFilter = '';
+let _secAuditPage = 0;
+const AUDIT_PAGE_SIZE = 50;
+// TOTP setup wizard state
+let _totpSetupSecret = '';
+let _totpSetupStep: 'idle' | 'setup' | 'verify' = 'idle';
+let _totpSetupTimerInterval: ReturnType<typeof setInterval> | null = null;
+
 let _settingsSection = 'general';
 export function setSettingsSection(s: string): void { _settingsSection = s; }
+
+// Reset security state when leaving security section
+export function resetSecurityState(): void {
+  _secMFAStatus = null;
+  _secPasskeys = null;
+  _secAuditEntries = null;
+  _totpSetupSecret = '';
+  _totpSetupStep = 'idle';
+  _secAuditPage = 0;
+}
 
 export function renderSettings(state: AppState): string {
   const secs = [
@@ -178,7 +253,183 @@ export function renderSettings(state: AppState): string {
       body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:.5rem">AI</h2><div style="font-size:.875rem;color:var(--text-secondary);margin-bottom:1rem">${aiIntro}</div><div class="card" style="padding:1rem;margin-bottom:1rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap"><span style="width:10px;height:10px;border-radius:50%;background:${statusDot};flex-shrink:0"></span><div style="flex:1;min-width:200px"><div style="font-weight:600">${escH(tierLabel)}</div><div style="font-size:.75rem;color:var(--text-secondary)">${escH(modelLabel)} · ${escH(statusText)}</div></div><div style="display:flex;gap:.5rem;flex-wrap:wrap"><button class="btn btn-primary btn-sm" id="ai-open-wizard">${Icons.Settings(14)} Change AI setup</button>${p.hasCompletedOnboarding ? `<button class="btn btn-secondary btn-sm" id="ai-reconnect">${Icons.Refresh(14)} Reconnect</button>` : ''}</div></div>${tierPanel}<div class="card" style="padding:1rem;margin-bottom:1rem"><div style="font-weight:600;margin-bottom:.625rem">Behaviour</div><label style="display:flex;gap:.5rem;align-items:flex-start;font-size:.8125rem;cursor:pointer"><input type="checkbox" id="ai-auto-apply" ${p.autoApplyCreates ? 'checked' : ''}><span>Auto-apply AI actions without confirmation <span style="color:var(--text-tertiary)">(off by default)</span></span></label><div style="margin-top:.625rem"><button class="btn btn-secondary btn-sm" id="ai-clear-history">${Icons.Trash(14)} Clear chat history</button></div></div><div class="card" style="padding:1rem;border-color:#fecaca"><div style="font-weight:600;margin-bottom:.5rem;color:#dc2626">Danger zone</div><div style="display:flex;gap:.5rem;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" id="ai-forget-keys" style="color:#dc2626">Forget all API keys</button><button class="btn btn-secondary btn-sm" id="ai-reset-setup" style="color:#dc2626">Reset AI setup</button></div></div>`;
     }
   } else if (_settingsSection === 'security') {
-    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">Security</h2><div class="card" style="padding:1.25rem;margin-bottom:1rem"><div style="font-weight:600;margin-bottom:.75rem">Change Password</div><div style="display:flex;flex-direction:column;gap:.75rem"><div class="form-group"><label class="form-label">Current Password</label><input class="input" type="password" id="pw-current"></div><div class="form-group"><label class="form-label">New Password</label><input class="input" type="password" id="pw-new"></div><div class="form-group"><label class="form-label">Confirm New</label><input class="input" type="password" id="pw-confirm"></div><button class="btn btn-primary" id="change-pw-btn">Change Password</button></div></div><div class="card" style="padding:1.25rem;border-color:#fecaca"><div style="font-weight:600;margin-bottom:.5rem;color:#dc2626">Danger Zone</div><p style="font-size:.875rem;color:var(--text-secondary);margin-bottom:.75rem">Permanently erase all data and reset the app.</p><button class="btn btn-danger" id="reset-app-btn">Reset App</button></div>`;
+    const lockTimeoutMins = _getLockTimeout();
+    const lastActivity = _getLastActivityAt();
+    const lastActivityStr = lastActivity ? new Date(lastActivity).toLocaleTimeString() : 'N/A';
+
+    // ── Section 1: Session Security ──────────────────────────────────────────
+    const sessionSection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
+      <div style="font-weight:600;margin-bottom:.75rem">Session Security</div>
+      <div class="form-group" style="margin-bottom:.75rem">
+        <label class="form-label">Auto-lock after idle</label>
+        <select class="input" id="lock-timeout-select" style="width:auto">
+          <option value="0"  ${lockTimeoutMins===0?'selected':''}>Off</option>
+          <option value="5"  ${lockTimeoutMins===5?'selected':''}>5 minutes</option>
+          <option value="10" ${lockTimeoutMins===10?'selected':''}>10 minutes</option>
+          <option value="15" ${lockTimeoutMins===15?'selected':''}>15 minutes (default)</option>
+          <option value="30" ${lockTimeoutMins===30?'selected':''}>30 minutes</option>
+          <option value="60" ${lockTimeoutMins===60?'selected':''}>60 minutes</option>
+        </select>
+      </div>
+      <div style="font-size:.75rem;color:var(--text-tertiary);margin-bottom:.75rem">Last activity: ${escH(lastActivityStr)}</div>
+      <button class="btn btn-secondary btn-sm" id="lock-now-btn">${Icons.Lock(14)} Lock Now</button>
+    </div>`;
+
+    // ── Section 2: Change Password ────────────────────────────────────────────
+    const passwordSection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
+      <div style="font-weight:600;margin-bottom:.75rem">Change Password</div>
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        <div class="form-group"><label class="form-label">Current Password</label><input class="input" type="password" id="pw-current"></div>
+        <div class="form-group"><label class="form-label">New Password</label><input class="input" type="password" id="pw-new"></div>
+        <div class="form-group"><label class="form-label">Confirm New</label><input class="input" type="password" id="pw-confirm"></div>
+        <button class="btn btn-primary" id="change-pw-btn">Change Password</button>
+      </div>
+    </div>`;
+
+    // ── Section 3: MFA ────────────────────────────────────────────────────────
+    const mfaStatus = _secMFAStatus;
+    let totpSection = '';
+    if (!mfaStatus) {
+      // Not yet loaded — show loading state + trigger async load
+      totpSection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-weight:600;margin-bottom:.75rem">Two-Factor Authentication (TOTP)</div>
+        <div style="font-size:.875rem;color:var(--text-secondary)" id="totp-loading">Loading…</div>
+      </div>`;
+    } else if (_totpSetupStep === 'setup') {
+      // TOTP setup wizard — show QR code + secret
+      const otpauthURI = buildOTPAuthURI(_totpSetupSecret, 'vault');
+      const qrSVG = generateQRCodeSVG(otpauthURI);
+      const secs = totpSecondsRemaining();
+      totpSection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-weight:600;margin-bottom:.75rem">Set Up Authenticator</div>
+        <div style="font-size:.875rem;color:var(--text-secondary);margin-bottom:1rem">Scan the QR code with Microsoft Authenticator, Google Authenticator, Authy, or 1Password.</div>
+        ${qrSVG ? `<div style="background:#fff;padding:.75rem;display:inline-block;border-radius:8px;margin-bottom:1rem">${qrSVG}</div><br>` : ''}
+        <div style="margin-bottom:.75rem">
+          <div style="font-size:.75rem;color:var(--text-tertiary);margin-bottom:.25rem">Manual entry — Secret key:</div>
+          <code style="font-size:.8125rem;word-break:break-all;background:var(--bg-base);padding:.375rem .625rem;border-radius:6px;display:block">${escH(_totpSetupSecret)}</code>
+          <button class="btn btn-secondary btn-sm" id="totp-copy-secret" style="margin-top:.375rem">${Icons.Edit(12)} Copy Secret</button>
+        </div>
+        <div style="font-size:.75rem;color:var(--text-tertiary);margin-bottom:.5rem">
+          <a href="${escH(otpauthURI)}" style="color:var(--accent);word-break:break-all;font-size:.7rem">Open in authenticator app</a>
+        </div>
+        <div style="border-top:1px solid var(--border-subtle);padding-top:.875rem;margin-top:.5rem">
+          <div style="font-weight:600;margin-bottom:.5rem;font-size:.875rem">Step 2: Verify code</div>
+          <div style="font-size:.75rem;color:var(--text-tertiary);margin-bottom:.5rem" id="totp-setup-timer">Code refreshes in ${secs}s</div>
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <input class="input" type="text" id="totp-setup-code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000"
+              style="width:140px;font-size:1.25rem;letter-spacing:.2rem;text-align:center" autocomplete="one-time-code">
+            <button class="btn btn-primary btn-sm" id="totp-setup-verify">Verify &amp; Enable</button>
+          </div>
+          <div id="totp-setup-error" style="display:none;color:#f87171;font-size:.8rem;margin-top:.375rem"></div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="totp-setup-cancel" style="margin-top:.75rem">Cancel</button>
+      </div>`;
+    } else {
+      const isEnabled = mfaStatus.totpEnabled;
+      totpSection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-weight:600;margin-bottom:.75rem">Two-Factor Authentication (TOTP)</div>
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+          <span style="font-size:.8125rem;font-weight:600;color:${isEnabled ? '#10b981' : '#94a3b8'}">${isEnabled ? '✓ Enabled' : 'Disabled'}</span>
+        </div>
+        <div style="display:flex;gap:.5rem">
+          ${isEnabled
+            ? `<button class="btn btn-secondary btn-sm" id="totp-disable-btn" style="color:#dc2626">Remove TOTP</button>`
+            : `<button class="btn btn-primary btn-sm" id="totp-enable-btn">Enable TOTP</button>`}
+        </div>
+      </div>`;
+    }
+
+    // WebAuthn passkeys section (only when available)
+    let passkeySection = '';
+    if (isWebAuthnAvailable()) {
+      const passkeys = _secPasskeys || [];
+      const passkeyList = passkeys.length
+        ? passkeys.map(p => `<div style="display:flex;align-items:center;gap:.625rem;padding:.375rem 0;border-bottom:1px solid var(--border-subtle)">
+            <div style="flex:1">
+              <div style="font-size:.8125rem;font-weight:500">${escH(p.deviceHint || 'Passkey')}</div>
+              <div style="font-size:.7rem;color:var(--text-tertiary)">${formatRelative(p.createdAt)}</div>
+            </div>
+            <button class="btn btn-ghost btn-icon btn-sm" style="color:#dc2626" data-remove-passkey="${escH(p.id)}">${Icons.Delete(14)}</button>
+          </div>`).join('')
+        : `<p style="font-size:.875rem;color:var(--text-tertiary)">No passkeys registered</p>`;
+
+      passkeySection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-weight:600;margin-bottom:.75rem">Passkeys (WebAuthn)</div>
+        <div style="font-size:.8125rem;color:var(--text-secondary);margin-bottom:.75rem">Sign in with Touch ID, Face ID, or Windows Hello. Passkeys use the WebAuthn PRF extension to protect your vault.</div>
+        ${passkeyList}
+        <button class="btn btn-secondary btn-sm" id="add-passkey-btn" style="margin-top:.625rem">Add Passkey</button>
+      </div>`;
+    }
+
+    // ── Section 4: Audit Log ──────────────────────────────────────────────────
+    const auditEntries = _secAuditEntries;
+    let auditSection = '';
+    if (!auditEntries) {
+      auditSection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-weight:600;margin-bottom:.75rem">Audit Log</div>
+        <div style="font-size:.875rem;color:var(--text-secondary)" id="audit-loading">Loading…</div>
+      </div>`;
+    } else {
+      const filtered = _secAuditFilter
+        ? auditEntries.filter(e => e.event.includes(_secAuditFilter))
+        : auditEntries;
+      const paged = filtered.slice(_secAuditPage * AUDIT_PAGE_SIZE, (_secAuditPage + 1) * AUDIT_PAGE_SIZE);
+      const totalPages = Math.ceil(filtered.length / AUDIT_PAGE_SIZE);
+      const purge = localStorage.getItem('taskapp_audit_purge_days') || '90';
+      const rows = paged.map(e => `<tr>
+        <td style="padding:.375rem .5rem;font-size:.75rem;white-space:nowrap;color:var(--text-secondary)">${escH(new Date(e.ts).toLocaleString())}</td>
+        <td style="padding:.375rem .5rem;font-size:.75rem;font-weight:500">${escH(e.event)}</td>
+        <td style="padding:.375rem .5rem;font-size:.7rem;color:var(--text-tertiary);max-width:200px;overflow:hidden;text-overflow:ellipsis">${escH(JSON.stringify(e.details))}</td>
+      </tr>`).join('');
+
+      auditSection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-weight:600;margin-bottom:.75rem">Audit Log <span style="font-weight:400;font-size:.8125rem;color:var(--text-secondary)">(${filtered.length} events)</span></div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.75rem">
+          <select class="input" id="audit-filter-select" style="width:auto;height:32px;font-size:.8125rem">
+            <option value="" ${!_secAuditFilter?'selected':''}>All events</option>
+            <option value="auth" ${_secAuditFilter==='auth'?'selected':''}>Auth events</option>
+            <option value="mfa" ${_secAuditFilter==='mfa'?'selected':''}>MFA events</option>
+            <option value="app_lock" ${_secAuditFilter==='app_lock'?'selected':''}>Lock events</option>
+            <option value="vault" ${_secAuditFilter==='vault'?'selected':''}>Vault events</option>
+            <option value="ai" ${_secAuditFilter==='ai'?'selected':''}>AI events</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" id="audit-export-csv">Export CSV</button>
+          <button class="btn btn-secondary btn-sm" id="audit-export-json">Export JSON</button>
+        </div>
+        ${rows ? `<div style="overflow-x:auto;margin-bottom:.75rem"><table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="text-align:left;padding:.375rem .5rem;font-size:.75rem;color:var(--text-tertiary);border-bottom:1px solid var(--border-subtle)">Time</th>
+            <th style="text-align:left;padding:.375rem .5rem;font-size:.75rem;color:var(--text-tertiary);border-bottom:1px solid var(--border-subtle)">Event</th>
+            <th style="text-align:left;padding:.375rem .5rem;font-size:.75rem;color:var(--text-tertiary);border-bottom:1px solid var(--border-subtle)">Details</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>` : `<p style="font-size:.875rem;color:var(--text-tertiary)">No events match the filter</p>`}
+        ${totalPages > 1 ? `<div style="display:flex;gap:.5rem;align-items:center;font-size:.8125rem">
+          <button class="btn btn-ghost btn-sm" id="audit-prev" ${_secAuditPage===0?'disabled':''}>← Prev</button>
+          <span style="color:var(--text-secondary)">Page ${_secAuditPage+1} of ${totalPages}</span>
+          <button class="btn btn-ghost btn-sm" id="audit-next" ${_secAuditPage>=totalPages-1?'disabled':''}>Next →</button>
+        </div>` : ''}
+        <div style="border-top:1px solid var(--border-subtle);padding-top:.75rem;margin-top:.75rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+          <label class="form-label" style="margin:0">Auto-purge:</label>
+          <select class="input" id="audit-purge-days" style="width:auto;height:32px;font-size:.8125rem">
+            <option value="0"   ${purge==='0'?'selected':''}>Never</option>
+            <option value="30"  ${purge==='30'?'selected':''}>30 days</option>
+            <option value="90"  ${purge==='90'?'selected':''}>90 days (default)</option>
+            <option value="365" ${purge==='365'?'selected':''}>1 year</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" id="audit-purge-all" style="color:#dc2626">Purge All</button>
+        </div>
+      </div>`;
+    }
+
+    // ── Danger Zone ───────────────────────────────────────────────────────────
+    const dangerSection = `<div class="card" style="padding:1.25rem;border-color:#fecaca">
+      <div style="font-weight:600;margin-bottom:.5rem;color:#dc2626">Danger Zone</div>
+      <p style="font-size:.875rem;color:var(--text-secondary);margin-bottom:.75rem">Permanently erase all data and reset the app.</p>
+      <button class="btn btn-danger" id="reset-app-btn">Reset App</button>
+    </div>`;
+
+    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">Security</h2>${sessionSection}${passwordSection}${totpSection}${passkeySection}${auditSection}${dangerSection}`;
   } else if (_settingsSection === 'storage') {
     const hasFsApi = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
     const fsReady = _isFsReady();
@@ -431,4 +682,159 @@ export function bindSettings(state: AppState): void {
   document.getElementById('ai-reset-setup')?.addEventListener('click', () => showConfirm('Reset AI setup? You will be walked through the wizard again. Chat history is preserved.', async () => {
     _aiPrefs.hasCompletedOnboarding = false; _aiPrefs.tier = null; _saveAIPrefs(_aiPrefs); await _resetAIConnection(); showToast('AI setup reset', 'success'); _appRenderWorkspace('settings');
   }));
+
+  // ── Security section bindings ─────────────────────────────────────────────────
+  if (_settingsSection === 'security') {
+    // Lazy-load async security state and re-render once data arrives
+    if (!_secMFAStatus) {
+      _loadMFAStatus().then(status => {
+        _secMFAStatus = status;
+        _appRenderWorkspace('settings');
+      }).catch(() => {});
+    }
+    if (!_secPasskeys) {
+      _loadPasskeys().then(keys => {
+        _secPasskeys = keys;
+        _appRenderWorkspace('settings');
+      }).catch(() => {});
+    }
+    if (!_secAuditEntries) {
+      _loadAuditLog().then(entries => {
+        _secAuditEntries = entries;
+        _appRenderWorkspace('settings');
+      }).catch(() => {});
+    }
+
+    // Session lock controls
+    document.getElementById('lock-now-btn')?.addEventListener('click', () => _lockApp());
+    document.getElementById('lock-timeout-select')?.addEventListener('change', (e) => {
+      const mins = parseInt((e.target as HTMLSelectElement).value, 10);
+      _setLockTimeout(mins);
+      showToast(mins > 0 ? `Auto-lock set to ${mins} minutes` : 'Auto-lock disabled', 'success');
+    });
+
+    // TOTP bindings
+    document.getElementById('totp-enable-btn')?.addEventListener('click', async () => {
+      _totpSetupSecret = await _generateNewTOTPSecret();
+      _totpSetupStep = 'setup';
+      _appRenderWorkspace('settings');
+      // Start countdown timer
+      const startTimer = () => {
+        const timerEl = document.getElementById('totp-setup-timer');
+        if (timerEl) timerEl.textContent = `Code refreshes in ${totpSecondsRemaining()}s`;
+      };
+      if (_totpSetupTimerInterval) clearInterval(_totpSetupTimerInterval);
+      _totpSetupTimerInterval = setInterval(startTimer, 1000);
+    });
+
+    document.getElementById('totp-disable-btn')?.addEventListener('click', () =>
+      showConfirm('Remove TOTP? You will no longer need a code to unlock.', async () => {
+        await _disableTOTP();
+        _secMFAStatus = null;
+        showToast('TOTP removed', 'success');
+        _appRenderWorkspace('settings');
+      })
+    );
+
+    document.getElementById('totp-setup-cancel')?.addEventListener('click', () => {
+      _totpSetupStep = 'idle';
+      _totpSetupSecret = '';
+      if (_totpSetupTimerInterval) { clearInterval(_totpSetupTimerInterval); _totpSetupTimerInterval = null; }
+      _appRenderWorkspace('settings');
+    });
+
+    document.getElementById('totp-copy-secret')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(_totpSetupSecret);
+        showToast('Secret copied to clipboard', 'success');
+      } catch { showToast('Copy failed — select the text manually', 'error'); }
+    });
+
+    document.getElementById('totp-setup-verify')?.addEventListener('click', async () => {
+      const code = (document.getElementById('totp-setup-code') as HTMLInputElement | null)?.value?.trim() || '';
+      const errEl = document.getElementById('totp-setup-error');
+      if (!code) { if (errEl) { errEl.textContent = 'Enter the 6-digit code'; errEl.style.display = 'block'; } return; }
+      const { verifyTOTPCode: verifyCb } = await import('../totp.js');
+      const ok = await verifyCb(_totpSetupSecret, code);
+      if (!ok) {
+        if (errEl) { errEl.textContent = 'Invalid code — check your authenticator app and try again'; errEl.style.display = 'block'; }
+        return;
+      }
+      await _enableTOTP(_totpSetupSecret);
+      _secMFAStatus = null;
+      _totpSetupStep = 'idle';
+      _totpSetupSecret = '';
+      if (_totpSetupTimerInterval) { clearInterval(_totpSetupTimerInterval); _totpSetupTimerInterval = null; }
+      showToast('TOTP enabled — keep your secret backed up!', 'success');
+      _appRenderWorkspace('settings');
+    });
+
+    // Passkey bindings
+    document.getElementById('add-passkey-btn')?.addEventListener('click', async () => {
+      const pw = prompt('Enter your vault master password to register a passkey:');
+      if (!pw) return;
+      try {
+        await _addPasskey(pw);
+        _secPasskeys = null;
+        showToast('Passkey registered', 'success');
+        _appRenderWorkspace('settings');
+      } catch (e) { showToast((e as Error).message, 'error', 6000); }
+    });
+
+    document.querySelectorAll<HTMLElement>('[data-remove-passkey]').forEach(btn =>
+      btn.addEventListener('click', () => showConfirm('Remove this passkey?', async () => {
+        const id = (btn.dataset as DOMStringMap & { removePasskey: string }).removePasskey;
+        await _removePasskey(id);
+        _secPasskeys = null;
+        showToast('Passkey removed', 'success');
+        _appRenderWorkspace('settings');
+      }))
+    );
+
+    // Audit log bindings
+    document.getElementById('audit-filter-select')?.addEventListener('change', (e) => {
+      _secAuditFilter = (e.target as HTMLSelectElement).value;
+      _secAuditPage = 0;
+      _appRenderWorkspace('settings');
+    });
+    document.getElementById('audit-prev')?.addEventListener('click', () => {
+      if (_secAuditPage > 0) { _secAuditPage--; _appRenderWorkspace('settings'); }
+    });
+    document.getElementById('audit-next')?.addEventListener('click', () => {
+      _secAuditPage++;
+      _appRenderWorkspace('settings');
+    });
+    document.getElementById('audit-export-csv')?.addEventListener('click', async () => {
+      try {
+        const csv = await _exportAuditCSV();
+        downloadText(`audit-log-${new Date().toISOString().split('T')[0]}.csv`, csv, 'text/csv');
+        showToast('Audit log exported as CSV', 'success');
+      } catch { showToast('Export failed', 'error'); }
+    });
+    document.getElementById('audit-export-json')?.addEventListener('click', async () => {
+      try {
+        const json = await _exportAuditJSON();
+        downloadText(`audit-log-${new Date().toISOString().split('T')[0]}.jsonl`, json, 'application/jsonlines');
+        showToast('Audit log exported as JSON Lines', 'success');
+      } catch { showToast('Export failed', 'error'); }
+    });
+    document.getElementById('audit-purge-days')?.addEventListener('change', (e) => {
+      const days = (e.target as HTMLSelectElement).value;
+      localStorage.setItem('taskapp_audit_purge_days', days);
+      showToast('Auto-purge setting saved', 'success');
+    });
+    document.getElementById('audit-purge-all')?.addEventListener('click', () =>
+      showConfirm('Purge all audit log entries? This cannot be undone.', async () => {
+        await _purgeAuditLog(null);
+        _secAuditEntries = null;
+        showToast('Audit log purged', 'success');
+        _appRenderWorkspace('settings');
+      })
+    );
+  } else {
+    // Reset security state when leaving the section
+    if (_secMFAStatus || _secPasskeys || _secAuditEntries) {
+      // Keep state cached — only reset when explicitly changing sections
+    }
+  }
 }

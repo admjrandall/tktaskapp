@@ -10,9 +10,13 @@ import {
   setAIHooks, showConfirm, showToast as _showToast, setTheme,
 } from './state.js';
 import type { AppState } from './state.js';
-import { dbInit, checkDueDates, markNotificationRead, markAllNotificationsRead, softDelete, getAdapter, getStore } from './db.js';
+import { dbInit, checkDueDates, markNotificationRead, markAllNotificationsRead, softDelete, getAdapter, getStore, clearDbState } from './db.js';
 import { _migrateLocalStorageToIDB, verifyPassword } from './vault.js';
 import { loadSessionKey, cacheSessionKey, clearSessionKey, hasSessionSentinel } from './session.js';
+import { auditLog, setAuditHooks, flushAuditBuffer, loadAuditLog, exportAuditCSV, exportAuditJSON, purgeAuditLog } from './audit.js';
+import { setAuthIDBHooks, setAuthAuditHook } from './auth.js';
+import { setMFAHooks, loadMFAStatus, enableTOTP, disableTOTP, generateNewTOTPSecret } from './mfa.js';
+import { setWebAuthnHooks, loadPasskeys, addPasskey, removePasskey } from './webauthn.js';
 import { fsInit, isFsReady, getFsLastSave, fsPickFile, fsWriteVault, fsUnlink } from './fs.js';
 
 // ── View imports ──────────────────────────────────────────────────────────────
@@ -26,7 +30,7 @@ import { renderCalendar, bindCalendar, setCalendarHooks } from './views/calendar
 import { renderTimeTracker, bindTimeTracker } from './views/time-tracker.js';
 import { renderReports, bindReports } from './views/reports.js';
 import { renderTrash, bindTrash } from './views/trash.js';
-import { renderSettings, bindSettings, setSettingsAIHooks, setSettingsFsHooks, setSettingsSection } from './views/settings.js';
+import { renderSettings, bindSettings, setSettingsAIHooks, setSettingsFsHooks, setSettingsSection, setSettingsSecurityHooks } from './views/settings.js';
 import {
   renderLibrary, bindLibrary, setLibraryHooks, setLibraryDocHooks,
   renderFileViewer, bindFileViewer,
@@ -75,6 +79,56 @@ import { isAITierAllowed } from './deployment-policy.js';
 
 // ── Auth import ───────────────────────────────────────────────────────────────
 import { renderAuth, bindAuth } from './auth.js';
+
+// ── App lock + idle detection (SEC-01, NIST AC-11) ────────────────────────────
+let _lockTimeoutMs = (() => {
+  const raw = localStorage.getItem('taskapp_lock_timeout');
+  const mins = raw !== null ? parseInt(raw, 10) : 15;
+  return (mins > 0) ? mins * 60 * 1000 : 0;
+})();
+let _idleTimer: ReturnType<typeof setTimeout> | null = null;
+export let _lastActivityAt = Date.now();
+
+// Callback set during init — allows lockApp to re-show auth with same afterUnlock handler
+let _onAuthSuccess: ((key: CryptoKey) => Promise<void>) | null = null;
+
+export function setLockTimeout(minutes: number): void {
+  localStorage.setItem('taskapp_lock_timeout', String(minutes));
+  _lockTimeoutMs = minutes > 0 ? minutes * 60 * 1000 : 0;
+  _resetIdleTimer();
+}
+
+export function _resetIdleTimer(): void {
+  if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
+  if (!_lockTimeoutMs || !getState().authed) return;
+  _lastActivityAt = Date.now();
+  _idleTimer = setTimeout(() => {
+    lockApp('idle_timeout').catch(console.error);
+  }, _lockTimeoutMs);
+}
+
+export async function lockApp(reason = 'manual'): Promise<void> {
+  auditLog('app_locked', { reason });
+  // Clear in-memory decrypted data
+  clearDbState();
+  await clearSessionKey().catch(() => {});
+  // Disconnect AI
+  try { resetAIConnection(); } catch { /* non-fatal */ }
+  try { await aiSecretsWipe(); } catch { /* non-fatal */ }
+  // Clear idle timer
+  if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
+  // Reset auth state
+  setState({ authed: false, cryptoKey: null });
+  // Show auth screen (use the app element — it must be in DOM at this point)
+  const el = document.getElementById('app');
+  if (!el) return;
+  el.innerHTML = await renderAuth();
+  const handler = _onAuthSuccess;
+  bindAuth(el, async key => {
+    await cacheSessionKey(key);
+    if (handler) await handler(key);
+  });
+}
 
 // ── App root element ──────────────────────────────────────────────────────────
 const appEl = document.getElementById('app')!;
@@ -245,7 +299,7 @@ function _wireHooks(): void {
   });
 
   // Topbar hooks
-  setTopbarHooks({ aiNeedsOnboarding, openAIWizard, setTheme });
+  setTopbarHooks({ aiNeedsOnboarding, openAIWizard, setTheme, lockApp });
 
   // Sidebar FS status hooks (badge on logo mark)
   setSidebarFsHooks({ getFsReady: isFsReady, getFsLastSave });
@@ -286,6 +340,28 @@ function _wireHooks(): void {
   });
   // Components AI hooks (for command palette AI nav guard)
   setComponentsAIHooks(aiNeedsOnboarding, openAIWizard);
+
+  // Settings Security hooks
+  setSettingsSecurityHooks({
+    lockApp: () => { lockApp('manual').catch(console.error); },
+    setLockTimeout,
+    getLockTimeout: () => {
+      const raw = localStorage.getItem('taskapp_lock_timeout');
+      return raw !== null ? parseInt(raw, 10) : 15;
+    },
+    loadAuditLog,
+    exportAuditCSV,
+    exportAuditJSON,
+    purgeAuditLog,
+    loadMFAStatus,
+    enableTOTP,
+    disableTOTP,
+    generateNewTOTPSecret,
+    loadPasskeys,
+    addPasskey: (pw: string) => addPasskey(pw),
+    removePasskey,
+    getLastActivityAt: () => _lastActivityAt,
+  });
 
   // Settings AI hooks
   setSettingsAIHooks({
@@ -368,8 +444,46 @@ export async function init(): Promise<void> {
   // Wire all cross-module hooks before first render
   _wireHooks();
 
+  // Log session start (pre-auth — buffered until key available)
+  auditLog('session_start', { protocol: location.protocol });
+
+  // Wire auth IDB hooks so TOTP can be checked during login
+  setAuthIDBHooks({
+    idbLoadStore: (store, key) => _idbLoadStore(store, key) as Promise<Record<string, unknown>[]>,
+  });
+  // Wire audit events from auth module
+  setAuthAuditHook((event, details) => auditLog(event as Parameters<typeof auditLog>[0], details));
+
+  // Idle activity event listeners (passive, capture phase)
+  const _activityEvents = ['pointermove', 'pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll'] as const;
+  const _onActivity = () => { if (getState().authed) _resetIdleTimer(); };
+  for (const ev of _activityEvents) {
+    window.addEventListener(ev, _onActivity, { passive: true, capture: true });
+  }
+
   const afterUnlock = async (key: CryptoKey): Promise<void> => {
     await dbInit(key);
+
+    // Wire audit hooks (need key to encrypt/decrypt)
+    setAuditHooks({
+      getKey: () => key,
+      putRecord: (store, rec) => _idbPutRecord(store, rec as { id: string } & Record<string, unknown>, key),
+      loadStore: (store) => _idbLoadStore(store, key) as Promise<Record<string, unknown>[]>,
+    });
+    flushAuditBuffer();  // flush any pre-auth events (session_start)
+    auditLog('auth_success');
+
+    // Wire MFA/passkey/webauthn IDB hooks
+    const _mfaHooks = {
+      getKey: () => key,
+      putRecord: (store: string, rec: Record<string, unknown>) =>
+        _idbPutRecord(store, rec as { id: string } & Record<string, unknown>, key),
+      loadStore: (store: string) =>
+        _idbLoadStore(store, key) as Promise<Record<string, unknown>[]>,
+    };
+    setMFAHooks(_mfaHooks);
+    setWebAuthnHooks(_mfaHooks);
+
     setState({ authed: true, cryptoKey: key });
     reloadData();
     try { await checkDueDates(); reloadData(); } catch { /* non-fatal */ }
@@ -377,6 +491,9 @@ export async function init(): Promise<void> {
       console.warn('[AI] secrets refresh failed:', (e as Error)?.message);
     }
     fullRender(getState());
+
+    // Start idle timer after unlock
+    _resetIdleTimer();
 
     // Wire adapter stream — NullAdapter returns a no-op unsubscribe immediately.
     getAdapter()?.stream(changes => {
@@ -471,6 +588,9 @@ export async function init(): Promise<void> {
       }
     }
   };
+
+  // Store afterUnlock so lockApp() can re-show auth with the same handler
+  _onAuthSuccess = afterUnlock;
 
   // Discard the IDB-persisted key if the tab was closed between sessions.
   // sessionStorage is cleared on tab close but preserved across F5 reloads,

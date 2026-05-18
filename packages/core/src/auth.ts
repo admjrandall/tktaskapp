@@ -207,15 +207,131 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
           if (lbl) lbl.textContent = 'Unlock';
           const pwEl = document.getElementById('auth-password') as HTMLInputElement | null;
           if (pwEl) { pwEl.value = ''; pwEl.focus(); }
+          _audit('auth_failure', { attempts: String(newCount) });
           return;
         }
         _resetLockout();
-        onSuccess(key);
+        _audit('auth_success');
+        // Check MFA before calling onSuccess
+        await _checkMFAStep(appEl, key, onSuccess);
       }
     } catch (_err) {
       showErr('An error occurred. Please try again.');
       if (btn) btn.disabled = false;
       if (lbl) lbl.textContent = fr ? 'Create Vault' : 'Unlock';
+    }
+  });
+}
+
+// ── MFA step (shown after password is verified) ────────────────────────────────
+async function _checkMFAStep(
+  appEl: Element,
+  key: CryptoKey,
+  onSuccess: (key: CryptoKey) => void,
+): Promise<void> {
+  // Load TOTP config using the verified key
+  let totpEnabled = false;
+  let totpSecret = '';
+  if (_idbLoadStore) {
+    try {
+      const docs = await _idbLoadStore('documents', key);
+      const cfg = docs.find(r => r['id'] === '__mfa_totp__') as
+        | { secret: string; enabled: boolean }
+        | undefined;
+      if (cfg?.enabled && cfg.secret) {
+        totpEnabled = true;
+        totpSecret = cfg.secret;
+      }
+    } catch { /* non-fatal — skip MFA if we can't load */ }
+  }
+
+  if (!totpEnabled) {
+    onSuccess(key);
+    return;
+  }
+
+  // Show TOTP step — replace the auth card content
+  _showTOTPStep(appEl, key, totpSecret, onSuccess);
+}
+
+function _showTOTPStep(
+  appEl: Element,
+  key: CryptoKey,
+  totpSecret: string,
+  onSuccess: (key: CryptoKey) => void,
+): void {
+  const secs = totpSecondsRemaining();
+  const card = appEl.querySelector('.auth-card');
+  if (!card) { onSuccess(key); return; }
+
+  card.innerHTML = `
+    <div class="auth-logo">Task App <span>CRM</span></div>
+    <div class="auth-subtitle">Enter your 6-digit authenticator code</div>
+    <form id="totp-form" autocomplete="off" style="display:flex;flex-direction:column;gap:1rem">
+      <div class="form-group">
+        <label class="form-label" style="color:#94a3b8">Authenticator Code</label>
+        <input class="input" type="text" id="totp-code" inputmode="numeric" pattern="[0-9]*"
+          maxlength="6" placeholder="000000"
+          autocomplete="one-time-code"
+          style="background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.12);color:#fff;font-size:1.5rem;letter-spacing:.25rem;text-align:center"
+          required>
+        <div style="font-size:.75rem;color:#64748b;margin-top:.375rem;text-align:center" id="totp-timer">Code refreshes in ${secs}s</div>
+      </div>
+      <div id="totp-error" style="display:none;color:#f87171;font-size:.8rem;text-align:center;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:.5rem"></div>
+      <button type="submit" id="totp-submit" class="btn btn-primary" style="width:100%;height:44px;font-size:.9375rem">
+        ${Icons.Lock(18)} <span id="totp-submit-label">Verify</span>
+      </button>
+    </form>
+    <div style="margin-top:.875rem;text-align:center">
+      <button type="button" id="totp-back" style="background:none;border:none;color:#64748b;font-size:.8rem;cursor:pointer">← Back to password</button>
+    </div>`;
+
+  // Countdown timer
+  let _timerInterval: ReturnType<typeof setInterval> | null = null;
+  const timerEl = document.getElementById('totp-timer');
+  _timerInterval = setInterval(() => {
+    const s = totpSecondsRemaining();
+    if (timerEl) timerEl.textContent = `Code refreshes in ${s}s`;
+  }, 1000);
+
+  const cleanup = () => { if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; } };
+
+  document.getElementById('totp-back')?.addEventListener('click', async () => {
+    cleanup();
+    appEl.innerHTML = await renderAuth();
+    bindAuth(appEl, onSuccess);
+  });
+
+  setTimeout(() => (document.getElementById('totp-code') as HTMLInputElement | null)?.focus(), 100);
+
+  document.getElementById('totp-form')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const code = (document.getElementById('totp-code') as HTMLInputElement | null)?.value?.trim() || '';
+    const errEl = document.getElementById('totp-error');
+    const btn = document.getElementById('totp-submit') as HTMLButtonElement | null;
+    const lbl = document.getElementById('totp-submit-label');
+    if (errEl) errEl.style.display = 'none';
+    if (btn) btn.disabled = true;
+    if (lbl) lbl.textContent = 'Verifying…';
+
+    try {
+      const ok = await verifyTOTPCode(totpSecret, code);
+      if (!ok) {
+        if (errEl) { errEl.textContent = 'Invalid code. Please try again.'; errEl.style.display = 'block'; }
+        if (btn) btn.disabled = false;
+        if (lbl) lbl.textContent = 'Verify';
+        const codeEl = document.getElementById('totp-code') as HTMLInputElement | null;
+        if (codeEl) { codeEl.value = ''; codeEl.focus(); }
+        _audit('mfa_failure');
+        return;
+      }
+      _audit('mfa_success');
+      cleanup();
+      onSuccess(key);
+    } catch {
+      if (errEl) { errEl.textContent = 'Verification error. Please try again.'; errEl.style.display = 'block'; }
+      if (btn) btn.disabled = false;
+      if (lbl) lbl.textContent = 'Verify';
     }
   });
 }

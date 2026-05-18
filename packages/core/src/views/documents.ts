@@ -469,7 +469,19 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
     if (!_savedRange || !_lastPreview) return;
     const sel2 = window.getSelection();
     if (sel2) { sel2.removeAllRanges(); sel2.addRange(_savedRange); }
-    document.execCommand('insertHTML', false, sanitizeDocHtml(_mdToHtml(_lastPreview)));
+    // Modern Range API replaces deprecated execCommand('insertHTML') — SEC-13
+    {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const fragment = range.createContextualFragment(sanitizeDocHtml(_mdToHtml(_lastPreview)));
+        range.insertNode(fragment);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
     markDirty();
     _removeInlineToolbar();
   });
@@ -484,7 +496,19 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
     endRange.collapse(false);
     sel2?.removeAllRanges();
     sel2?.addRange(endRange);
-    document.execCommand('insertHTML', false, `<br>${sanitizeDocHtml(_mdToHtml(_lastPreview))}`);
+    // Modern Range API replaces deprecated execCommand('insertHTML') — SEC-13
+    {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const fragment = range.createContextualFragment(`<br>${sanitizeDocHtml(_mdToHtml(_lastPreview))}`);
+        range.insertNode(fragment);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
     markDirty();
     _removeInlineToolbar();
   });
@@ -559,11 +583,27 @@ export function bindDocumentEditor(): void {
       e.preventDefault();
       const cmd = (btn.dataset as DOMStringMap & { cmd: string }).cmd;
       const val = (btn.dataset as DOMStringMap & { val?: string }).val || null;
+      // execCommand is deprecated (SEC-13). For rich-text formatting commands that still
+      // require execCommand (bold, italic, etc.) we continue using it as the Range API
+      // does not provide equivalent formatting APIs. createLink is replaced inline below.
       if (cmd === 'createLink') {
         const raw = prompt('Enter URL:', 'https://');
         const safeUrl = raw ? sanitizeUrl(raw) : null;
         if (!safeUrl) { if (raw) showToast('Only http, https, and mailto links are allowed', 'error'); return; }
-        document.execCommand('createLink', false, safeUrl);
+        // Use modern Selection/Range API for link insertion
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const selectedText = range.toString() || safeUrl;
+          range.deleteContents();
+          const a = document.createElement('a');
+          a.href = safeUrl;
+          a.textContent = selectedText;
+          range.insertNode(a);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
       }
       else document.execCommand(cmd, false, val ?? undefined);
       markDirty();
