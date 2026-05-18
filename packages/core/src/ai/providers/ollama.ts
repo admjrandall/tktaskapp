@@ -3,6 +3,7 @@
 // No dependency on ai-runtime (avoids circular imports).
 
 import { aiPrefs } from '../ai-prefs.js';
+import { assertLocalAIEndpointAllowed } from '../../deployment-policy.js';
 
 type AnyRecord = Record<string, unknown>;
 type Message   = { role: string; content: string };
@@ -11,6 +12,7 @@ type Message   = { role: string; content: string };
 
 export async function loadOllama(updateTxt: (msg: string) => void): Promise<void> {
   const { url, modelId } = aiPrefs.ollama;
+  assertLocalAIEndpointAllowed(url);
   updateTxt(`Checking Ollama at ${url}…`);
   const ping = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(3000) });
   if (!ping.ok) throw new Error(`Ollama responded ${ping.status}`);

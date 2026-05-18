@@ -646,7 +646,10 @@ function renderWizardStep3Cloud(): string {
     </div>`;
   }
   return `<h3 style="font-size:1.125rem;font-weight:600;margin:0 0 .5rem">Connect a cloud provider</h3>
-    <p style="font-size:.8125rem;color:var(--text-secondary);margin:0 0 1rem;line-height:1.5">Bring your own API key. Task App never sees or stores it on a server.</p>
+    <p style="font-size:.8125rem;color:var(--text-secondary);margin:0 0 .5rem;line-height:1.5">Bring your own API key. Task App never sees or stores it on a server.</p>
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--radius-sm);padding:.5rem .75rem;font-size:.75rem;color:#78350f;line-height:1.6;margin-bottom:.875rem">
+      <strong>Data notice:</strong> When you ask AI questions about your CRM data (e.g. "list my overdue tasks"), record names and summaries are included in the prompt sent to the cloud provider. No encrypted vault data is transmitted — only plaintext summaries built at query time.
+    </div>
     ${seg}${panel}`;
 }
 
@@ -768,6 +771,11 @@ export function bindAIWizard(): void {
     if (!prov) return;
     const k = (w.cloudKeyInputs[prov] || '').trim();
     if (!k) return;
+    const provDef = CLOUD_PROVIDERS[prov];
+    if (provDef?.keyPattern && !provDef.keyPattern.test(k)) {
+      showToast(`Invalid ${escH(provDef.label)} key format — check the key and try again`, 'error', 6000);
+      return;
+    }
     try {
       const secrets = await aiSecretsLoad();
       secrets[prov] = k;

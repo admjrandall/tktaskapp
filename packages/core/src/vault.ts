@@ -8,7 +8,7 @@
 import {
   SALT_KEY, VERIFY_KEY, VAULT_KEY, VERIFY_PAYLOAD,
   KDF_VERSION_KEY, VAULT_DB_NAME, VAULT_META_STORE,
-  SALT_BYTES, STORES,
+  SALT_BYTES, STORES, IDB_STORES,
 } from './constants.js';
 import {
   u8ToBase64, base64ToU8, aesEncrypt, aesDecrypt, deriveKey,
@@ -107,7 +107,18 @@ export async function writeVerifyToken(key: CryptoKey): Promise<void> {
 export async function verifyPassword(key: CryptoKey): Promise<boolean> {
   const b64 = await _vaultMetaGet(VERIFY_KEY);
   if (!b64) return false;
-  try { return (await aesDecrypt(key, b64 as string)) === VERIFY_PAYLOAD; } catch { return false; }
+  try {
+    const decrypted = await aesDecrypt(key, b64 as string);
+    if (typeof decrypted !== 'string') return false;
+    // Constant-time byte comparison — prevents timing side-channel attacks.
+    const enc = new TextEncoder();
+    const a = enc.encode(decrypted);
+    const b = enc.encode(VERIFY_PAYLOAD);
+    if (a.byteLength !== b.byteLength) return false;
+    let diff = 0;
+    for (let i = 0; i < a.byteLength; i++) diff |= a[i]! ^ b[i]!;
+    return diff === 0;
+  } catch { return false; }
 }
 
 // ── initCrypto with PBKDF2 migration ───────────────────────────────────
@@ -129,7 +140,7 @@ export async function initCrypto(password: string): Promise<CryptoKey> {
   if (isLegacy) {
     const legacyKey = await deriveKey(password, salt, PBKDF2_ITERATIONS_LEGACY);
     const isValid = await verifyPassword(legacyKey).catch(() => false);
-    if (!isValid) return legacyKey;
+    if (!isValid) throw new Error('Incorrect password');
     console.info('[crypto] Migrating vault from 310k to 600k PBKDF2 iterations…');
     const vault = await loadVault(legacyKey);
     const newSalt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
@@ -182,10 +193,18 @@ export async function importEncryptedBackup(
   if (p.v !== 1) throw new Error('Unknown backup version');
   const salt = base64ToU8(p.salt);
   let vault: unknown;
-  try { vault = await aesDecrypt(await deriveKey(pw, salt, PBKDF2_ITERATIONS), p.data); }
-  catch { vault = await aesDecrypt(await deriveKey(pw, salt, PBKDF2_ITERATIONS_LEGACY), p.data); }
+  let legacyKdfUsed = false;
+  try {
+    vault = await aesDecrypt(await deriveKey(pw, salt, PBKDF2_ITERATIONS), p.data);
+  } catch {
+    vault = await aesDecrypt(await deriveKey(pw, salt, PBKDF2_ITERATIONS_LEGACY), p.data);
+    legacyKdfUsed = true;
+  }
+  if (legacyKdfUsed) {
+    console.warn('[vault] importEncryptedBackup: backup used legacy 310k-iteration KDF. Consider exporting a fresh backup after this import.');
+  }
   await saveVault(currentKey, vault as Record<string, unknown[]>);
-  return vault;
+  return { vault, legacyKdfUsed };
 }
 
 export async function exportJSON(key: CryptoKey): Promise<string> {
@@ -199,11 +218,25 @@ export async function importJSON(json: string, key: CryptoKey): Promise<unknown>
   if (typeof v !== 'object' || Array.isArray(v) || v === null) {
     throw new Error('Invalid import format: expected an object');
   }
-  const validStores = new Set([...STORES, 'documents', 'conversations']);
+  const validStores = new Set([...STORES, ...IDB_STORES]);
   for (const [k, arr] of Object.entries(v as Record<string, unknown>)) {
     if (!validStores.has(k)) throw new Error(`Unknown store in import: "${k}"`);
     if (!Array.isArray(arr)) throw new Error(`Store "${k}" must be an array`);
   }
-  await saveVault(key, v as Record<string, unknown[]>);
-  return v;
+  // IDB-backed stores (documents, conversations) are individually encrypted in
+  // nexus_data_v1 and cannot be bulk-imported through the vault blob — exclude them.
+  const vaultData: Record<string, unknown[]> = {};
+  const skippedIdb: string[] = [];
+  for (const [k, arr] of Object.entries(v as Record<string, unknown[]>)) {
+    if (STORES.includes(k)) {
+      vaultData[k] = arr;
+    } else {
+      skippedIdb.push(k);
+    }
+  }
+  if (skippedIdb.length > 0) {
+    console.warn(`[vault] importJSON: skipped IDB-backed stores (${skippedIdb.join(', ')}) — per-record encryption prevents bulk vault import.`);
+  }
+  await saveVault(key, vaultData);
+  return vaultData;
 }
