@@ -6,6 +6,53 @@ Versions are dated; there is no semantic version number — the public interface
 
 ---
 
+## [2026-05-18] — Full security hardening (NIST SP 800-53 / FedRAMP Moderate / GDPR / OWASP 2026)
+
+### Security — Added
+
+**New modules:**
+- `packages/core/src/audit.ts` — Encrypted audit log (AES-256-GCM, `nexus_data_v1`). 25 event types: `session_start`, `auth_success`, `auth_failure`, `auth_locked`, `auth_unlocked`, `mfa_success`, `mfa_failure`, `mfa_enabled`, `mfa_disabled`, `passkey_registered`, `passkey_removed`, `app_locked`, `app_unlocked`, `password_changed`, `vault_file_opened`, `vault_exported`, `vault_imported`, `backup_exported`, `backup_imported`, `data_exported`, `data_imported`, `app_reset`, `ai_key_added`, `ai_key_removed`, `ai_query`. CSV and JSON Lines export. Auto-purge policy (30/90/365 days/never, stored in `localStorage`).
+- `packages/core/src/totp.ts` — Pure WebCrypto TOTP (RFC 6238 / RFC 4226). HMAC-SHA1, 6-digit codes, 30-second window, Base32 secret, ±1 window drift tolerance. QR code generation via `qrcode-generator`.
+- `packages/core/src/webauthn.ts` — WebAuthn Level 3 with PRF extension. Passkey registers, uses PRF output to derive AES-256-GCM key protecting the master password. Only enabled on `https://` origins (AAL2+). Graceful degradation to TOTP-only on `file://`.
+- `packages/core/src/mfa.ts` — MFA orchestration layer. Stores TOTP config as `{ id: '__mfa_totp__' }` in `nexus_data_v1`. Exposes `loadMFAStatus`, `verifyMFACode`, `enableTOTP`, `disableTOTP`, `generateNewTOTPSecret`.
+
+**App lock & idle timeout (NIST AC-11):**
+- `lockApp(reason)` in `main.ts` — clears in-memory `CryptoKey`, all DB state, session key, AI secrets, and re-renders the auth screen. Triggered by idle timeout, lock button, or manual call.
+- Idle detection on `pointermove`, `pointerdown`, `keydown`, `touchstart`, `wheel`, `scroll`. Default timeout: 15 minutes (1–60 min configurable, or Off).
+- Lock button added to topbar.
+
+**Brute-force lockout:**
+- Failed-auth counter and lockout timestamp moved from `sessionStorage` to `localStorage` so lockout persists across tab closes (NIST AC-7).
+- Exponential backoff with 30-second cap.
+
+**Settings → Security tab:**
+- Session lock timeout selector (5/10/15/30/60 min or Off).
+- Change password form (requires current password).
+- TOTP setup wizard with QR code (Microsoft Authenticator, Google Authenticator, Authy compatible) and manual secret entry.
+- Passkey management (register new, list registered, remove).
+- Audit log viewer with event-type filter, pagination (50/page), CSV/JSON export, auto-purge policy selector, and manual purge-all.
+- Danger Zone (reset app).
+
+**Data protection:**
+- `sanitize.ts`: `sanitizeDataUrl()` — restricts `href`/`src` to `data:` URIs and `https:` only; rejects `javascript:`, `file:`, `blob:`, etc.
+- `sanitize.ts`: `sanitizeDocHtml()` — DOMPurify 3.4.3 integration for document editor HTML.
+- Prompt injection mitigation in AI tools: `<crm_data>` delimiters, 500-char field truncation.
+
+### Security — Fixed
+
+- **SEC-02**: `btoa(String.fromCharCode(...))` replaced with chunked base64 helper (stack-overflow fix for large arrays).
+- **SEC-03**: `document.execCommand('insertHTML')` replaced with Range API in document editor.
+- **SEC-14**: Ollama URL validation now rejects non-`http:`/`https:` protocols in `probeOllama`, `pullOllamaModel`, and `deleteOllamaModel` (SSRF prevention).
+- **SEC-15**: `fsReadVault()` validates field types (`salt`, `verify`, `vault` must be strings) before writing to IDB.
+- **SEC-17**: AI `navigate` tool restricted to safe views only (`dashboard`, `clients`, `departments`, `projects`, `tasks`, `people`, `calendar`, `time`, `reports`, `ai`). Cannot navigate to `settings` or `trash` — enforced both in prompt and at runtime.
+- **SEC-21**: `importJSON` now blocks importing into `trash` and `notifications` stores. This prevents GDPR-erased records from being restored through a JSON import.
+- **SEC-26**: GDPR/CCPA privacy notice added to Settings → About. Explains offline-only storage, no telemetry, user rights, and data control.
+- **SEC-27**: Re-auth gate (`requireReauth`) added before vault export (`.taskappbak`) and JSON export. User must re-enter master password before any data export.
+- **M-03**: Sanitized `href` and `src` attributes for file data URIs in library, files, and record-modal views.
+- **M-08**: Vault import validates that all store names are in the known-stores allowlist.
+
+---
+
 ## [2026-05-17] — Sidebar IA redesign + Recycle Bin + mobile "More" sheet
 
 ### Navigation — Changed

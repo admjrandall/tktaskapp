@@ -108,16 +108,21 @@ Modules must be imported in this order (deeper dependencies first):
 10. icons.ts              — no dependencies
 11. trusted-types.ts      — no dependencies (side-effect IIFE — MUST import first in main.ts)
 12. components.ts         — state, utils, icons, db
-13. views/*               — state, db, utils, icons, components
-14. ai/ai-prefs.ts        — no dependencies (localStorage only)
-15. deployment-policy.ts  — no dependencies; build/profile policy
-16. ai/providers/*        — stateless; no app-layer deps
-17. ai/ai-runtime.ts      — state, ai-prefs, deployment-policy, providers, (lazy: state.js)
-18. ai/ai-tools.ts        — ai-runtime, (injected: SCHEMAS, streamToBubble, finalRender)
-19. ai/ai-settings.ts     — ai-prefs, ai-runtime, deployment-policy, providers/ollama
-20. ai/ai-ui.ts           — ai-runtime, ai-tools, ai-settings, ai-prefs, deployment-policy, state, utils, icons
-21. auth.ts               — crypto, vault, session, state, utils, icons, fs
-22. main.ts               — all of the above
+13. sanitize.ts           — dompurify (XSS sanitization for HTML/URLs)
+14. totp.ts               — no dependencies (pure WebCrypto TOTP, RFC 6238)
+15. webauthn.ts           — no dependencies (WebAuthn PRF passkeys; hooks injected by main.ts)
+16. mfa.ts                — totp; hooks injected by main.ts
+17. audit.ts              — no app deps (hooks injected by main.ts via setAuditHooks)
+18. views/*               — state, db, utils, icons, components, sanitize
+19. ai/ai-prefs.ts        — no dependencies (localStorage only)
+20. deployment-policy.ts  — no dependencies; build/profile policy
+21. ai/providers/*        — stateless; no app-layer deps
+22. ai/ai-runtime.ts      — state, ai-prefs, deployment-policy, providers, (lazy: state.js)
+23. ai/ai-tools.ts        — ai-runtime, (injected: SCHEMAS, streamToBubble, finalRender)
+24. ai/ai-settings.ts     — ai-prefs, ai-runtime, deployment-policy, providers/ollama
+25. ai/ai-ui.ts           — ai-runtime, ai-tools, ai-settings, ai-prefs, deployment-policy, state, utils, icons
+26. auth.ts               — crypto, vault, session, state, utils, icons, fs, mfa
+27. main.ts               — all of the above
 ```
 
 ---
@@ -180,6 +185,10 @@ clear()               → void
 | Dashboard layout | `localStorage` key `taskapp_dash_v1` | — | Non-sensitive preference |
 | AI preferences | `localStorage` key `taskapp_ai_prefs_v2` | — | Plaintext JSON |
 | Cloud API keys | IDB `nexus_data_v1` / record `__ai_secrets__` | — | AES-GCM encrypted |
+| Audit log | IDB `nexus_data_v1` / record `__audit_log__` | — | AES-GCM encrypted; exportable CSV/JSON Lines |
+| TOTP config | IDB `nexus_data_v1` / record `__mfa_totp__` | — | AES-GCM encrypted; secret + enabled flag |
+| Passkey credentials | IDB `nexus_data_v1` / record `__mfa_passkeys__` | — | AES-GCM encrypted; PRF-wrapped master password per credential |
+| Auth lockout state | `localStorage` keys `nexus_auth_fail_count`, `nexus_auth_locked_until` | — | Persists across tab close (NIST AC-7) |
 
 ---
 

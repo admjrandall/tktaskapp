@@ -1,7 +1,7 @@
 # Security Policy
 
 **Task App CRM** — monorepo, built to `dist/offline/index.html`
-**Last reviewed:** 2026-05-17
+**Last reviewed:** 2026-05-18
 All information in this document is derived from direct inspection of the current codebase.
 
 ---
@@ -48,6 +48,9 @@ Vaults created before the 2026-05-15 hardening pass used 310,000 PBKDF2 iteratio
 | Documents | IndexedDB `nexus_data_v1` | Each record individually AES-GCM encrypted |
 | Conversations | IndexedDB `nexus_data_v1` | Each record individually AES-GCM encrypted |
 | Cloud API keys (Anthropic, OpenAI, Google) | IndexedDB `nexus_data_v1` record `__ai_secrets__` | AES-GCM encrypted |
+| Audit log | IndexedDB `nexus_data_v1` record `__audit_log__` | AES-GCM encrypted |
+| TOTP config (secret, enabled, timestamps) | IndexedDB `nexus_data_v1` record `__mfa_totp__` | AES-GCM encrypted |
+| Passkey credentials (PRF-wrapped master password) | IndexedDB `nexus_data_v1` record `__mfa_passkeys__` | AES-GCM encrypted (inner password also AES-GCM under PRF key) |
 | Salt, verify token, KDF version | IndexedDB `nexus_vault_v2` | Salt is plaintext (it must be); verify token and vault are AES-GCM encrypted |
 
 ### What is NOT encrypted
@@ -132,11 +135,38 @@ The offline profile blocks cloud AI and browser model downloads. Enterprise/clou
 
 ---
 
-## Auth and brute-force protection
+## Auth, MFA, and brute-force protection
 
 - Password is never stored. The PBKDF2-derived key is tested against an encrypted verify token (`'NEXUS_CRM_OK'`); if decryption fails, the password is wrong.
 - Failed attempts trigger an exponential lockout: attempt 1 = 500ms delay, attempt 2 = 1s, attempt 3 = 2s ... capped at 30 seconds per attempt.
-- Lockout state (`_authFailCount`, `_authLockedUntil`) is in-memory only — cleared on page refresh. This is a UI-level protection, not a cryptographic one. An attacker with access to the raw IDB files can attempt offline dictionary attacks at the speed of their hardware against a PBKDF2-600k key. Password strength is the primary defence.
+- Lockout state (`nexus_auth_fail_count`, `nexus_auth_locked_until`) is stored in `localStorage` so it persists across tab closes (NIST AC-7 compliance). This is a UI-level protection, not a cryptographic one. An attacker with access to the raw IDB files can attempt offline dictionary attacks at the speed of their hardware against a PBKDF2-600k key. Password strength is the primary defence.
+
+### TOTP MFA (all builds — NIST AAL2)
+- Pure WebCrypto TOTP: RFC 6238 / RFC 4226, HMAC-SHA1, 6-digit codes, 30-second window, ±1 step drift tolerance.
+- Secret generated via `crypto.getRandomValues(20 bytes)`, Base32-encoded, stored encrypted in `nexus_data_v1`.
+- Setup wizard shows QR code (Microsoft Authenticator, Google Authenticator, Authy, 1Password compatible) and manual entry key.
+- TOTP second factor is required at each unlock when enabled.
+
+### WebAuthn Passkeys with PRF extension (HTTPS builds only — NIST AAL2+)
+- WebAuthn Level 3 PRF extension: the authenticator evaluates a PRF over a stored salt, producing 32 bytes which are used to derive an AES-256-GCM key.
+- The master password is encrypted under this PRF-derived key; successful authentication decrypts the master password directly — no password entry required.
+- Requires a secure context (`https://` or `localhost`). Not available on `file://`. The UI hides the passkey option when `isWebAuthnAvailable()` returns false.
+- Multiple passkeys supported (different devices). Each credential stores its own PRF salt and encrypted password blob.
+
+### App lock / idle timeout (NIST AC-11)
+- `lockApp(reason)` clears the in-memory `CryptoKey`, all DB state (`_dbData`), the session key from IndexedDB, AI secrets, and disconnects the AI connection. Re-renders the auth screen.
+- Idle events monitored: `pointermove`, `pointerdown`, `keydown`, `touchstart`, `wheel`, `scroll`. Default timeout: 15 minutes.
+- Configurable 1–60 minutes or Off via Settings → Security.
+- Lock button in topbar provides one-click manual lock.
+
+### Audit log (NIST AU-2, AU-3, AU-9)
+- All security-relevant events are recorded: session start, auth success/failure/lockout, MFA enable/disable/success/failure, passkey register/remove, app lock/unlock, password change, vault/backup export/import, app reset, AI key add/remove, AI queries.
+- Log stored encrypted (AES-GCM) in `nexus_data_v1` under `__audit_log__`. Each entry has an ID, ISO timestamp, event type, details object, and user-agent string.
+- Exportable as CSV or JSON Lines. Auto-purge policy configurable (30/90/365 days/never).
+
+### Re-auth before sensitive operations (NIST IA-11 / Zero Trust)
+- Vault export (`.taskappbak`) and JSON export require re-entering the master password before proceeding.
+- Password change requires the current password (handled by `changePassword()`).
 
 ---
 
@@ -150,7 +180,7 @@ The offline profile blocks cloud AI and browser model downloads. Enterprise/clou
 | Hugging Face model-weight downloads | Low-Medium | Enterprise only | Disabled in the offline OT profile. Other profiles may allow it when the user opts into Gemma WebGPU models. |
 | File integrity check skipped on `file://` | Low | Yes | Chrome/Edge block `fetch()` from `file://` via CORS. Check detects `location.protocol === 'file:'` and exits cleanly. App works normally. Check runs when served via HTTP/HTTPS. |
 | Session key survives F5 (tab close clears it) | Low | Yes | This is intentional UX — requiring the password on every page refresh would be disruptive. Tab close is the security boundary. |
-| Brute-force lockout is in-memory only | Medium | Yes | Offline dictionary attacks against the IDB file are bounded only by password strength and PBKDF2 cost, not by the UI lockout. Strong password is required. |
+| Brute-force lockout persists in localStorage | Medium | Yes | Lockout now survives tab close. Offline dictionary attacks against the IDB file are bounded only by password strength and PBKDF2 cost. Strong password is the primary defence. |
 | `localStorage` still used for non-sensitive preferences | None | Yes | Theme, dashboard layout, AI prefs (no keys). These are intentionally not encrypted — there is no sensitive data in them. |
 | Cloud AI receives CRM summary data | Medium | Enterprise only | Disabled in the offline OT profile. Enterprise users may opt into cloud tiers; documented in network connections above. |
 | AI cloud API keys are encrypted but stored locally | Medium | Yes | Best available option for a no-server offline app. Keys are AES-GCM encrypted under the vault key. |
