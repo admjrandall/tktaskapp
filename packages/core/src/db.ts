@@ -23,7 +23,12 @@ import { parseDateLocal } from './utils.js';
 let _dbKey: CryptoKey | null = null;
 let _dbData: Record<string, unknown[]> = {};
 let _adapter: SyncAdapter | null = null;
-const INTERNAL_DOCUMENT_IDS = new Set(['__ai_secrets__']);
+const INTERNAL_DOCUMENT_IDS = new Set([
+  '__ai_secrets__',
+  '__audit_log__',
+  '__mfa_totp__',
+  '__mfa_passkeys__',
+]);
 
 export function setAdapter(a: SyncAdapter): void {
   _adapter = a;
@@ -279,6 +284,13 @@ export function globalSearch(q: string): { store: string; id: string; label: str
   ss('people', r => (r.name as string) || 'Person', '👤');
   ss('documents', r => (r.title as string) || 'Document', '📄');
   return results.slice(0, 20);
+}
+
+// ── App lock — wipes all in-memory decrypted state ─────────────────────────────
+export function clearDbState(): void {
+  _dbKey = null;
+  _dbData = {};
+  STORES.forEach(s => { _dbData[s] = []; });
 }
 
 // Internal accessors for other modules (e.g. fs.ts, ai/*) that need raw state.
