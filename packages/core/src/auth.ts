@@ -11,6 +11,23 @@ import { Icons } from './icons.js';
 import { fsInit, fsSetHandle } from './fs.js';
 import { SALT_KEY, VERIFY_KEY, VAULT_KEY } from './constants.js';
 import { _vaultMetaSet } from './vault.js';
+import { totpSecondsRemaining, verifyTOTPCode } from './totp.js';
+
+// ── MFA IDB hooks — injected from main.ts after dbInit wires up ───────────────
+type IdbLoadFn = (store: string, key: CryptoKey) => Promise<Record<string, unknown>[]>;
+let _idbLoadStore: IdbLoadFn | null = null;
+export function setAuthIDBHooks(hooks: { idbLoadStore: IdbLoadFn }): void {
+  _idbLoadStore = hooks.idbLoadStore;
+}
+
+// ── Audit log hook ─────────────────────────────────────────────────────────────
+let _auditLog: ((event: string, details?: Record<string, string>) => void) | null = null;
+export function setAuthAuditHook(fn: (event: string, details?: Record<string, string>) => void): void {
+  _auditLog = fn;
+}
+function _audit(event: string, details?: Record<string, string>): void {
+  _auditLog?.(event as 'auth_failure', details);
+}
 
 // ── Brute-force lockout state (localStorage — persists across tab close to prevent bypass) ─
 // NIST AC-7: lockout must survive tab close; sessionStorage is cleared on tab close and
