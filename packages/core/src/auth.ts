@@ -12,17 +12,19 @@ import { fsInit, fsSetHandle } from './fs.js';
 import { SALT_KEY, VERIFY_KEY, VAULT_KEY } from './constants.js';
 import { _vaultMetaSet } from './vault.js';
 
-// ── Brute-force lockout state (sessionStorage — persists across F5, cleared on tab close) ─
-const _SS_FAIL_COUNT  = 'nexus_auth_fail_count';
-const _SS_LOCKED_UNTIL = 'nexus_auth_locked_until';
+// ── Brute-force lockout state (localStorage — persists across tab close to prevent bypass) ─
+// NIST AC-7: lockout must survive tab close; sessionStorage is cleared on tab close and
+// could be bypassed by simply reopening the browser tab.
+const _LS_FAIL_COUNT  = 'nexus_auth_fail_count';
+const _LS_LOCKED_UNTIL = 'nexus_auth_locked_until';
 
-function _getFailCount(): number  { return parseInt(sessionStorage.getItem(_SS_FAIL_COUNT)  || '0', 10) || 0; }
-function _getLockedUntil(): number { return parseInt(sessionStorage.getItem(_SS_LOCKED_UNTIL) || '0', 10) || 0; }
-function _setFailCount(n: number): void  { sessionStorage.setItem(_SS_FAIL_COUNT,  String(n)); }
-function _setLockedUntil(n: number): void { sessionStorage.setItem(_SS_LOCKED_UNTIL, String(n)); }
+function _getFailCount(): number  { return parseInt(localStorage.getItem(_LS_FAIL_COUNT)  || '0', 10) || 0; }
+function _getLockedUntil(): number { return parseInt(localStorage.getItem(_LS_LOCKED_UNTIL) || '0', 10) || 0; }
+function _setFailCount(n: number): void  { localStorage.setItem(_LS_FAIL_COUNT,  String(n)); }
+function _setLockedUntil(n: number): void { localStorage.setItem(_LS_LOCKED_UNTIL, String(n)); }
 function _resetLockout(): void {
-  sessionStorage.removeItem(_SS_FAIL_COUNT);
-  sessionStorage.removeItem(_SS_LOCKED_UNTIL);
+  localStorage.removeItem(_LS_FAIL_COUNT);
+  localStorage.removeItem(_LS_LOCKED_UNTIL);
 }
 
 export async function renderAuth(): Promise<string> {
@@ -94,6 +96,8 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
         const text = await file.text();
         const payload = JSON.parse(text);
         if (payload.v !== 2) throw new Error('Unknown vault version');
+        if (typeof payload.salt !== 'string' || typeof payload.verify !== 'string' || typeof payload.vault !== 'string')
+          throw new Error('Vault file fields have unexpected types — file may be corrupted or tampered');
         if (payload.salt)   await _vaultMetaSet(SALT_KEY,   payload.salt);
         if (payload.verify) await _vaultMetaSet(VERIFY_KEY, payload.verify);
         if (payload.vault)  await _vaultMetaSet(VAULT_KEY,  payload.vault);
@@ -108,6 +112,8 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
         const text = await file.text();
         const payload = JSON.parse(text);
         if (payload.v !== 2) throw new Error('Unknown vault version');
+        if (typeof payload.salt !== 'string' || typeof payload.verify !== 'string' || typeof payload.vault !== 'string')
+          throw new Error('Vault file fields have unexpected types — file may be corrupted or tampered');
         if (payload.salt)   await _vaultMetaSet(SALT_KEY,   payload.salt);
         if (payload.verify) await _vaultMetaSet(VERIFY_KEY, payload.verify);
         if (payload.vault)  await _vaultMetaSet(VAULT_KEY,  payload.vault);

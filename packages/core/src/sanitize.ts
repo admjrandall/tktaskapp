@@ -69,3 +69,20 @@ export function sanitizeUrl(url: string): string | null {
     return null;
   }
 }
+
+/**
+ * Validate a dataUrl for use in href/src attributes for file records.
+ * Only allows data: URIs (produced by FileReader.readAsDataURL) and https: URLs.
+ * Rejects javascript:, vbscript:, and all other schemes to prevent XSS via
+ * maliciously crafted vault import payloads.
+ */
+export function sanitizeDataUrl(url: unknown): string {
+  if (typeof url !== 'string' || !url) return '';
+  const trimmed = url.trim();
+  if (trimmed.toLowerCase().startsWith('data:')) return trimmed;
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol === 'https:') return trimmed;
+  } catch { /* invalid URL */ }
+  return '';
+}

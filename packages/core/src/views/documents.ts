@@ -802,8 +802,13 @@ export function bindDocModal(): void {
 }
 
 // ── Utility: plain text escape (for AI prompts, not innerHTML) ────────────────
+// Strips control characters (including newlines) to prevent prompt injection
+// via document titles that contain instruction text. Capped at 200 chars.
 function escPlain(s: string): string {
-  return s.replace(/[\\"]/g, c => '\\' + c);
+  return s
+    .replace(/[\x00-\x1f\x7f]/g, ' ')
+    .replace(/[\\"]/g, c => '\\' + c)
+    .slice(0, 200);
 }
 
 // ── Minimal markdown/HTML pass-through for AI output ─────────────────────────

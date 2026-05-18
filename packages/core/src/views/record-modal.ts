@@ -2,6 +2,7 @@
 // Extracted from taskapp.html lines 4119–4224.
 
 import { escH, sanitize, formatRelative, formatFileSize, readFileAsBase64 } from '../utils.js';
+import { sanitizeDataUrl } from '../sanitize.js';
 import { dbGetAll, dbGetById, dbCreate, dbUpdate, dbDelete, softDelete, nowISO } from '../db.js';
 import { getState, showToast, showConfirm, closeRecordModal, reloadData } from '../state.js';
 import { Icons } from '../icons.js';
@@ -80,7 +81,8 @@ const FILE_ICONS: Record<string, string> = { pdf: '📄', doc: '📝', docx: '�
 function getFileIcon(name: string): string { const ext = (name || '').split('.').pop()!.toLowerCase(); return FILE_ICONS[ext] || '📎'; }
 
 function renderModalFileRow(f: AnyRecord): string {
-  return `<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem;background:var(--bg-base);border-radius:var(--radius-md);margin-bottom:.375rem"><span style="font-size:1.1rem">${getFileIcon(String(f.name || ''))}</span><div style="flex:1;min-width:0"><div style="font-size:.8rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(String(f.name || ''))}</div><div style="font-size:.7rem;color:var(--text-tertiary)">${f.size ? formatFileSize(Number(f.size)) : ''}</div></div>${f.dataUrl ? `<a href="${f.dataUrl}" download="${escH(String(f.name || ''))}" class="btn btn-ghost btn-icon btn-sm">${Icons.Download(12)}</a>` : ''}<button class="btn btn-ghost btn-icon btn-sm" data-modal-del-file="${f.id}" style="color:var(--priority-high)">${Icons.Delete(12)}</button></div>`;
+  const safeUrl = sanitizeDataUrl(f.dataUrl);
+  return `<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem;background:var(--bg-base);border-radius:var(--radius-md);margin-bottom:.375rem"><span style="font-size:1.1rem">${getFileIcon(String(f.name || ''))}</span><div style="flex:1;min-width:0"><div style="font-size:.8rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(String(f.name || ''))}</div><div style="font-size:.7rem;color:var(--text-tertiary)">${f.size ? formatFileSize(Number(f.size)) : ''}</div></div>${safeUrl ? `<a href="${escH(safeUrl)}" download="${escH(String(f.name || ''))}" class="btn btn-ghost btn-icon btn-sm">${Icons.Download(12)}</a>` : ''}<button class="btn btn-ghost btn-icon btn-sm" data-modal-del-file="${f.id}" style="color:var(--priority-high)">${Icons.Delete(12)}</button></div>`;
 }
 
 export function getSCHEMAS(): Record<string, { fields: Array<{ key: string; type: string; store?: string }> }> { return SCHEMAS; }

@@ -106,6 +106,8 @@ export async function fsReadVault(handle: FileSystemFileHandle): Promise<boolean
     const text = await file.text();
     const payload = JSON.parse(text);
     if (payload.v !== 2) throw new Error('Unknown file version');
+    if (typeof payload.salt !== 'string' || typeof payload.verify !== 'string' || typeof payload.vault !== 'string')
+      throw new Error('Vault file fields have unexpected types');
     if (payload.salt)   await _vaultMetaSet(SALT_KEY,   payload.salt);
     if (payload.verify) await _vaultMetaSet(VERIFY_KEY, payload.verify);
     if (payload.vault)  await _vaultMetaSet(VAULT_KEY,  payload.vault);

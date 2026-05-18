@@ -268,6 +268,8 @@ export function bindSettings(state: AppState): void {
   });
 
   document.getElementById('reset-app-btn')?.addEventListener('click', () => showConfirm('Delete ALL data and reset?', async () => {
+    // Wipe cloud API keys from memory and IDB before clearing other state.
+    await _aiSecretsWipe().catch(() => {});
     localStorage.clear(); sessionStorage.clear();
     await clearSessionKey().catch(() => {});
     await _idbClearStore('documents').catch(() => {});
@@ -298,9 +300,14 @@ export function bindSettings(state: AppState): void {
     const pw = (document.getElementById('import-pw') as HTMLInputElement | null)?.value;
     const text = await readFileAsText(file);
     try {
-      if (file.name.endsWith('.taskappbak')) { if (!pw) { showToast('Enter backup password', 'error'); return; } await importEncryptedBackup(text, pw, _state.cryptoKey!); }
-      else { await importJSON(text, _state.cryptoKey!); }
-      reloadData(); showToast('Imported successfully', 'success');
+      if (file.name.endsWith('.taskappbak')) {
+        if (!pw) { showToast('Enter backup password', 'error'); return; }
+        const result = await importEncryptedBackup(text, pw, _state.cryptoKey!);
+        reloadData(); showToast('Imported successfully', 'success');
+        if ((result as { legacyKdfUsed?: boolean })?.legacyKdfUsed) {
+          setTimeout(() => showToast('⚠️ Backup used older encryption (310k iterations). Export a fresh backup to upgrade it.', 'info', 8000), 1500);
+        }
+      } else { await importJSON(text, _state.cryptoKey!); reloadData(); showToast('Imported successfully', 'success'); }
     } catch { showToast('Import failed — wrong password?', 'error'); }
   });
 

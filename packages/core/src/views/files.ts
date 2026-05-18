@@ -2,6 +2,7 @@
 // Extracted from taskapp.html lines 7393–7475.
 
 import { escH, formatRelative, formatFileSize, readFileAsBase64 } from '../utils.js';
+import { sanitizeDataUrl } from '../sanitize.js';
 import { Icons } from '../icons.js';
 import { renderEmpty } from '../components.js';
 import { dbGetAll, dbGetById, dbCreate, dbDelete, nowISO } from '../db.js';
@@ -66,12 +67,12 @@ export function renderFilesView(_state: AppState): string {
       ? `<span style="font-size:.7rem;color:var(--accent);flex-shrink:0">${escH(recStore!)}: ${escH(String(rec.name || rec.title || ''))}</span>`
       : '';
     const name = String(f.name || '');
-    const dataUrl = f.dataUrl ? String(f.dataUrl) : '';
+    const dataUrl = sanitizeDataUrl(f.dataUrl);
     const ext = name.split('.').pop()?.toLowerCase() ?? '';
     const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
     return `<div style="background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius-xl);overflow:hidden;display:flex;flex-direction:column;transition:all var(--transition);box-shadow:var(--shadow-sm)">
       ${isImage && dataUrl
-        ? `<div style="height:120px;background:var(--bg-base);overflow:hidden;display:flex;align-items:center;justify-content:center"><img src="${dataUrl}" style="max-height:120px;max-width:100%;object-fit:cover;width:100%"></div>`
+        ? `<div style="height:120px;background:var(--bg-base);overflow:hidden;display:flex;align-items:center;justify-content:center"><img src="${escH(dataUrl)}" style="max-height:120px;max-width:100%;object-fit:cover;width:100%"></div>`
         : `<div style="height:80px;background:var(--bg-base);display:flex;align-items:center;justify-content:center;font-size:2.5rem">${getFileIcon(name)}</div>`}
       <div style="padding:.875rem;flex:1;display:flex;flex-direction:column;gap:.375rem">
         <div style="font-weight:600;font-size:.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escH(name)}">${escH(name)}</div>
@@ -81,7 +82,7 @@ export function renderFilesView(_state: AppState): string {
         </div>
         ${recLabel}
         <div style="display:flex;gap:.375rem;margin-top:.5rem">
-          ${dataUrl ? `<a href="${dataUrl}" download="${escH(name)}" class="btn btn-secondary btn-sm" style="flex:1;justify-content:center">${Icons.Download(14)} Download</a>` : ''}
+          ${dataUrl ? `<a href="${escH(dataUrl)}" download="${escH(name)}" class="btn btn-secondary btn-sm" style="flex:1;justify-content:center">${Icons.Download(14)} Download</a>` : ''}
           <button class="btn btn-ghost btn-icon btn-sm" data-del-global-file="${f.id}" style="color:var(--priority-high)">${Icons.Delete(14)}</button>
         </div>
       </div>

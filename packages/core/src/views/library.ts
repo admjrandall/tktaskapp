@@ -2,6 +2,7 @@
 // Extracted from taskapp.html lines 5110–5386.
 
 import { escH, formatRelative, formatFileSize } from '../utils.js';
+import { sanitizeDataUrl } from '../sanitize.js';
 import { Icons } from '../icons.js';
 import { dbGetAll, dbGetById, dbCreate, dbUpdate, dbDelete, nowISO } from '../db.js';
 import { setState, reloadData, showToast } from '../state.js';
@@ -77,7 +78,7 @@ function _renderFileCard(f: AnyRecord): string {
       <span>${formatRelative(String(f.addedAt || f.createdAt || ''))}</span>
       <div class="lib-card-actions">
         <button class="btn btn-ghost btn-sm lib-file-view" data-file-id="${f.id}" title="View">${Icons.Eye ? Icons.Eye(14) : '👁'}</button>
-        ${f.dataUrl ? `<a class="btn btn-ghost btn-sm" href="${String(f.dataUrl)}" download="${escH(String(f.name))}" title="Download">${Icons.Download(14)}</a>` : ''}
+        ${f.dataUrl ? (() => { const su = sanitizeDataUrl(f.dataUrl); return su ? `<a class="btn btn-ghost btn-sm" href="${escH(su)}" download="${escH(String(f.name))}" title="Download">${Icons.Download(14)}</a>` : ''; })() : ''}
         <button class="btn btn-ghost btn-sm lib-file-delete" data-file-id="${f.id}" title="Delete">${Icons.Trash(14)}</button>
       </div>
     </div>
@@ -309,12 +310,12 @@ export function renderFileViewer(fileId: string | null): string {
   const f = dbGetById('files', fileId) as AnyRecord | null;
   if (!f) return '';
   const name = String(f.name || '');
-  const dataUrl = f.dataUrl ? String(f.dataUrl) : '';
+  const dataUrl = sanitizeDataUrl(f.dataUrl);
   let body = '';
   if (_isImageFileV(name) && dataUrl) {
-    body = `<img src="${dataUrl}" alt="${escH(name)}" style="max-width:100%;max-height:100%;object-fit:contain">`;
+    body = `<img src="${escH(dataUrl)}" alt="${escH(name)}" style="max-width:100%;max-height:100%;object-fit:contain">`;
   } else if (_isPdfFileV(name) && dataUrl) {
-    body = `<embed src="${dataUrl}" type="application/pdf" style="width:100%;height:100%;border:none">`;
+    body = `<embed src="${escH(dataUrl)}" type="application/pdf" style="width:100%;height:100%;border:none">`;
   } else if (_isTextFileV(name) && dataUrl) {
     let raw = '';
     try { raw = dataUrl.includes(',') ? atob(dataUrl.split(',')[1] ?? '') : ''; } catch { /* unsupported encoding */ }
@@ -322,7 +323,7 @@ export function renderFileViewer(fileId: string | null): string {
   } else {
     body = `<div style="padding:2rem;text-align:center;color:var(--text-tertiary)">
       <p style="font-size:1rem;margin-bottom:1rem">Preview not available for this file type</p>
-      ${dataUrl ? `<a href="${dataUrl}" download="${escH(name)}" class="btn btn-primary">${Icons.Download(14)} Download</a>` : ''}
+      ${dataUrl ? `<a href="${escH(dataUrl)}" download="${escH(name)}" class="btn btn-primary">${Icons.Download(14)} Download</a>` : ''}
     </div>`;
   }
   return `<div class="file-viewer-backdrop" id="file-viewer-backdrop">
@@ -332,7 +333,7 @@ export function renderFileViewer(fileId: string | null): string {
           <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(name)}</div>
           <div style="font-size:.75rem;color:var(--text-tertiary)">${f.size ? formatFileSize(Number(f.size)) : ''} · Added ${formatRelative(String(f.addedAt || ''))}</div>
         </div>
-        ${dataUrl ? `<a href="${dataUrl}" download="${escH(name)}" class="btn btn-secondary btn-sm">${Icons.Download(14)} Download</a>` : ''}
+        ${dataUrl ? `<a href="${escH(dataUrl)}" download="${escH(name)}" class="btn btn-secondary btn-sm">${Icons.Download(14)} Download</a>` : ''}
         <button class="btn btn-ghost btn-icon" id="file-viewer-close">${Icons.Close()}</button>
       </div>
       <div class="file-viewer-body">${body}</div>
