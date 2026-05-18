@@ -5,7 +5,7 @@
 
 import { showToast } from '../state.js';
 import type { AppState } from '../state.js';
-import { assertLocalAIEndpointAllowed, isAITierAllowed } from '../deployment-policy.js';
+import { assertLocalAIEndpointAllowed, isAITierAllowed, allowedAITiers } from '../deployment-policy.js';
 import { aiPrefs, saveAIPrefs, syncAIPrefsLegacy } from './ai-prefs.js';
 import type { WebLLMPipeline } from './providers/browser-transformers.js';
 import { loadNano, callNano, destroyNanoSession } from './providers/browser-nano.js';
@@ -208,7 +208,11 @@ export async function startAILoad(): Promise<void> {
   const tier = aiPrefs.tier;
   try {
     if (!isAITierAllowed(tier)) {
-      throw new Error('This build allows only local/internal AI server connections. Open Settings → AI to configure Ollama.');
+      const allowed = allowedAITiers();
+      const hint = allowed.includes('browser') ? 'Open Settings → AI to set up Gemini Nano.'
+        : allowed.includes('ollama') ? 'Open Settings → AI to configure Ollama.'
+        : 'Open Settings → AI to configure an AI provider.';
+      throw new Error(`AI tier "${tier ?? 'none'}" is not allowed in this build. ${hint}`);
     }
     if (tier === 'browser') {
       const modelId = aiPrefs.browser.modelId;

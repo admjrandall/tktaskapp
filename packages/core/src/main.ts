@@ -430,11 +430,11 @@ export async function init(): Promise<void> {
     }
   })();
 
-  // Request persistent storage once per session
-  if (navigator.storage?.persist) {
+  // Request persistent storage once per session (silently skipped on file:// — browser never grants it there)
+  if (navigator.storage?.persist && location.protocol !== 'file:') {
     navigator.storage.persist().then(granted => {
       if (granted) console.info('[storage] Persistent storage granted.');
-      else console.warn('[storage] Persistent storage not granted — data may be evicted under pressure.');
+      else console.info('[storage] Persistent storage not granted — data protected by encryption regardless.');
     }).catch(() => {});
   }
 
@@ -571,7 +571,14 @@ export async function init(): Promise<void> {
       try { await checkDueDates(); reloadData(); } catch { /* non-fatal */ }
     }, 60000);
 
-    // Auto-reconnect AI if onboarding was completed
+    // Auto-reconnect AI if onboarding was completed with an allowed tier.
+    // If the saved tier is no longer allowed in this build profile (e.g. 'ollama'
+    // saved from a previous session but now running an OT-only build), silently
+    // clear the tier so the user isn't shown a confusing error on startup.
+    if (aiPrefs.hasCompletedOnboarding && aiPrefs.tier && !isAITierAllowed(aiPrefs.tier)) {
+      aiPrefs.tier = null as unknown as typeof aiPrefs.tier;
+      saveAIPrefs(aiPrefs);
+    }
     if (aiPrefs.hasCompletedOnboarding && aiPrefs.tier && isAITierAllowed(aiPrefs.tier)) {
       if (aiPrefs.tier === 'cloud') {
         setTimeout(async () => {
@@ -581,9 +588,9 @@ export async function init(): Promise<void> {
         }, 500);
       } else {
         setTimeout(() => {
-          try { startAILoad(); } catch (e) {
+          startAILoad().catch((e: unknown) => {
             console.warn('[AI] auto-reconnect failed:', (e as Error)?.message);
-          }
+          });
         }, 500);
       }
     }

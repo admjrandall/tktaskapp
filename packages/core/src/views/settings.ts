@@ -165,6 +165,10 @@ export function setSettingsSecurityHooks(hooks: {
 let _secMFAStatus: { totpEnabled: boolean; totpSecret: string } | null = null;
 let _secPasskeys: Array<{ id: string; deviceHint?: string; createdAt: string }> | null = null;
 let _secAuditEntries: Array<{ id: string; ts: string; event: string; details: Record<string, string>; ua: string }> | null = null;
+// In-flight flags prevent duplicate concurrent loads that cause re-render cascades
+let _secMFALoading = false;
+let _secPasskeysLoading = false;
+let _secAuditLoading = false;
 let _secAuditFilter = '';
 let _secAuditPage = 0;
 const AUDIT_PAGE_SIZE = 50;
@@ -181,6 +185,9 @@ export function resetSecurityState(): void {
   _secMFAStatus = null;
   _secPasskeys = null;
   _secAuditEntries = null;
+  _secMFALoading = false;
+  _secPasskeysLoading = false;
+  _secAuditLoading = false;
   _totpSetupSecret = '';
   _totpSetupStep = 'idle';
   _secAuditPage = 0;
@@ -516,7 +523,7 @@ export function renderSettings(state: AppState): string {
         </div>
       </div>`;
   }
-  return `<div style="display:flex;flex-direction:column;height:100%"><div class="workspace-toolbar"><span style="font-weight:600">Settings</span></div><div style="flex:1;display:flex;overflow:hidden"><div style="padding:1rem .75rem;border-right:1px solid var(--border-subtle);background:var(--bg-base);flex-shrink:0"><div class="settings-nav">${nav}</div></div><div style="flex:1;overflow-y:auto;padding:1.5rem;max-width:640px">${body}</div></div></div>`;
+  return `<div style="display:flex;flex-direction:column;height:100%"><div class="workspace-toolbar"><span style="font-weight:600">Settings</span></div><div style="flex:1;display:flex;overflow:hidden"><div style="padding:1rem .75rem;border-right:1px solid var(--border-subtle);background:var(--bg-base);flex-shrink:0"><div class="settings-nav">${nav}</div></div><div style="flex:1;overflow-y:auto;padding:1.5rem">${body}</div></div></div>`;
 }
 
 async function requireReauth(): Promise<boolean> {
@@ -726,24 +733,27 @@ export function bindSettings(state: AppState): void {
 
   // ── Security section bindings ─────────────────────────────────────────────────
   if (_settingsSection === 'security') {
-    // Lazy-load async security state and re-render once data arrives
-    if (!_secMFAStatus) {
+    // Lazy-load async security state — in-flight flags prevent duplicate concurrent loads
+    // that would cause re-render cascades and freeze the tab.
+    const _allLoaded = () => !!_secMFAStatus && !!_secPasskeys && !!_secAuditEntries;
+    const _maybeRender = () => { if (_allLoaded()) _appRenderWorkspace('settings'); };
+    if (!_secMFAStatus && !_secMFALoading) {
+      _secMFALoading = true;
       _loadMFAStatus().then(status => {
-        _secMFAStatus = status;
-        _appRenderWorkspace('settings');
-      }).catch(() => {});
+        _secMFAStatus = status; _secMFALoading = false; _maybeRender();
+      }).catch(() => { _secMFALoading = false; });
     }
-    if (!_secPasskeys) {
+    if (!_secPasskeys && !_secPasskeysLoading) {
+      _secPasskeysLoading = true;
       _loadPasskeys().then(keys => {
-        _secPasskeys = keys;
-        _appRenderWorkspace('settings');
-      }).catch(() => {});
+        _secPasskeys = keys; _secPasskeysLoading = false; _maybeRender();
+      }).catch(() => { _secPasskeysLoading = false; });
     }
-    if (!_secAuditEntries) {
+    if (!_secAuditEntries && !_secAuditLoading) {
+      _secAuditLoading = true;
       _loadAuditLog().then(entries => {
-        _secAuditEntries = entries;
-        _appRenderWorkspace('settings');
-      }).catch(() => {});
+        _secAuditEntries = entries; _secAuditLoading = false; _maybeRender();
+      }).catch(() => { _secAuditLoading = false; });
     }
 
     // Session lock controls
