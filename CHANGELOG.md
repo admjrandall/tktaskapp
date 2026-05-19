@@ -6,6 +6,18 @@ Versions are dated; there is no semantic version number — the public interface
 
 ---
 
+## [2026-05-19] — AI document Write UX fixes + chat input visibility
+
+### AI — Fixed
+- **AI Edit "Write" inserted at cursor position** — rewritten to insert AI-generated content immediately after the block element (paragraph, heading, list item, etc.) where the cursor was sitting before the modal opened, rather than replacing the entire document. Falls back to appending at the end when no cursor position is available. The streaming container shows a blue left-border accent during inference; on completion it is replaced with clean parsed nodes via `_safeHtmlFragment`.
+- **AI Edit "Write" content disappeared after streaming** — the `finally` block called `_reRenderDocModal()` (which re-renders the editor from DB) before calling `saveDocument()`, so the new AI content was overwritten by the old DB state before it was ever persisted. Fixed: `await saveDocument()` is called first, then `_reRenderDocModal()` reads the freshly saved content.
+- **AI Edit "Write" streamed to detached DOM node** — the overlay was previously closed by calling `_reRenderDocModal()` before streaming started. `_reRenderDocModal()` replaces the entire doc modal DOM via `replaceWith()`, detaching the `editor` reference captured in the closure; all streaming `onToken` writes went to an invisible orphaned node, and `saveDocument()` read the now-empty live editor. Fixed by removing only the overlay element directly (`getElementById('doc-ai-edit-overlay').remove()`) so the editor remains in the live DOM.
+
+### UI — Fixed
+- **Chat input card indistinguishable from background** — in light mode, `--chat-input-bg` was `var(--slate-50)`, the same shade as the AI workspace background. Changed to `#fff` (white). Added a dedicated `--chat-input-border` variable (`slate-400` light / `slate-600` dark) replacing the previously too-light `--border-default`, plus a subtle `box-shadow` to visually lift the card off the surrounding surface.
+
+---
+
 ## [2026-05-19] — AI document security hardening + chat UX fixes
 
 ### Security — Fixed

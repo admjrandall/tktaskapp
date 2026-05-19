@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 **Task App CRM** — TypeScript monorepo, built to `dist/offline/index.html`
-**Last reviewed:** 2026-05-17 (ADR-026 added)
+**Last reviewed:** 2026-05-19 (ADR-028 added)
 
 This document records every significant architectural and technical decision made for the application — what was chosen, what alternatives were considered, and why. Each decision entry answers the question: *"Why does the code look like this?"*
 
@@ -541,6 +541,27 @@ The soft-delete destination is called **Recycle Bin** throughout the UI (previou
 
 ### Rationale
 "Recycle Bin" is the platform-standard term on Windows (the primary target environment) and is unambiguous about the intent (deleted, recoverable, not permanent). Nesting it inside Settings reduces sidebar clutter while keeping the feature accessible. Users who need it visit Settings → Recycle Bin; the path is discoverable without occupying prime nav real estate.
+
+---
+
+## ADR-028 — AI Write inserts at cursor position rather than replacing the document
+
+**Status:** Active
+**Date:** 2026-05-19
+
+### Decision
+The AI Edit "Write" action inserts generated content **at the cursor position** (after the nearest block-level ancestor — `<p>`, `<h1>`–`<h3>`, `<li>`, `<blockquote>`, `<pre>`, `<div>`) rather than clearing the editor and replacing all content. The cursor range is captured in `_aiInsertRange` immediately before `_reRenderDocModal()` is called (which would otherwise destroy the selection). During streaming a `contenteditable="false"` `<div>` with a blue left-border accent is inserted at that position, streaming tokens are rendered into it, and on completion it is replaced with a clean `DocumentFragment` via `_safeHtmlFragment()`. Falls back to `editor.appendChild` when no cursor range is available.
+
+### Alternatives considered
+- **Replace entire document** — original behaviour; destructive and unexpected when the user has existing content they want to keep.
+- **Append to end always** — simpler fallback, used when no cursor position is recorded, but not the primary behaviour.
+- **Insert at exact text cursor offset** — possible via `range.insertNode()` directly, but would split paragraphs mid-sentence. Walking up to the nearest block ancestor produces cleaner insertion points.
+
+### Rationale
+Users position their cursor to indicate intent. Replacing the whole document when they are trying to add a section is surprising and destructive. Version history captures a pre-write snapshot regardless, so Replace-all is recoverable — but avoiding the replacement in the first place is simpler UX. The block-level ancestor walk (`P`, `H1`–`H3`, `LI`, etc.) avoids orphaned inline nodes by always inserting after complete structural units.
+
+### DOM / Trusted Types constraint
+The streaming container's `innerHTML` setter is covered by the `patchInnerHTML` IIFE (routes through `_rawPolicy`). `streamDiv.replaceWith(frag)` uses a `DocumentFragment` produced by `_safeHtmlFragment()`, which goes through `tempDiv.innerHTML` (also patched) — the unpatched `Range.createContextualFragment` sink is not used anywhere in this path.
 
 ---
 
