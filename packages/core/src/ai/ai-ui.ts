@@ -19,7 +19,7 @@ import {
 import { aiPrefs } from './ai-prefs.js';
 import {
   buildSystemPrompt, handleModelOutput, applyPendingAction,
-  setAIToolsHooks,
+  setAIToolsHooks, extractToolCall,
 } from './ai-tools.js';
 import { aiNeedsOnboarding, openNanoDownloadModal, isNanoModalOpen } from './ai-settings.js';
 
@@ -47,8 +47,38 @@ export function setAIUISchemas(schemas: Record<string, { fields: Array<{ key: st
 }
 
 // ── Streaming bubble helper ────────────────────────────────────────────────────
+const _TOOL_STREAM_LABELS: Record<string, string> = {
+  query_records:     'Searching records…',
+  count_records:     'Counting records…',
+  summarize_record:  'Summarizing record…',
+  answer_question:   'Looking up information…',
+  create_record:     'Preparing to create…',
+  update_record:     'Preparing to update…',
+  delete_record:     'Preparing to delete…',
+  navigate:          'Navigating…',
+  list_files:        'Listing files…',
+  get_running_timer: 'Checking timer…',
+  start_timer:       'Preparing timer action…',
+  log_communication: 'Preparing log entry…',
+  attach_file:       'Preparing attachment…',
+};
+
 export function streamToBubble(text: string): void {
-  const html = escH(text) + '<span class="spinner" style="width:10px;height:10px;margin-left:4px;vertical-align:middle"></span>';
+  let displayHtml: string;
+  const jsonIdx = text.indexOf('{"tool"');
+  if (jsonIdx >= 0) {
+    const prose = text.slice(0, jsonIdx).trimEnd();
+    const tc = extractToolCall(text);
+    const toolName = tc ? String(tc['tool']) : '';
+    const label = _TOOL_STREAM_LABELS[toolName] ?? 'Working…';
+    displayHtml = (prose ? escH(prose) + '<br>' : '') +
+      `<span style="font-style:italic;opacity:.65">${escH(label)}</span>`;
+  } else if (text.trimStart().startsWith('{')) {
+    displayHtml = `<span style="font-style:italic;opacity:.65">Working…</span>`;
+  } else {
+    displayHtml = escH(text);
+  }
+  const html = displayHtml + '<span class="spinner" style="width:10px;height:10px;margin-left:4px;vertical-align:middle"></span>';
   document.querySelectorAll('[id^="streaming-bubble"]').forEach(el => { el.innerHTML = html; });
 }
 
