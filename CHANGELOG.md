@@ -6,6 +6,24 @@ Versions are dated; there is no semantic version number — the public interface
 
 ---
 
+## [2026-05-19] — AI document security hardening + chat UX fixes
+
+### Security — Fixed
+- **`Range.createContextualFragment` Trusted Types violation** — Replace and Insert Below in the document inline AI toolbar called this DOM sink with a plain string, violating `require-trusted-types-for 'script'` and throwing a silent `TypeError` that prevented insertion entirely. Replaced with a `tempDiv.innerHTML` approach that routes through the existing patched setter (`_rawPolicy` → TrustedHTML). Both operations now work correctly and are wrapped in `try/catch` with user-visible error toasts.
+- **AI document renderer now escapes before tagging** — The `_mdToHtml` renderer previously passed model output through regex substitutions without HTML-escaping first, meaning a model that emitted raw HTML could bypass the renderer. Rewritten as a line-by-line state machine: every text segment is HTML-escaped (`&→&amp;`, `<→&lt;`, etc.) *before* being wrapped in structural tags. Model output can no longer inject markup regardless of what the model emits.
+- **Model instructions changed from HTML to Markdown** — System prompts for all document AI features (full-document write, inline rewrite/improve/expand/summarise/translate/table/formal/shorten) now explicitly request Markdown output and prohibit HTML tags. Aligns with the industry-standard pipeline used by ChatGPT, Notion AI, GitHub Copilot, and Gemini.
+
+### AI — Fixed
+- **AI Edit "Write" button silent failure** — when the AI stream hook was not ready, clicking Write silently returned with no feedback. Now shows a `'Connect AI first in Settings → AI'` toast.
+- **Streaming bubble showed raw JSON tool calls** — model output like `{"tool":"answer_question","args":{}}` was streamed verbatim into the chat bubble. Now replaced with a human-readable label (e.g. *Looking up information…*) matching the pattern used by ChatGPT and Gemini.
+- **Built-in AI wait hint** — the streaming bubble now shows a secondary note ("Built-in AI can take 10–30 s on first use") when the browser tier is active, preventing users from thinking nothing is happening during Nano/Phi-4-mini inference.
+- **Suggestion chips give immediate feedback** — clicking a suggestion chip now disables all chips instantly (prevents double-send) before `sendAIMessage` makes the full DOM update.
+
+### UI — Fixed
+- **Chat input indistinguishable from background** — `chat-input-card` switched from `--bg-base` to `--bg-elevated`, border weight increased to 1.5px, subtle box-shadow added, focus ring added (3px accent glow). The toolbar row (model picker + send button) is now separated from the textarea by a `--border-subtle` top border. Matches the visual language of major AI chat interfaces.
+
+---
+
 ## [2026-05-18] — Built-in AI UX fix + Edge/Phi-4-mini support
 
 ### Fixed

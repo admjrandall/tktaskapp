@@ -105,6 +105,18 @@ Two Trusted Types policies are registered once in `packages/core/src/trusted-typ
 - No `eval()` or `new Function()` anywhere in the file
 - Cloud AI responses are treated as untrusted text — they are escaped before rendering in the chat UI (`escH(text)` in `streamToBubble()`)
 
+### AI-generated document content — defence-in-depth pipeline
+
+All AI output rendered into the document editor passes through **three sequential gates** before touching the DOM:
+
+1. **Constrained Markdown renderer** (`_mdToHtml` in `documents.ts`) — processes input line-by-line. Every text segment is HTML-escaped (`&`, `<`, `>`, `"` → entities) *before* being wrapped in a tag. Only a small set of structural tags can be emitted (`h1`–`h3`, `p`, `ul`, `ol`, `li`, `pre`, `code`, `blockquote`, `table`, `hr`). Raw HTML in model output becomes visible escaped text, not markup. Model instructions request Markdown output; the renderer enforces it regardless.
+
+2. **DOMPurify allow-list** (`sanitizeDocHtml` in `sanitize.ts`) — runs after the renderer as a belt-and-braces gate. Strips anything not on the explicit tag/attribute allow-list and enforces safe link schemes (`http`, `https`, `mailto` only).
+
+3. **Trusted Types `_rawPolicy`** — the patched `innerHTML` setter wraps the sanitized string in a `TrustedHTML` object, satisfying `require-trusted-types-for 'script'` enforcement in the CSP.
+
+**Why `Range.createContextualFragment` is not used:** Chrome enforces Trusted Types on this DOM sink and our patch only covers `innerHTML`/`outerHTML`. Instead, AI content is inserted via a temporary `<div>` whose `innerHTML` setter is patched, then moved into a `DocumentFragment` node-by-node. This avoids the unpatched sink entirely.
+
 ---
 
 ## File integrity

@@ -1636,19 +1636,21 @@
 
     .chat-input-card {
       margin: 0 1rem 1rem;
-      background: var(--bg-base);
-      border: 1px solid var(--border-default);
+      background: var(--bg-elevated);
+      border: 1.5px solid var(--border-default);
       border-radius: var(--radius-lg);
-      padding: .5rem .75rem;
+      padding: .625rem .875rem .5rem;
       display: flex;
       flex-direction: column;
-      gap: .5rem;
-      transition: border-color var(--transition);
-      flex-shrink: 0
+      gap: 0;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      flex-shrink: 0;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08)
     }
 
     .chat-input-card:focus-within {
-      border-color: var(--accent)
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99,102,241,.12), 0 1px 6px rgba(0,0,0,.08)
     }
 
     .chat-input-flat {
@@ -1661,8 +1663,8 @@
       font-size: .875rem;
       color: var(--text-primary);
       max-height: 140px;
-      min-height: 24px;
-      padding: .25rem 0;
+      min-height: 36px;
+      padding: .25rem 0 .625rem;
       line-height: 1.5
     }
 
@@ -1678,7 +1680,10 @@
     .chat-input-bar {
       display: flex;
       align-items: center;
-      gap: .5rem
+      gap: .5rem;
+      border-top: 1px solid var(--border-subtle);
+      padding-top: .5rem;
+      margin-top: .125rem
     }
 
     .model-picker-btn {

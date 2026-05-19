@@ -234,7 +234,7 @@ function _bindAIEditModal(editor: HTMLElement | null, titleInput: HTMLInputEleme
   });
 
   writeBtn?.addEventListener('click', async () => {
-    if (!_streamAI || !editor) return;
+    if (!_streamAI || !editor) { showToast('Connect AI first in Settings → AI', 'error'); return; }
     const instruction = input?.value?.trim();
     if (!instruction) { showToast('Enter an instruction first', 'error'); return; }
 
@@ -259,7 +259,7 @@ function _bindAIEditModal(editor: HTMLElement | null, titleInput: HTMLInputEleme
     editor.innerHTML = '';
     editor.setAttribute('contenteditable', 'false');
 
-    const system = `You are a professional document writer. The user is editing a document titled "${escPlain(docTitle)}". Write well-structured content using clear paragraphs, headings where appropriate, and professional language. Return only the document body content — no preamble, no "Here is your document:", just the content itself. Use simple HTML: <h1>, <h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>, <em>.`;
+    const system = `You are a professional document writer. The user is editing a document titled "${escPlain(docTitle)}". Write well-structured content using clear paragraphs, headings where appropriate, and professional language. Return only the document body content — no preamble, no "Here is your document:", just the content itself. Format using Markdown only: # h1, ## h2, ### h3, **bold**, *italic*, \`code\`, - bullets, 1. numbered lists, > blockquotes. Do not output HTML tags.`;
     const prompt = currentContent
       ? `Current document content:\n${currentContent}\n\nInstruction: ${instruction}`
       : `Document title: ${docTitle}\n\nInstruction: ${instruction}`;
@@ -310,7 +310,7 @@ type InlineActionId = typeof _INLINE_ACTIONS[number]['id'];
 
 // Build prompt for each inline action
 function _inlinePrompt(actionId: InlineActionId, selectedText: string, instruction: string): { system: string; prompt: string } {
-  const system = 'You are a professional writing assistant. Return only the revised text — no preamble, no explanation, no quotes. Preserve formatting intent.';
+  const system = 'You are a professional writing assistant. Return only the revised text — no preamble, no explanation, no quotes. Preserve formatting intent. Format using Markdown only: **bold**, *italic*, `code`, # headings, - bullets. Do not output HTML tags.';
   const base = `Selected text:\n"""\n${selectedText}\n"""`;
   const prompts: Record<InlineActionId, string> = {
     rewrite:   `${base}\n\nRewrite the selected text following this instruction: ${instruction}`,
@@ -318,7 +318,7 @@ function _inlinePrompt(actionId: InlineActionId, selectedText: string, instructi
     expand:    `${base}\n\nExpand the selected text with more detail, examples, or explanation. Keep the same style and tone.`,
     summarise: `${base}\n\nSummarise the selected text concisely in 1–3 sentences.`,
     translate: `${base}\n\nTranslate the selected text into ${instruction || 'Spanish'}. Return only the translation.`,
-    table:     `${base}\n\nConvert the selected text into a well-structured HTML table using <table>, <thead>, <th>, <tbody>, <tr>, <td> tags. Return only the table HTML.`,
+    table:     `${base}\n\nConvert the selected text into a well-structured Markdown table using | col | col | header rows and |---|---| separators. Return only the Markdown table.`,
     formal:    `${base}\n\nRewrite the selected text in a formal, professional tone. Keep the same meaning.`,
     shorter:   `${base}\n\nMake the selected text shorter and more concise. Preserve the key meaning.`,
   };
@@ -467,50 +467,56 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
   document.getElementById('doc-inline-replace')?.addEventListener('mousedown', e => {
     e.preventDefault();
     if (!_savedRange || !_lastPreview) return;
-    const sel2 = window.getSelection();
-    if (sel2) { sel2.removeAllRanges(); sel2.addRange(_savedRange); }
-    // Modern Range API replaces deprecated execCommand('insertHTML') — SEC-13
-    {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        const fragment = range.createContextualFragment(sanitizeDocHtml(_mdToHtml(_lastPreview)));
-        range.insertNode(fragment);
-        range.collapse(false);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
+    try {
+      const sel = window.getSelection();
+      if (!sel) return;
+      sel.removeAllRanges();
+      sel.addRange(_savedRange);
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      // _safeHtmlFragment uses the patched innerHTML setter (→ _rawPolicy → TrustedHTML)
+      // instead of Range.createContextualFragment which is not covered by our TT patch.
+      range.insertNode(_safeHtmlFragment(_lastPreview));
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (err) {
+      showToast('Replace failed — please try again', 'error');
+      console.error('[doc-replace]', err);
+    } finally {
+      markDirty();
+      _removeInlineToolbar();
     }
-    markDirty();
-    _removeInlineToolbar();
   });
 
   document.getElementById('doc-inline-insert-below')?.addEventListener('mousedown', e => {
     e.preventDefault();
     if (!_savedRange || !_lastPreview) return;
-    const sel2 = window.getSelection();
-    if (sel2) { sel2.removeAllRanges(); sel2.addRange(_savedRange); }
-    // Move to end of selection, then insert paragraph + content
-    const endRange = _savedRange.cloneRange();
-    endRange.collapse(false);
-    sel2?.removeAllRanges();
-    sel2?.addRange(endRange);
-    // Modern Range API replaces deprecated execCommand('insertHTML') — SEC-13
-    {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        const fragment = range.createContextualFragment(`<br>${sanitizeDocHtml(_mdToHtml(_lastPreview))}`);
-        range.insertNode(fragment);
-        range.collapse(false);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
+    try {
+      const sel = window.getSelection();
+      if (!sel) return;
+      // Move cursor to end of selection
+      const endRange = _savedRange.cloneRange();
+      endRange.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(endRange);
+      const range = sel.getRangeAt(0);
+      // Insert a <br> separator node then the content fragment
+      const br = document.createElement('br');
+      range.insertNode(br);
+      range.setStartAfter(br);
+      range.collapse(true);
+      range.insertNode(_safeHtmlFragment(_lastPreview));
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (err) {
+      showToast('Insert failed — please try again', 'error');
+      console.error('[doc-insert-below]', err);
+    } finally {
+      markDirty();
+      _removeInlineToolbar();
     }
-    markDirty();
-    _removeInlineToolbar();
   });
 
   document.getElementById('doc-inline-regenerate')?.addEventListener('mousedown', e => {
@@ -851,23 +857,120 @@ function escPlain(s: string): string {
     .slice(0, 200);
 }
 
-// ── Minimal markdown/HTML pass-through for AI output ─────────────────────────
-// AI output may be markdown or HTML — convert markdown to HTML for preview
+// ── Constrained Markdown → HTML renderer ─────────────────────────────────────
+// Processes input line-by-line. ALL text content is HTML-escaped before being
+// wrapped in tags so model output can never inject markup — even if the model
+// ignores the "Markdown only" instruction and emits raw HTML tags, those tags
+// become visible escaped text, not executable markup. DOMPurify (sanitizeDocHtml)
+// then runs as a second gate before any DOM insertion.
 function _mdToHtml(md: string): string {
-  // If the content already looks like HTML, return as-is
-  if (/<(p|h[1-3]|ul|ol|table)\b/i.test(md)) return md;
-  return md
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+  // Gate 1: escape every character that has HTML meaning.
+  const esc = (s: string) => s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  // Safe inline formatting applied to already-escaped text.
+  // Patterns use only printable ASCII — cannot be confused with escaped entities.
+  const inline = (s: string) => s
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`)
-    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-    .replace(/\n\n+/g, '</p><p>')
-    .replace(/^(?!<[h|u|o|l|p])(.+)/gm, '<p>$1</p>')
-    .replace(/<p><\/p>/g, '');
+    .replace(/\*(.+?)\*/g,     '<em>$1</em>')
+    .replace(/`(.+?)`/g,       '<code>$1</code>');
+
+  const lines = md.split('\n');
+  const out: string[] = [];
+  let inUl = false, inOl = false, inPre = false, inTable = false, tableHead = true;
+
+  const closeList = () => {
+    if (inUl) { out.push('</ul>'); inUl = false; }
+    if (inOl) { out.push('</ol>'); inOl = false; }
+  };
+  const closeTable = () => {
+    if (inTable) { out.push('</tbody></table>'); inTable = false; tableHead = true; }
+  };
+  const closeAll = () => { closeList(); closeTable(); };
+
+  for (const raw of lines) {
+    // Fenced code block toggle
+    if (raw.trimStart().startsWith('```')) {
+      if (inPre) { out.push('</code></pre>'); inPre = false; }
+      else { closeAll(); out.push('<pre><code>'); inPre = true; }
+      continue;
+    }
+    if (inPre) { out.push(esc(raw)); continue; }
+
+    // Markdown table row: | cell | cell |
+    if (/^\|.+\|$/.test(raw.trim())) {
+      const isSep = /^\|[\s\-:|]+\|$/.test(raw.trim());
+      if (isSep) {
+        if (inTable && tableHead) { out.push('</thead><tbody>'); tableHead = false; }
+        continue;
+      }
+      if (!inTable) { closeList(); out.push('<table><thead>'); inTable = true; tableHead = true; }
+      const tag = tableHead ? 'th' : 'td';
+      const cells = raw.trim().slice(1, -1).split('|').map(c => `<${tag}>${inline(esc(c.trim()))}</${tag}>`);
+      out.push(`<tr>${cells.join('')}</tr>`);
+      continue;
+    }
+    closeTable();
+
+    // ATX headings (# ## ###)
+    const hm = raw.match(/^(#{1,3})\s+(.+)/);
+    if (hm) {
+      closeList();
+      const tag = `h${hm[1]!.length}`;
+      out.push(`<${tag}>${inline(esc(hm[2]!.trim()))}</${tag}>`);
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}\s*$/.test(raw.trim())) { closeAll(); out.push('<hr>'); continue; }
+
+    // Unordered list item
+    const ul = raw.match(/^[-*+]\s+(.+)/);
+    if (ul) {
+      if (inOl) { out.push('</ol>'); inOl = false; }
+      if (!inUl) { out.push('<ul>'); inUl = true; }
+      out.push(`<li>${inline(esc(ul[1]!))}</li>`);
+      continue;
+    }
+
+    // Ordered list item
+    const ol = raw.match(/^\d+[.)]\s+(.+)/);
+    if (ol) {
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      if (!inOl) { out.push('<ol>'); inOl = true; }
+      out.push(`<li>${inline(esc(ol[1]!))}</li>`);
+      continue;
+    }
+
+    // Blockquote
+    const bq = raw.match(/^>\s*(.*)/);
+    if (bq) { closeAll(); out.push(`<blockquote><p>${inline(esc(bq[1]!))}</p></blockquote>`); continue; }
+
+    // Blank line — close open structures
+    if (raw.trim() === '') { closeAll(); continue; }
+
+    // Default: paragraph
+    closeAll();
+    out.push(`<p>${inline(esc(raw.trim()))}</p>`);
+  }
+
+  closeAll();
+  if (inPre) out.push('</code></pre>');
+  return out.join('\n');
+}
+
+// Build a DocumentFragment from sanitized Markdown. Uses the patched innerHTML
+// setter (→ _rawPolicy → TrustedHTML) to satisfy require-trusted-types-for 'script'
+// without calling Range.createContextualFragment, which is not patched.
+function _safeHtmlFragment(md: string): DocumentFragment {
+  const div = document.createElement('div');
+  div.innerHTML = sanitizeDocHtml(_mdToHtml(md)); // patched setter handles TrustedHTML
+  const frag = document.createDocumentFragment();
+  while (div.firstChild) frag.appendChild(div.firstChild);
+  return frag;
 }
 
 // ── Production DOCX export (OOXML ZIP) ───────────────────────────────────────

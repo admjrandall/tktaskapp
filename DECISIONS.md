@@ -541,3 +541,21 @@ The soft-delete destination is called **Recycle Bin** throughout the UI (previou
 
 ### Rationale
 "Recycle Bin" is the platform-standard term on Windows (the primary target environment) and is unambiguous about the intent (deleted, recoverable, not permanent). Nesting it inside Settings reduces sidebar clutter while keeping the feature accessible. Users who need it visit Settings → Recycle Bin; the path is discoverable without occupying prime nav real estate.
+
+---
+
+## ADR-027 — Constrained Markdown renderer for AI document content; retire HTML-direct model output
+
+**Status:** Active
+**Date:** 2026-05-19
+
+### Decision
+AI models that write or edit document content are instructed to return **Markdown only** (no HTML tags). A line-by-line constrained renderer (`_mdToHtml` in `documents.ts`) converts the Markdown to HTML before DOMPurify sanitisation. The renderer HTML-escapes all text content *before* wrapping it in structural tags, so model output can never inject markup even if the model ignores the Markdown instruction. `Range.createContextualFragment` is replaced with a `tempDiv.innerHTML` approach to keep all DOM-string insertion inside the patched `innerHTML` sink (Trusted Types compliance).
+
+### Alternatives considered
+- **HTML-direct output + DOMPurify only** — single gate; relies on DOMPurify catching every edge case against the full HTML/CSS/SVG attack surface.
+- **Structured JSON schema output** — strongest isolation but Nano/small models produce unreliable JSON; adds parsing complexity.
+- **Markdown + third-party renderer (marked, markdown-it)** — adds bundle weight and a dependency surface; the constrained subset needed here (headings, lists, tables, code, inline styles) is straightforward to implement inline.
+
+### Rationale
+Industry standard (ChatGPT, Notion AI, GitHub Copilot, Gemini) is Markdown-in → renderer → sanitize. The renderer grammar is a second gate that collapses the attack surface before DOMPurify runs. A model that ignores "Markdown only" and emits `<script>` gets it HTML-escaped by the renderer into visible text — DOMPurify never even sees it as a tag. Belt-and-braces matches the threat model of an offline app where vault data could contain adversarially crafted AI output from a compromised or jailbroken model.

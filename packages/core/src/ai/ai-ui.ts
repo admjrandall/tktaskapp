@@ -189,7 +189,7 @@ export function renderChatBody(compact: boolean): string {
   return `<div style="display:flex;flex-direction:column;flex:1;overflow:hidden">
     <div class="chat-messages" id="${id('chat-messages')}">
       ${notLoadedUI}${suggests}${msgs}${pendingUI}
-      ${aiRuntime.streaming ? `<div class="chat-message assistant"><div class="avatar avatar-sm" style="background:var(--indigo-600);color:#fff;flex-shrink:0">N</div><div class="chat-bubble" id="${id('streaming-bubble')}"><span class="thinking"><span class="thinking-dots"><span></span><span></span><span></span></span>Thinking…</span></div></div>` : ''}
+      ${aiRuntime.streaming ? `<div class="chat-message assistant"><div class="avatar avatar-sm" style="background:var(--indigo-600);color:#fff;flex-shrink:0">N</div><div class="chat-bubble" id="${id('streaming-bubble')}"><span class="thinking"><span class="thinking-dots"><span></span><span></span><span></span></span>Thinking…${aiPrefs.tier === 'browser' ? '<span style="display:block;font-size:.75rem;color:var(--text-tertiary);margin-top:.375rem">Built-in AI can take 10–30 s on first use</span>' : ''}</span></div></div>` : ''}
     </div>
     <div class="chat-input-card">
       <textarea class="chat-input-flat" id="${id('chat-input')}" placeholder="${aiRuntime.ready ? 'Ask Task App AI…' : 'Connect AI first'}" rows="1" ${!aiRuntime.ready || aiRuntime.pendingAction ? 'disabled' : ''}></textarea>
@@ -271,7 +271,10 @@ export function bindAIPanel(): void {
   });
   document.getElementById('ai-open-wizard-empty-panel')?.addEventListener('click', () => _openAIWizard(1));
   document.querySelectorAll<HTMLElement>('[data-suggest]').forEach(btn =>
-    btn.addEventListener('click', () => sendAIMessage((btn.dataset as DOMStringMap & { suggest: string }).suggest, 'panel'))
+    btn.addEventListener('click', () => {
+      document.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach(b => { b.disabled = true; b.style.opacity = '.5'; });
+      sendAIMessage((btn.dataset as DOMStringMap & { suggest: string }).suggest, 'panel');
+    })
   );
   bindActionButtons('panel');
   bindChatInput('panel');
@@ -297,7 +300,10 @@ export function bindAIChatWorkspace(): void {
     aiRuntime.history = []; aiRuntime.pendingAction = null; _appRenderWorkspace('ai');
   });
   document.querySelectorAll<HTMLElement>('[data-suggest]').forEach(btn =>
-    btn.addEventListener('click', () => sendAIMessage((btn.dataset as DOMStringMap & { suggest: string }).suggest, 'workspace'))
+    btn.addEventListener('click', () => {
+      document.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach(b => { b.disabled = true; b.style.opacity = '.5'; });
+      sendAIMessage((btn.dataset as DOMStringMap & { suggest: string }).suggest, 'workspace');
+    })
   );
   bindActionButtons('workspace');
   bindChatInput('workspace');
