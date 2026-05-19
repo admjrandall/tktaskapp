@@ -36,6 +36,7 @@ export const AI_DEFAULT_PREFS = {
     usage: { tokensIn: 0, tokensOut: 0, estCostUsd: 0, monthKey: '' },
   },
   autoApplyCreates: false,
+  nanoDisclaimerAcknowledged: false,
   // Legacy mirror fields — kept in sync by syncAIPrefsLegacy() for old callsites
   backend: null as string | null,
   ollamaUrl: '',

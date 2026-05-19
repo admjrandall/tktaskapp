@@ -33,8 +33,9 @@ export const aiRuntime = {
   abortController:   null as AbortController | null,
   history:           [] as Message[],
   pendingAction:     null as { tool: string; args: AnyRecord; summary: string } | null,
-  ollamaModelsCache: null as AnyRecord[] | null,
-  modelPickerOpen:   null as string | null,
+  ollamaModelsCache:  null as AnyRecord[] | null,
+  modelPickerOpen:    null as string | null,
+  downloadProgress:   null as { loaded: number; total: number } | null,
 };
 
 // ── Hook injection ─────────────────────────────────────────────────────────────
@@ -217,7 +218,11 @@ export async function startAILoad(): Promise<void> {
     if (tier === 'browser') {
       const modelId = aiPrefs.browser.modelId;
       if (modelId === 'nano') {
-        aiRuntime.nanoSession = await loadNano(updateTxt, _buildSystemPrompt());
+        const onProgress = (loaded: number, total: number) => {
+          aiRuntime.downloadProgress = { loaded, total };
+        };
+        aiRuntime.nanoSession = await loadNano(updateTxt, _buildSystemPrompt(), onProgress);
+        aiRuntime.downloadProgress = null;
         aiRuntime.backend = 'nano';
       } else {
         const onProgress = (pct: number) => { aiRuntime.webllmLoadProgress = pct; };
@@ -243,6 +248,7 @@ export async function startAILoad(): Promise<void> {
   } catch (e) {
     console.warn('[AI] load failed:', (e as Error)?.message);
     aiRuntime.loadStarted = false;
+    aiRuntime.downloadProgress = null;
     aiRuntime.history.push({ role: 'assistant', content: `Could not connect to AI.\n\n• ${(e as Error)?.message}\n\nFix in Settings → AI.` });
     showToast('AI failed to connect — see chat', 'error', 6000);
   }

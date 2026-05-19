@@ -21,7 +21,7 @@ import {
   buildSystemPrompt, handleModelOutput, applyPendingAction,
   setAIToolsHooks,
 } from './ai-tools.js';
-import { aiNeedsOnboarding } from './ai-settings.js';
+import { aiNeedsOnboarding, openNanoDownloadModal, isNanoModalOpen } from './ai-settings.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -221,6 +221,10 @@ function renderModelDropdown(ns: string): string {
 }
 
 // ── Bind functions ─────────────────────────────────────────────────────────────
+
+// Prevents double-triggering openNanoDownloadModal during async availability check
+let _autoNanoTriggering = false;
+
 function ctxId(name: string, ctx: string): HTMLElement | null {
   const ns = ctx === 'panel' ? 'panel' : 'ws';
   return document.getElementById(`${name}-${ns}`) || document.getElementById(name);
@@ -244,6 +248,15 @@ export function bindAIPanel(): void {
 }
 
 export function bindAIChatWorkspace(): void {
+  // In OT mode, auto-open the Nano modal when AI is enabled but not yet loaded.
+  // Fires each time the user navigates to the AI view, so they are never silently stuck.
+  if (isOTOnlyMode() && aiPrefs.hasCompletedOnboarding && aiPrefs.tier === 'browser'
+      && !aiRuntime.ready && !aiRuntime.loadStarted
+      && !isNanoModalOpen() && !_autoNanoTriggering) {
+    _autoNanoTriggering = true;
+    openNanoDownloadModal().finally(() => { _autoNanoTriggering = false; });
+  }
+
   document.getElementById('ai-load-btn')?.addEventListener('click', () => {
     if (isOTOnlyMode()) _openAIWizard(1); else startAILoad();
   });

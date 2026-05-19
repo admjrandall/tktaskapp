@@ -1,5 +1,6 @@
-// ── CHROME BUILT-IN AI (GEMINI NANO) PROVIDER ────────────────────────────────
-// Uses the Chrome Prompt API (window.LanguageModel / window.ai.languageModel).
+// ── CHROME / EDGE BUILT-IN AI PROVIDER ────────────────────────────────────────
+// Uses the browser Prompt API (window.LanguageModel).
+// Chrome 148+ uses Gemini Nano; Edge 148+ uses Phi-4-mini. Same API surface.
 // Stateless — sessions are owned by ai-runtime.ts and passed in as parameters.
 
 type AnyRecord = Record<string, unknown>;
@@ -15,37 +16,50 @@ function getNanoAPI(): AnyRecord | undefined {
 export async function loadNano(
   updateTxt: (msg: string) => void,
   systemPrompt: string,
+  onProgress?: (loaded: number, total: number) => void,
 ): Promise<AnyRecord> {
-  updateTxt('Checking Chrome Built-in AI (Gemini Nano)…');
+  updateTxt('Checking built-in AI…');
   const api = getNanoAPI();
-  if (!api) throw new Error('LanguageModel API not found. Enable chrome://flags/#prompt-api-for-gemini-nano');
+  if (!api) throw new Error('LanguageModel API not found. Enable chrome://flags/#prompt-api-for-gemini-nano (Chrome) or the equivalent edge://flags entry (Edge), then relaunch.');
 
   const opts = { expectedOutputs: [{ type: 'text', languages: ['en'] }] };
-  const avail = await (api['availability'] as (o: AnyRecord) => Promise<string>)(opts);
-  if (avail === 'unavailable') throw new Error('Gemini Nano not available on this device');
+  let avail: string;
+  try {
+    avail = await (api['availability'] as (o: AnyRecord) => Promise<string>)(opts);
+  } catch {
+    avail = 'unavailable';
+  }
+  if (avail === 'unavailable') throw new Error('Built-in AI is not available on this device. Ensure Chrome/Edge 127+ with hardware acceleration enabled and the Prompt API flag active.');
 
   if (avail === 'downloadable' || avail === 'downloading') {
-    updateTxt('Downloading Gemini Nano (~4GB, one-time)…');
-    (api['create'] as (o: AnyRecord) => Promise<unknown>)(opts).catch(() => { /* background download */ });
-    let attempts = 0;
-    await new Promise<void>((resolve, reject) => {
-      const poll = setInterval(async () => {
-        attempts++;
-        const status = await (api['availability'] as (o: AnyRecord) => Promise<string>)(opts).catch(() => 'unavailable');
-        updateTxt(`Downloading Gemini Nano… ${Math.round(attempts * 5 / 60)} min`);
-        if (status === 'available' || status === 'readily') { clearInterval(poll); resolve(); }
-        else if (status === 'unavailable' || attempts >= 120) { clearInterval(poll); reject(new Error('Download timed out')); }
-      }, 5000);
-    });
+    updateTxt('Waiting for browser to download AI model (~4 GB)…');
+  } else {
+    updateTxt('Connecting to built-in AI…');
   }
 
-  updateTxt('Connecting to Gemini Nano…');
+  // Single create() handles download (if needed) + session creation.
+  // The monitor callback surfaces real download progress via the downloadprogress
+  // event (Chrome/Edge 127+). If the browser does not support monitor, the
+  // parameter is silently ignored and onProgress is never called.
   const session = await (api['create'] as (o: AnyRecord) => Promise<AnyRecord>)({
-    expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    ...opts,
     initialPrompts: [{ role: 'system', content: systemPrompt }],
+    monitor: (m: AnyRecord) => {
+      try {
+        (m['addEventListener'] as (type: string, handler: (e: AnyRecord) => void) => void)(
+          'downloadprogress',
+          (e: AnyRecord) => {
+            const loaded = Number(e['loaded'] ?? 0);
+            const total  = Number(e['total']  ?? 0);
+            if (total > 0) onProgress?.(loaded, total);
+          },
+        );
+      } catch { /* monitor not supported — progress stays indeterminate */ }
+    },
   });
   session['_sysPrompt'] = systemPrompt;
 
+  updateTxt('Verifying built-in AI…');
   const test = await (session['prompt'] as (m: string) => Promise<string>)('Reply with one word: ready');
   if (!test) throw new Error('Model returned empty response');
   return session;

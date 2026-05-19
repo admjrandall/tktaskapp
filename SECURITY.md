@@ -69,10 +69,10 @@ Vaults created before the 2026-05-15 hardening pass used 310,000 PBKDF2 iteratio
 The CSP meta tag in the built `dist/offline/index.html` enforces the following:
 
 - **`default-src 'none'`** — no resources load by default
-- **`script-src`** — SHA-256 hash of the single inlined script block; `'wasm-unsafe-eval'` to allow WebAssembly compilation (required by the ONNX runtime inside transformers.js WebLLM — narrower than `'unsafe-eval'`, does not permit arbitrary JS eval)
+- **`script-src`** — SHA-256 hash of the single inlined script block. No `'wasm-unsafe-eval'` in the offline build — transformers.js WebLLM is disabled (aliased to a stub) and the ONNX runtime is not bundled. (`'wasm-unsafe-eval'` may be present in sync/enterprise build profiles that include WebGPU model support.)
 - **`style-src 'unsafe-inline'`** — allows inline `style=` attributes throughout the app. Style block hashes are not used because when `style-src` contains any hash values, browsers ignore `unsafe-inline` entirely per spec — which would block the 177+ inline `style=` attributes in render functions. Script hashes are the security-critical protection; style hashing is not required for this threat model.
 - **`img-src 'self' data: blob:`** — permits inline data URIs (file attachments stored as base64) and blob URLs
-- **Offline `connect-src 'self' http://localhost:11434 http://127.0.0.1:11434` by default** — the offline profile is OT-only and permits only approved Ollama-compatible local/internal AI endpoints. Additional site LAN origins must be added at build time with `OT_AI_CONNECT_SRC`.
+- **Offline `connect-src 'self' http://localhost:11434 http://127.0.0.1:11434` by default** — the offline profile uses browser built-in AI (Gemini Nano on Chrome, Phi-4-mini on Edge), which runs entirely on-device and makes no network requests during inference. The localhost entries are maintained for forward compatibility. `OT_AI_CONNECT_SRC` at build time adds extra origins to this directive (CSP header only — does not enable the Ollama tier).
 - **Sync/enterprise `connect-src`** — may allow supported cloud AI APIs, Hugging Face model weights, and default Ollama localhost endpoints depending on the build profile.
 - **`worker-src blob:`** — required for transformers.js WebLLM Web Worker
 - **`object-src 'none'`** — blocks all plugin content
@@ -123,7 +123,7 @@ The app makes no network requests during normal offline operation. Network is us
 
 | Destination | When | What is sent |
 |-------------|------|-------------|
-| `http://localhost:11434`, `http://127.0.0.1:11434`, or build-allowlisted internal origins | Offline AI — Ollama-compatible tier | System prompt, chat history, user message |
+| No network request | Offline AI — browser built-in tier | Gemini Nano (Chrome) / Phi-4-mini (Edge) runs on-device; no data leaves the device |
 | `https://api.anthropic.com/v1/messages` | Enterprise/cloud AI — Anthropic tier | System prompt, chat history, user message |
 | `https://api.openai.com/v1/chat/completions` | Enterprise/cloud AI — OpenAI tier | System prompt, chat history, user message |
 | `https://generativelanguage.googleapis.com/...` | Enterprise/cloud AI — Google tier | System prompt, chat history, user message |
@@ -131,7 +131,7 @@ The app makes no network requests during normal offline operation. Network is us
 
 **No telemetry. No analytics. No tracking of any kind.**
 
-The offline profile blocks cloud AI and browser model downloads. Enterprise/cloud AI calls include a compact summary of current CRM record counts and a few field values as context (built by `buildDataSummary()`). Users should be aware that when using cloud AI tiers, this CRM summary is transmitted to the selected provider. Local/internal Ollama-compatible tiers send data only to the configured endpoint.
+The offline profile allows only browser built-in AI (Gemini Nano on Chrome, Phi-4-mini on Edge) — cloud AI and WebGPU/transformers.js model downloads are disabled. Enterprise/cloud AI calls (sync/enterprise builds only) include a compact summary of current CRM record counts and a few field values as context (built by `buildDataSummary()`). Users should be aware that when using cloud AI tiers, this CRM summary is transmitted to the selected provider. Local/internal Ollama-compatible tiers (sync/enterprise builds) send data only to the configured endpoint.
 
 ---
 

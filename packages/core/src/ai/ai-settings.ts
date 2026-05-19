@@ -250,18 +250,29 @@ export function closeAIWizard(): void {
 
 // ── Nano download modal (OT/offline profile only) ─────────────────────────────
 interface NanoModalState {
-  open:        boolean;
-  phase:       'disclaimer' | 'downloading' | 'error';
-  elapsed:     number;
-  error:       string | null;
+  open:    boolean;
+  phase:   'disclaimer' | 'downloading' | 'error';
+  elapsed: number;
+  error:   string | null;
 }
 
 export let _nanoModal: NanoModalState | null = null;
-let _nanoModalTimer: ReturnType<typeof setInterval> | null = null;
+let _nanoModalTimer:   ReturnType<typeof setInterval> | null = null;
+let _nanoModalPending  = false; // synchronous guard against double-trigger during async availability check
+
+export function isNanoModalOpen(): boolean { return _nanoModal !== null || _nanoModalPending; }
 
 function _getNanoAPI(): Record<string, unknown> | undefined {
   const w = window as unknown as Record<string, unknown>;
   return (w['LanguageModel'] ?? (w['ai'] as Record<string, unknown> | undefined)?.['languageModel']) as Record<string, unknown> | undefined;
+}
+
+function _setNanoPrefs(): void {
+  aiPrefs.tier = 'browser';
+  aiPrefs.browser.modelId = 'nano';
+  aiPrefs.hasCompletedOnboarding = true;
+  syncAIPrefsLegacy(aiPrefs);
+  saveAIPrefs(aiPrefs);
 }
 
 function _startNanoDownload(): void {
@@ -284,54 +295,77 @@ function _startNanoDownload(): void {
       clearInterval(_nanoModalTimer!); _nanoModalTimer = null;
       if (_nanoModal) {
         _nanoModal.phase = 'error';
-        _nanoModal.error = 'Gemini Nano failed to initialize. Ensure the Prompt API flag is enabled (chrome://flags/#prompt-api-for-gemini-nano) and try again.';
+        _nanoModal.error = 'Built-in AI failed to initialize. Ensure the Prompt API flag is enabled (chrome://flags/#prompt-api-for-gemini-nano in Chrome, or edge://flags in Edge) and try again.';
         _fullRender(getState() as AppState);
       }
       return;
     }
 
-    // Update only the elapsed text node — no full re-render
+    // Partial DOM update — avoid a full re-render on every tick
     _nanoModal.elapsed += 2;
-    const el = document.getElementById('nano-modal-elapsed');
-    if (el) {
+    const progress = aiRuntime.downloadProgress;
+    const pct = progress && progress.total > 0
+      ? Math.min(100, Math.round((progress.loaded / progress.total) * 100))
+      : null;
+
+    const elapsedEl = document.getElementById('nano-modal-elapsed');
+    if (elapsedEl) {
       const mins = Math.floor(_nanoModal.elapsed / 60);
       const secs = _nanoModal.elapsed % 60;
-      el.textContent = mins > 0 ? `${mins}m ${secs}s elapsed` : `${secs}s elapsed`;
+      elapsedEl.textContent = mins > 0 ? `${mins}m ${secs}s elapsed` : `${secs}s elapsed`;
     }
+    const barEl = document.getElementById('nano-modal-progress-bar') as HTMLElement | null;
+    const pctEl = document.getElementById('nano-modal-progress-pct');
+    if (barEl) barEl.style.width = pct !== null ? `${pct}%` : '100%'; // 100% = indeterminate pulse
+    if (pctEl) pctEl.textContent = pct !== null ? `${pct}%` : '';
   }, 2000);
 }
 
 export async function openNanoDownloadModal(): Promise<void> {
-  const api = _getNanoAPI();
-  if (!api) {
-    _nanoModal = { open: true, phase: 'error', elapsed: 0,
-      error: 'Chrome Built-in AI (Prompt API) is not available. In Chrome, open chrome://flags/#prompt-api-for-gemini-nano, enable the flag, and relaunch.' };
-    _fullRender(getState() as AppState);
-    return;
-  }
-  let avail: string;
+  if (_nanoModalPending || _nanoModal) return; // already open or opening
+  _nanoModalPending = true;
   try {
-    avail = await (api['availability'] as (o: unknown) => Promise<string>)({ expectedOutputs: [{ type: 'text', languages: ['en'] }] });
-  } catch { avail = 'unavailable'; }
+    const api = _getNanoAPI();
+    if (!api) {
+      _nanoModal = { open: true, phase: 'error', elapsed: 0,
+        error: 'Built-in AI (Prompt API) is not available in this browser. In Chrome, open chrome://flags/#prompt-api-for-gemini-nano and enable the flag, then relaunch. In Edge, open edge://flags and search for the Prompt API flag.' };
+      _fullRender(getState() as AppState);
+      return;
+    }
 
-  if (avail === 'unavailable') {
-    _nanoModal = { open: true, phase: 'error', elapsed: 0,
-      error: 'Gemini Nano is not available on this device. Ensure Chrome 127+ with hardware acceleration enabled and the Prompt API flag active.' };
+    let avail: string;
+    try {
+      avail = await (api['availability'] as (o: unknown) => Promise<string>)({ expectedOutputs: [{ type: 'text', languages: ['en'] }] });
+    } catch { avail = 'unavailable'; }
+
+    if (avail === 'unavailable') {
+      _nanoModal = { open: true, phase: 'error', elapsed: 0,
+        error: 'Built-in AI is not available on this device. Ensure Chrome/Edge 127+ with hardware acceleration enabled and the Prompt API flag active.' };
+      _fullRender(getState() as AppState);
+      return;
+    }
+
+    if (avail === 'readily' || avail === 'available') {
+      // Model already downloaded — set prefs, navigate to AI view, let the
+      // workspace connecting spinner handle feedback. No modal needed.
+      _setNanoPrefs();
+      navigate('ai');
+      startAILoad().catch(() => {});
+      return;
+    }
+
+    // Model needs downloading ('downloadable' | 'downloading').
+    // Show disclaimer only on first-ever acknowledgement; skip it after that.
+    _setNanoPrefs();
+    if (!aiPrefs.nanoDisclaimerAcknowledged) {
+      _nanoModal = { open: true, phase: 'disclaimer', elapsed: 0, error: null };
+    } else {
+      _nanoModal = { open: true, phase: 'downloading', elapsed: 0, error: null };
+      _startNanoDownload();
+    }
     _fullRender(getState() as AppState);
-    return;
-  }
-  if (avail === 'readily' || avail === 'available') {
-    startAILoad().catch(() => {});
-    return;
-  }
-  // downloadable or downloading
-  if (aiPrefs.hasCompletedOnboarding && isAITierAllowed(aiPrefs.tier)) {
-    _nanoModal = { open: true, phase: 'downloading', elapsed: 0, error: null };
-    _fullRender(getState() as AppState);
-    _startNanoDownload();
-  } else {
-    _nanoModal = { open: true, phase: 'disclaimer', elapsed: 0, error: null };
-    _fullRender(getState() as AppState);
+  } finally {
+    _nanoModalPending = false;
   }
 }
 
@@ -344,35 +378,41 @@ export function closeNanoDownloadModal(): void {
 export function renderNanoDownloadModal(): string {
   if (!_nanoModal) return '';
   const m = _nanoModal;
-  const disclaimer = `<p style="font-size:.875rem;color:var(--text-secondary);line-height:1.65;margin:0 0 .875rem">Chrome Built-in AI (Gemini Nano) requires a <strong>one-time local model download (~4 GB)</strong> managed entirely by Chrome and stored on this device. All inference runs locally — no data is transmitted externally. Chrome 127+ with the Prompt API flag enabled is required.</p>`;
+  const disclaimer = `<p style="font-size:.875rem;color:var(--text-secondary);line-height:1.65;margin:0 0 .875rem">Your browser's built-in AI (Gemini Nano on Chrome, Phi-4-mini on Edge) requires a <strong>one-time local model download (~4 GB)</strong> managed entirely by the browser and stored on this device. All inference runs locally — no data is ever transmitted externally.</p>`;
   let body = '';
   let footer = '';
+
   if (m.phase === 'disclaimer') {
-    body = `<h3 style="font-size:1.125rem;font-weight:600;margin:0 0 .75rem">Gemini Nano — First-time Setup</h3>${disclaimer}`;
-    footer = `<button class="btn btn-secondary btn-sm" id="nano-modal-close">Not now</button><button class="btn btn-primary btn-sm" id="nano-modal-enable">Enable Gemini Nano</button>`;
+    body = `<h3 style="font-size:1.125rem;font-weight:600;margin:0 0 .75rem">Built-in AI — First-time Setup</h3>${disclaimer}`;
+    footer = `<button class="btn btn-secondary btn-sm" id="nano-modal-close">Not now</button><button class="btn btn-primary btn-sm" id="nano-modal-enable">Enable AI</button>`;
   } else if (m.phase === 'downloading') {
-    const mins = Math.floor(m.elapsed / 60);
-    const secs = m.elapsed % 60;
-    const timeStr = mins > 0 ? `${mins}m ${secs}s elapsed` : `${secs}s elapsed`;
-    body = `<h3 style="font-size:1.125rem;font-weight:600;margin:0 0 .75rem">Downloading Gemini Nano…</h3>
+    body = `<h3 style="font-size:1.125rem;font-weight:600;margin:0 0 .75rem">Downloading AI model…</h3>
       ${disclaimer}
       <div style="display:flex;align-items:center;gap:.875rem;padding:.75rem;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:var(--radius-md)">
         <div class="spinner" style="width:28px;height:28px;border-width:3px;flex-shrink:0"></div>
-        <div>
-          <div style="font-size:.875rem;font-weight:600">Chrome is managing the download (~4 GB)</div>
-          <div style="font-size:.75rem;color:var(--text-tertiary);margin-top:.125rem" id="nano-modal-elapsed">${timeStr} — you may continue using Task App while this runs</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.875rem;font-weight:600">Browser is managing the download (~4 GB)</div>
+          <div style="margin-top:.5rem;background:var(--border-subtle);border-radius:999px;height:6px;overflow:hidden">
+            <div id="nano-modal-progress-bar" style="height:100%;background:var(--accent);border-radius:999px;width:0%;transition:width .6s ease"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--text-tertiary);margin-top:.25rem">
+            <span id="nano-modal-elapsed">0s elapsed</span>
+            <span id="nano-modal-progress-pct"></span>
+          </div>
         </div>
-      </div>`;
+      </div>
+      <p style="font-size:.75rem;color:var(--text-tertiary);margin:.625rem 0 0;line-height:1.5">You may continue using Task App while the download runs.</p>`;
     footer = `<button class="btn btn-secondary btn-sm" id="nano-modal-close">Close (continues in background)</button>`;
   } else {
-    body = `<h3 style="font-size:1.125rem;font-weight:600;margin:0 0 .75rem">Gemini Nano — Not Available</h3>
+    body = `<h3 style="font-size:1.125rem;font-weight:600;margin:0 0 .75rem">Built-in AI — Not Available</h3>
       <div class="card" style="padding:.875rem;border-color:#fecaca;background:#fef2f2;color:#991b1b;font-size:.8125rem;line-height:1.6">${escH(m.error || 'Unknown error')}</div>`;
     footer = `<button class="btn btn-secondary btn-sm" id="nano-modal-close">Close</button>`;
   }
+
   return `<div class="modal-backdrop" id="nano-modal-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1.5rem">
     <div class="card" style="max-width:520px;width:100%;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-lg)">
       <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:.625rem;background:var(--bg-base)">
-        ${Icons.AI(20)}<span style="font-weight:600">Task App AI — Gemini Nano</span>
+        ${Icons.AI(20)}<span style="font-weight:600">Task App AI</span>
       </div>
       <div style="padding:1.25rem 1.5rem">${body}</div>
       <div style="padding:.875rem 1.25rem;border-top:1px solid var(--border-subtle);display:flex;justify-content:flex-end;gap:.5rem;background:var(--bg-base)">${footer}</div>
@@ -388,10 +428,8 @@ export function bindNanoDownloadModal(): void {
     if ((e.target as HTMLElement).id === 'nano-modal-backdrop') closeNanoDownloadModal();
   });
   document.getElementById('nano-modal-enable')?.addEventListener('click', () => {
-    aiPrefs.tier = 'browser';
-    aiPrefs.browser.modelId = 'nano';
-    aiPrefs.hasCompletedOnboarding = true;
-    syncAIPrefsLegacy(aiPrefs);
+    // Mark disclaimer permanently acknowledged — won't show again even after disable/re-enable
+    aiPrefs.nanoDisclaimerAcknowledged = true;
     saveAIPrefs(aiPrefs);
     m.phase = 'downloading';
     m.elapsed = 0;

@@ -6,6 +6,24 @@ Versions are dated; there is no semantic version number — the public interface
 
 ---
 
+## [2026-05-18] — Built-in AI UX fix + Edge/Phi-4-mini support
+
+### Fixed
+- **Browser built-in AI reconnect** — re-enabling AI after disable (or navigating to the AI view after a browser restart) silently called `startAILoad()` with no visible feedback when the model was already present. Now navigates to the AI view and shows the workspace connecting spinner correctly.
+- **Disclaimer shown on every re-enable** — disabling AI cleared `hasCompletedOnboarding`, causing the one-time download disclaimer to reappear on every subsequent enable. Added `nanoDisclaimerAcknowledged` to `AIPrefs` (persisted in `taskapp_ai_prefs_v2`); the disclaimer now only shows when the browser model genuinely needs downloading and is never shown again after first acknowledgement.
+- **No real download progress** — the download modal showed elapsed time only. Now uses the browser's `downloadprogress` event (`loaded`/`total` bytes) via the `monitor` callback on `LanguageModel.create()` to drive a real percentage progress bar. Falls back to indeterminate animation if the event is not fired.
+- **Auto-present modal** — navigating to the AI view with AI enabled but not loaded required a manual button click. The AI view now auto-triggers `openNanoDownloadModal()` immediately.
+- **Double-trigger race** — added `_nanoModalPending` synchronous guard and `_autoNanoTriggering` flag to prevent duplicate modal opens during the async `availability()` check.
+- **`browser-nano.ts` simplified** — removed the fire-and-forget `create()` + polling loop. One `create()` call with `initialPrompts` + `monitor` handles download, progress reporting, and session creation.
+
+### Changed
+- `aiRuntime` object gains `downloadProgress: { loaded: number; total: number } | null` field, cleared on load completion or failure.
+- `browser-nano.ts` `loadNano()` accepts optional `onProgress` callback; no change to call sites that omit it.
+- Error messages in the built-in AI modal now mention both Chrome (`chrome://flags`) and Edge (`edge://flags`) flags.
+- Model descriptions updated to reflect Edge 148 Phi-4-mini support alongside Chrome Gemini Nano (same `window.LanguageModel` API, same `browser-nano.ts` provider, no code change required).
+
+---
+
 ## [2026-05-18] — Full security hardening (NIST SP 800-53 / FedRAMP Moderate / GDPR / OWASP 2026)
 
 ### Security — Added
@@ -97,10 +115,10 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-17] — AI production hardening
 
 ### Offline Profile — Changed
-- **Offline build is now OT-only for AI** — `apps/offline` sets an OT deployment policy that allows only Ollama-compatible local/internal AI endpoints. Browser AI, cloud AI, Hugging Face model downloads, and in-app Ollama model pulls are disabled in this profile.
+- **Offline build is now OT-only for AI** — `apps/offline` sets `OT_ONLY_DEPLOYMENT_POLICY` with `allowedTiers: ['browser']`, meaning only Gemini Nano is available. Cloud AI, WebGPU/transformers.js, Hugging Face model downloads, and in-app Ollama model pulls are disabled. The AI wizard in this profile redirects to a Nano setup modal (one-time flag + model download required; after that AI works fully offline).
 - **Offline build excludes Transformers payload** — `apps/offline/vite.config.ts` aliases `@huggingface/transformers` to a disabled stub so the OT artifact does not carry browser-model runtime code it cannot use.
-- **Offline build stubs browser AI providers** — Chrome Prompt API and WebGPU provider modules are aliased to disabled stubs in the offline build.
-- **Offline build stubs cloud providers** — Anthropic, OpenAI, and Google provider modules are aliased to disabled stubs in the offline build so cloud API endpoints are not bundled into the OT artifact.
+- **Offline build stubs WebGPU/transformers.js provider** — the `browser-transformers.js` provider module is aliased to a disabled stub. The Chrome Prompt API provider (`browser-nano.ts`) is **not** aliased and remains active in the offline bundle.
+- **Offline build stubs cloud providers** — Anthropic, OpenAI, and Google provider modules are aliased to disabled stubs so cloud API endpoints are not bundled into the OT artifact.
 - **Offline CSP now blocks cloud/internet AI** — removed cloud provider and Hugging Face endpoints from `apps/offline/index.html`; `connect-src` defaults to `http://localhost:11434 http://127.0.0.1:11434`.
 - **Internal LAN AI endpoints are build allowlisted** — set `OT_AI_CONNECT_SRC` when building offline to include approved origins such as `https://ai-server.internal` or `http://10.10.1.20:11434`.
 

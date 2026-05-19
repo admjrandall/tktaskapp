@@ -480,25 +480,31 @@ The injected `StreamFn` in `main.ts` now delegates entirely to `callBackend()` f
 
 ---
 
-## ADR-024 — Offline build uses OT-only local/internal AI policy
+## ADR-024 — Offline build uses OT-only browser built-in AI policy
 
 **Status:** Active
-**Date:** 2026-05-17
+**Date:** 2026-05-17 (updated 2026-05-18)
 
 ### Decision
-The `apps/offline` build now sets an `ot-only` deployment policy. In this profile, AI is allowed only through Ollama-compatible endpoints on localhost, private LAN IPs, or internal hostnames. Browser AI, cloud AI providers, Hugging Face model downloads, and in-app model pulls are disabled for the offline profile. The offline Vite config aliases browser AI and cloud provider modules to disabled stubs so the OT artifact does not bundle browser-model runtime code or cloud API endpoints.
+The `apps/offline` build sets an `ot-only` deployment policy (`OT_ONLY_DEPLOYMENT_POLICY.ai.allowedTiers = ['browser']`). In this profile, only the **browser built-in AI tier** is allowed — Chrome 148+ exposes Gemini Nano, Edge 148+ exposes Phi-4-mini; both use the same `window.LanguageModel` API and the same `browser-nano.ts` provider. Cloud AI, WebGPU/transformers.js, Hugging Face model downloads, and in-app Ollama model pulls are disabled. The offline Vite config aliases the WebGPU/transformers.js provider and all three cloud provider modules to disabled stubs. `browser-nano.ts` is **not** aliased and remains active in the offline bundle.
+
+The built-in AI modal (`openNanoDownloadModal`) handles the full setup flow: it auto-triggers when the user navigates to the AI view with AI enabled but not loaded. If the browser model still needs downloading, a one-time disclaimer is shown (`aiPrefs.nanoDisclaimerAcknowledged`); after acknowledgement the disclaimer never appears again, even after disable/re-enable cycles. Download progress is reported via the browser's `downloadprogress` event (real bytes-loaded / bytes-total) with an animated progress bar. When the model is already present, the modal is skipped and the workspace connecting spinner handles feedback.
 
 ### Rationale
-OT/ICS environments need a build that does not attempt internet access and cannot accidentally send CRM data to cloud AI providers. A UI-only warning is not enough; the policy is enforced in AI setup, model switching, runtime connection, and the offline CSP.
+OT/ICS environments are typically air-gapped or severely network-restricted. Browser built-in AI is the only tier that satisfies this constraint: the model is managed by the browser itself (same trust boundary as installing Chrome/Edge), works from `file://`, and after a one-time browser-managed download requires zero network access for inference. Cloud AI would require internet. Ollama requires a separate local service installation. Transformers.js WebGPU models require internet to download weights from Hugging Face CDN (app-initiated third-party download — unacceptable for air-gapped OT). Browser-managed model downloads are equivalent in trust to the browser binary itself.
+
+Both Chrome and Edge require a flag to expose `window.LanguageModel` to web pages (including `file://` origins, which cannot participate in Origin Trials):
+- Chrome: `chrome://flags/#prompt-api-for-gemini-nano` → Enabled → Relaunch
+- Edge: equivalent flag at `edge://flags` → Enabled → Relaunch
+
+The ~4 GB model files are stored outside the browser profile directory and survive cache/cookie clears. Resetting the browser profile or reinstalling the browser restores the flag to default (disabled) — users must re-enable it.
 
 ### CSP consequence
-The offline CSP `connect-src` defaults to `http://localhost:11434 http://127.0.0.1:11434`. Site-specific LAN AI endpoints must be explicitly allowlisted at build time with `OT_AI_CONNECT_SRC`, for example:
+The offline CSP `connect-src` defaults to `http://localhost:11434 http://127.0.0.1:11434`. These entries are maintained for forward compatibility. The `OT_AI_CONNECT_SRC` env var adds additional origins to `connect-src` at build time but does **not** enable the Ollama tier (blocked by `allowedTiers`). It is provided for environments that may need specific origins in the CSP for other reasons:
 
 ```bash
 OT_AI_CONNECT_SRC="http://localhost:11434 http://127.0.0.1:11434 https://ai-server.internal" pnpm run build:offline
 ```
-
-This is intentional: CSP cannot safely allow arbitrary LAN hosts at runtime without also weakening the no-internet guarantee.
 
 ---
 

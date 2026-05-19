@@ -667,7 +667,9 @@ export function bindSettings(state: AppState): void {
   // Nano-only (OT mode) bindings
   document.getElementById('ai-enable-nano')?.addEventListener('click', () => _openAIWizard(1));
   document.getElementById('ai-disable-nano')?.addEventListener('click', async () => {
-    _aiPrefs.hasCompletedOnboarding = false; _aiPrefs.tier = null; _saveAIPrefs(_aiPrefs);
+    _aiPrefs.tier = null; _aiPrefs.hasCompletedOnboarding = false;
+    // nanoDisclaimerAcknowledged preserved — user already accepted the one-time warning.
+    _saveAIPrefs(_aiPrefs);
     await _resetAIConnection(); showToast('AI disabled', 'success'); _appRenderWorkspace('settings');
   });
   if (isOTOnlyMode()) {
