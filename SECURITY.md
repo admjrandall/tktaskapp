@@ -78,7 +78,7 @@ The CSP meta tag in the built `dist/offline/index.html` enforces the following:
 - **`object-src 'none'`** — blocks all plugin content
 - **`base-uri 'none'`** — prevents base tag injection
 - **`frame-ancestors 'none'`** — not in the CSP meta tag (browsers ignore `frame-ancestors` in `<meta>` elements per spec — it only works in HTTP response headers). If the app is ever served via HTTPS, add `frame-ancestors 'none'` as a server-side response header.
-- **`trusted-types nexus-crm nexus-crm-raw`** — only these two policy names may be created
+- **`trusted-types nexus-crm nexus-crm-raw dompurify`** — only these three policy names may be created. `dompurify` is the name DOMPurify 3.x registers automatically when Trusted Types is enforced; it must be explicitly allowed or DOMPurify's internal DOM parsing fails, producing ~180 runtime errors per page load.
 - **`require-trusted-types-for 'script'`** — any raw string assigned to `innerHTML` or another DOM sink throws a `TypeError`; all assignments must go through a registered policy
 
 **CSP hashes are regenerated automatically** by `generate-csp.mjs`, which runs as part of every `pnpm run build:offline` command. Never edit the hash manually.

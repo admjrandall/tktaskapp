@@ -55,6 +55,7 @@
       --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, .07), 0 2px 4px -2px rgba(0, 0, 0, .05);
       --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, .08), 0 4px 6px -4px rgba(0, 0, 0, .05);
       --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, .1), 0 8px 10px -6px rgba(0, 0, 0, .05);
+      --chat-input-bg: var(--slate-50);
       --radius-sm: 6px;
       --radius-md: 10px;
       --radius-lg: 14px;
@@ -86,7 +87,8 @@
       --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, .3);
       --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, .4), 0 2px 4px -2px rgba(0, 0, 0, .3);
       --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, .5), 0 4px 6px -4px rgba(0, 0, 0, .4);
-      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, .6), 0 8px 10px -6px rgba(0, 0, 0, .4)
+      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, .6), 0 8px 10px -6px rgba(0, 0, 0, .4);
+      --chat-input-bg: var(--slate-800)
     }
 
     *,
@@ -1636,8 +1638,8 @@
 
     .chat-input-card {
       margin: 0 1rem 1rem;
-      background: var(--bg-elevated);
-      border: 1.5px solid var(--border-default);
+      background: var(--chat-input-bg);
+      border: 2px solid var(--border-default);
       border-radius: var(--radius-lg);
       padding: .625rem .875rem .5rem;
       display: flex;
@@ -1645,12 +1647,12 @@
       gap: 0;
       transition: border-color var(--transition), box-shadow var(--transition);
       flex-shrink: 0;
-      box-shadow: 0 1px 6px rgba(0,0,0,.08)
+      box-shadow: 0 2px 12px rgba(0,0,0,.1)
     }
 
     .chat-input-card:focus-within {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(99,102,241,.12), 0 1px 6px rgba(0,0,0,.08)
+      box-shadow: 0 0 0 3px rgba(99,102,241,.15), 0 2px 12px rgba(0,0,0,.1)
     }
 
     .chat-input-flat {
