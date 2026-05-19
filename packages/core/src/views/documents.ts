@@ -290,8 +290,9 @@ function _bindAIEditModal(editor: HTMLElement | null, titleInput: HTMLInputEleme
       _aiStreaming = false;
       _aiEditAbort = null;
       editor.setAttribute('contenteditable', 'true');
-      if (accumulated) markDirty();
-      // Re-render topbar to remove Stop button
+      // Save BEFORE _reRenderDocModal() — the re-render reads from DB, so content must
+      // be persisted first or the editor will be overwritten with the old pre-AI value.
+      if (accumulated) await saveDocument();
       _reRenderDocModal();
     }
   });
