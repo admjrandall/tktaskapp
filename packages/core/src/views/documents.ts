@@ -50,6 +50,7 @@ let _savedRange: Range | null = null; // saved selection before toolbar opens
 let _aiEditModalOpen = false;
 let _aiEditAbort: AbortController | null = null;
 let _aiStreaming = false;
+let _aiInsertRange: Range | null = null; // cursor position saved before modal opens
 
 // ── List view ─────────────────────────────────────────────────────────────────
 
@@ -239,18 +240,15 @@ function _bindAIEditModal(editor: HTMLElement | null, titleInput: HTMLInputEleme
     if (!instruction) { showToast('Enter an instruction first', 'error'); return; }
 
     const docTitle = titleInput?.value?.trim() || 'Untitled';
-    const currentContent = editor.innerText?.slice(0, 3000) || '';
 
-    // Remove the overlay without calling _reRenderDocModal() — that function replaces
-    // the entire doc modal DOM via replaceWith(), which would detach the editor reference
-    // captured in this closure. All streaming writes would then target a disconnected node.
+    // Remove overlay directly — _reRenderDocModal() would detach the editor reference
     _aiEditModalOpen = false;
     _aiStreaming = true;
     document.getElementById('doc-ai-edit-overlay')?.remove();
     const _aiEditBtn = document.getElementById('doc-ai-edit-btn') as HTMLButtonElement | null;
     if (_aiEditBtn) { _aiEditBtn.disabled = true; _aiEditBtn.style.opacity = '.5'; }
 
-    // Save version snapshot before AI overwrites
+    // Save version snapshot of current content before inserting AI content
     if (_docOpenId) {
       const existing = dbGetById('documents', _docOpenId) as AnyRecord | null;
       if (existing) {
@@ -260,13 +258,35 @@ function _bindAIEditModal(editor: HTMLElement | null, titleInput: HTMLInputEleme
       }
     }
 
-    editor.innerHTML = '';
-    editor.setAttribute('contenteditable', 'false');
+    // Create a streaming container and place it at the saved cursor position (or end of doc)
+    const streamDiv = document.createElement('div');
+    streamDiv.setAttribute('contenteditable', 'false');
+    streamDiv.style.cssText = 'border-left:3px solid var(--accent);padding:.25rem 0 .25rem .75rem;margin:.5rem 0;color:var(--text-secondary)';
 
-    const system = `You are a professional document writer. The user is editing a document titled "${escPlain(docTitle)}". Write well-structured content using clear paragraphs, headings where appropriate, and professional language. Return only the document body content — no preamble, no "Here is your document:", just the content itself. Format using Markdown only: # h1, ## h2, ### h3, **bold**, *italic*, \`code\`, - bullets, 1. numbered lists, > blockquotes. Do not output HTML tags.`;
-    const prompt = currentContent
-      ? `Current document content:\n${currentContent}\n\nInstruction: ${instruction}`
-      : `Document title: ${docTitle}\n\nInstruction: ${instruction}`;
+    const range = _aiInsertRange;
+    let insertedAtCursor = false;
+    if (range) {
+      try {
+        // Walk up to the nearest block-level ancestor inside the editor so we insert
+        // after a whole paragraph rather than splitting text mid-word
+        let anchor: Node = range.commonAncestorContainer;
+        if (anchor.nodeType === Node.TEXT_NODE) anchor = anchor.parentElement!;
+        while (anchor.parentElement && anchor.parentElement !== editor && !['P','H1','H2','H3','LI','BLOCKQUOTE','PRE','DIV'].includes((anchor as Element).tagName)) {
+          anchor = anchor.parentElement;
+        }
+        if (editor.contains(anchor) && anchor !== editor) {
+          (anchor as Element).after(streamDiv);
+          insertedAtCursor = true;
+        }
+      } catch { /* fall through to append */ }
+    }
+    if (!insertedAtCursor) editor.appendChild(streamDiv);
+
+    editor.setAttribute('contenteditable', 'false');
+    streamDiv.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+    const system = `You are a professional document writer inserting new content into a document titled "${escPlain(docTitle)}". Write well-structured content using clear paragraphs, headings where appropriate, and professional language. Return only the new content — no preamble, no "Here is what I wrote:", just the content itself. Format using Markdown only: # h1, ## h2, ### h3, **bold**, *italic*, \`code\`, - bullets, 1. numbered lists, > blockquotes. Do not output HTML tags.`;
+    const prompt = `Document title: ${docTitle}\n\nInstruction: ${instruction}`;
 
     _aiEditAbort = new AbortController();
     let accumulated = '';
@@ -278,21 +298,25 @@ function _bindAIEditModal(editor: HTMLElement | null, titleInput: HTMLInputEleme
         signal: _aiEditAbort.signal,
         onToken: (full: string) => {
           accumulated = full;
-          editor.innerHTML = sanitizeDocHtml(_mdToHtml(full));
-          // scroll to bottom as content grows
-          const wrap = editor.closest('.doc-content-area') as HTMLElement | null;
-          if (wrap) wrap.scrollTop = wrap.scrollHeight;
+          streamDiv.innerHTML = sanitizeDocHtml(_mdToHtml(full));
+          streamDiv.scrollIntoView({ block: 'nearest' });
         },
       });
     } catch (e) {
       if ((e as Error)?.name !== 'AbortError') showToast('AI write failed — check AI settings', 'error');
+      if (!accumulated) streamDiv.remove();
     } finally {
       _aiStreaming = false;
       _aiEditAbort = null;
+      _aiInsertRange = null;
       editor.setAttribute('contenteditable', 'true');
-      // Save BEFORE _reRenderDocModal() — the re-render reads from DB, so content must
-      // be persisted first or the editor will be overwritten with the old pre-AI value.
-      if (accumulated) await saveDocument();
+      if (accumulated) {
+        // Replace the styled streaming container with clean parsed nodes
+        const frag = _safeHtmlFragment(accumulated);
+        streamDiv.replaceWith(frag);
+        // Save BEFORE _reRenderDocModal() so the re-render reads the new content from DB
+        await saveDocument();
+      }
       _reRenderDocModal();
     }
   });
@@ -765,6 +789,9 @@ export function bindDocumentEditor(): void {
   // ── AI Edit button ──────────────────────────────────────────────────────────
   document.getElementById('doc-ai-edit-btn')?.addEventListener('click', () => {
     if (!_isAIReady()) { showToast('Connect AI first in Settings → AI', 'error'); return; }
+    // Save cursor position now — _reRenderDocModal() replaces the DOM and loses it
+    const sel = window.getSelection();
+    _aiInsertRange = (sel && sel.rangeCount > 0) ? sel.getRangeAt(0).cloneRange() : null;
     _aiEditModalOpen = true;
     _reRenderDocModal();
     // After re-render, bind the modal
