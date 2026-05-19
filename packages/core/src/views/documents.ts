@@ -241,10 +241,14 @@ function _bindAIEditModal(editor: HTMLElement | null, titleInput: HTMLInputEleme
     const docTitle = titleInput?.value?.trim() || 'Untitled';
     const currentContent = editor.innerText?.slice(0, 3000) || '';
 
-    // Close modal, save version snapshot, then stream
+    // Remove the overlay without calling _reRenderDocModal() — that function replaces
+    // the entire doc modal DOM via replaceWith(), which would detach the editor reference
+    // captured in this closure. All streaming writes would then target a disconnected node.
     _aiEditModalOpen = false;
     _aiStreaming = true;
-    _reRenderDocModal();
+    document.getElementById('doc-ai-edit-overlay')?.remove();
+    const _aiEditBtn = document.getElementById('doc-ai-edit-btn') as HTMLButtonElement | null;
+    if (_aiEditBtn) { _aiEditBtn.disabled = true; _aiEditBtn.style.opacity = '.5'; }
 
     // Save version snapshot before AI overwrites
     if (_docOpenId) {
