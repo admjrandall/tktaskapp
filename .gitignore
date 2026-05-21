@@ -5,3 +5,14 @@ dist/
 .DS_Store
 Thumbs.db
 .turbo/
+
+# Tool caches
+.eslintcache
+
+# Scratch / session artifacts
+lint-output.txt
+*lint-output.txt
+upgrade-session-prompt.md
+
+# axe report — uploaded as CI artifact, not stored in repo
+axe-report.json
