@@ -1,0 +1,2262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Task App CRM Future UI Mockup</title>
+  <style>
+    :root {
+      --bg: #f7f8f5;
+      --panel: #ffffff;
+      --panel-2: #f1f4ef;
+      --panel-3: #e8ede5;
+      --text: #1c2420;
+      --muted: #61706a;
+      --line: #d9dfd7;
+      --line-strong: #bfc9bc;
+      --blue: #2563eb;
+      --green: #188451;
+      --amber: #a05a00;
+      --red: #c2413b;
+      --violet: #6d5bd0;
+      --teal: #087d84;
+      --focus: #111827;
+      --shadow: 0 14px 34px rgba(31, 41, 55, 0.09);
+      --radius: 8px;
+      --rail: 248px;
+      --right: 360px;
+      --density-row: 44px;
+      --density-pad: 14px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background: var(--bg);
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: var(--rail) minmax(0, 1fr) var(--right);
+      min-height: 100vh;
+    }
+
+    .left-rail {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      padding: 18px 14px;
+      border-right: 1px solid var(--line);
+      background: #fbfcfa;
+    }
+
+    .brand {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 6px 6px 10px;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      color: #ffffff;
+      background: #203d36;
+      font-weight: 800;
+    }
+
+    .brand strong,
+    .record-title h2,
+    .workspace-title h1,
+    .brief-title h3 {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+
+    .brand span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .nav-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-label {
+      padding: 0 10px 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .nav-btn {
+      min-height: 38px;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      color: #26312c;
+      background: transparent;
+      text-align: left;
+    }
+
+    .nav-btn:hover {
+      background: var(--panel-2);
+    }
+
+    .nav-btn.active {
+      background: #dde8df;
+      color: #10231c;
+      font-weight: 750;
+    }
+
+    .nav-icon {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: #edf1ea;
+      color: #41504a;
+      font-size: 14px;
+    }
+
+    .nav-btn.active .nav-icon {
+      color: #ffffff;
+      background: #203d36;
+    }
+
+    .nav-count {
+      min-width: 26px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      color: #203d36;
+      background: #e6efe8;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .rail-footer {
+      margin-top: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .rail-footer strong {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .rail-footer p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .main-shell {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(247, 248, 245, 0.94);
+      backdrop-filter: blur(12px);
+    }
+
+    .command-search {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 42px;
+      padding: 0 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      text-align: left;
+    }
+
+    .command-search span:nth-child(2) {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .kbd {
+      padding: 2px 6px;
+      border: 1px solid var(--line);
+      border-bottom-color: var(--line-strong);
+      border-radius: 5px;
+      background: #f6f7f4;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .status-chip,
+    .pill {
+      display: inline-flex;
+      min-height: 28px;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: currentColor;
+      flex: 0 0 auto;
+    }
+
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: #33423c;
+      background: var(--panel);
+      font-weight: 800;
+    }
+
+    .icon-btn:hover {
+      background: var(--panel-2);
+    }
+
+    .workspace {
+      display: none;
+      min-width: 0;
+      padding: 22px 24px 72px;
+    }
+
+    .workspace.active {
+      display: block;
+    }
+
+    .workspace-title {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    .workspace-title h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    .workspace-title p {
+      max-width: 860px;
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .title-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: var(--panel);
+      color: #22312b;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .btn.primary {
+      border-color: #203d36;
+      background: #203d36;
+      color: #ffffff;
+    }
+
+    .btn.danger {
+      border-color: #efc4c1;
+      background: #fff7f6;
+      color: var(--red);
+    }
+
+    .btn.ghost {
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .command-grid {
+      grid-template-columns: minmax(280px, 1.15fr) minmax(280px, 1fr);
+      align-items: start;
+    }
+
+    .three-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .two-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 1px 0 rgba(17, 24, 39, 0.02);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfa;
+    }
+
+    .panel-header h2,
+    .panel-header h3 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.25;
+    }
+
+    .panel-header p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .panel-body {
+      padding: var(--density-pad);
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      min-height: 86px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfa;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 25px;
+      line-height: 1;
+    }
+
+    .metric em {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-style: normal;
+    }
+
+    .attention-list,
+    .activity-list,
+    .recommendation-list,
+    .timeline,
+    .approval-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .attention-item,
+    .activity-item,
+    .recommendation,
+    .approval,
+    .timeline-item,
+    .agent-row,
+    .record-row,
+    .api-row,
+    .capability-row {
+      display: grid;
+      gap: 8px;
+      min-height: var(--density-row);
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .attention-item {
+      grid-template-columns: 10px minmax(0, 1fr) auto;
+      align-items: center;
+    }
+
+    .severity {
+      width: 10px;
+      height: 100%;
+      min-height: 36px;
+      border-radius: 999px;
+      background: var(--blue);
+    }
+
+    .severity.risk {
+      background: var(--red);
+    }
+
+    .severity.warn {
+      background: var(--amber);
+    }
+
+    .severity.good {
+      background: var(--green);
+    }
+
+    .item-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .item-copy {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .recommendation {
+      background: #fffefa;
+    }
+
+    .recommendation strong,
+    .approval strong,
+    .agent-row strong,
+    .record-row strong,
+    .api-row strong,
+    .capability-row strong {
+      display: block;
+      line-height: 1.28;
+    }
+
+    .recommendation .evidence,
+    .approval .diff,
+    .agent-row .meta,
+    .record-row .meta,
+    .api-row .meta,
+    .capability-row .meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .row-actions {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .tiny-btn {
+      min-height: 28px;
+      padding: 5px 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fbfcfa;
+      color: #33423c;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .tiny-btn.ai {
+      color: var(--violet);
+      background: #f7f4ff;
+      border-color: #dad2ff;
+    }
+
+    .tiny-btn.good {
+      color: var(--green);
+      background: #f2fbf6;
+      border-color: #bfe6cf;
+    }
+
+    .tiny-btn.warn {
+      color: var(--amber);
+      background: #fff8ed;
+      border-color: #f1d0a2;
+    }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 3px;
+    }
+
+    .stage {
+      min-height: 162px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfa;
+    }
+
+    .stage h3 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 0 0 8px;
+      font-size: 13px;
+    }
+
+    .stage-item {
+      min-height: 44px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #ffffff;
+      margin-top: 7px;
+      font-size: 12px;
+    }
+
+    .load-bars {
+      display: grid;
+      gap: 9px;
+    }
+
+    .load-row {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr) 40px;
+      gap: 9px;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .bar {
+      height: 9px;
+      border-radius: 999px;
+      background: #e8ede5;
+      overflow: hidden;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--green);
+    }
+
+    .bar span.warn {
+      background: var(--amber);
+    }
+
+    .bar span.risk {
+      background: var(--red);
+    }
+
+    .record-layout {
+      display: grid;
+      grid-template-columns: minmax(340px, 1fr) 340px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .record-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      margin-bottom: 14px;
+    }
+
+    .record-title h2 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .record-title p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .health-ring {
+      width: 82px;
+      height: 82px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at center, #ffffff 0 51%, transparent 52%),
+        conic-gradient(var(--green) 0 76%, #e8ede5 76% 100%);
+      color: var(--green);
+      font-size: 20px;
+      font-weight: 850;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      overflow-x: auto;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #edf1ea;
+    }
+
+    .tab-btn {
+      min-height: 32px;
+      padding: 6px 10px;
+      border-radius: 7px;
+      color: #40504a;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tab-btn.active {
+      color: #19241f;
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(17, 24, 39, 0.08);
+    }
+
+    .tab-panel {
+      display: none;
+      margin-top: 12px;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .field {
+      min-height: 66px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfa;
+    }
+
+    .field span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .field strong {
+      display: block;
+      margin-top: 7px;
+      overflow-wrap: anywhere;
+    }
+
+    .record-action-bar {
+      position: sticky;
+      bottom: 12px;
+      z-index: 12;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 14px;
+      padding: 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: var(--shadow);
+    }
+
+    .relationship-map {
+      position: relative;
+      min-height: 300px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(#eef2ec 1px, transparent 1px),
+        linear-gradient(90deg, #eef2ec 1px, transparent 1px);
+      background-size: 24px 24px;
+      overflow: hidden;
+    }
+
+    .edge {
+      position: absolute;
+      height: 2px;
+      background: #c5cec1;
+      transform-origin: left center;
+    }
+
+    .node {
+      position: absolute;
+      min-width: 92px;
+      max-width: 148px;
+      padding: 8px 9px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 8px 18px rgba(31, 41, 55, 0.08);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .node span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .node.client {
+      border-color: #a8d7bd;
+      background: #f2fbf6;
+    }
+
+    .node.ai {
+      border-color: #dad2ff;
+      background: #f7f4ff;
+    }
+
+    .timeline-item {
+      grid-template-columns: 94px minmax(0, 1fr);
+      align-items: start;
+    }
+
+    .timeline-time {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .ai-layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 1fr) minmax(300px, 0.85fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .chat-stream {
+      display: grid;
+      gap: 10px;
+    }
+
+    .message {
+      max-width: 86%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #ffffff;
+      line-height: 1.45;
+      font-size: 13px;
+    }
+
+    .message.user {
+      justify-self: end;
+      background: #eef6ff;
+      border-color: #cfe2ff;
+    }
+
+    .message.ai {
+      background: #f7f4ff;
+      border-color: #dad2ff;
+    }
+
+    .plan-steps {
+      display: grid;
+      gap: 8px;
+      counter-reset: step;
+    }
+
+    .plan-step {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .plan-step::before {
+      counter-increment: step;
+      content: counter(step);
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      color: #ffffff;
+      background: var(--teal);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .agent-builder {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .template-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .agent-template {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 9px;
+      align-items: start;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      text-align: left;
+    }
+
+    .agent-template.active {
+      border-color: #c5b9ff;
+      background: #f7f4ff;
+    }
+
+    .template-icon {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: #ffffff;
+      background: var(--violet);
+      font-weight: 850;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .form-field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .form-field.full {
+      grid-column: 1 / -1;
+    }
+
+    .form-field label {
+      color: #34423d;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+      width: 100%;
+      min-height: 38px;
+      padding: 8px 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--text);
+    }
+
+    .form-field textarea {
+      min-height: 86px;
+      resize: vertical;
+    }
+
+    .scope-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .check-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfa;
+      font-size: 13px;
+    }
+
+    .check-pill input {
+      width: 16px;
+      height: 16px;
+      accent-color: #203d36;
+    }
+
+    .report-grid {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .brief-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .brief-btn {
+      display: grid;
+      gap: 4px;
+      width: 100%;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--text);
+      text-align: left;
+    }
+
+    .brief-btn.active {
+      border-color: #a8d7bd;
+      background: #f2fbf6;
+    }
+
+    .brief-btn strong {
+      font-size: 13px;
+    }
+
+    .brief-btn span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .brief-title {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 12px;
+    }
+
+    .brief-title h3 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(42px, 1fr));
+      gap: 8px;
+      align-items: end;
+      height: 180px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfa;
+    }
+
+    .chart-bar {
+      display: grid;
+      align-content: end;
+      gap: 6px;
+      height: 100%;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .chart-bar span {
+      display: block;
+      border-radius: 6px 6px 0 0;
+      background: #2f6f62;
+    }
+
+    .backend-map {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .api-row,
+    .capability-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+    }
+
+    .api-method {
+      padding: 4px 7px;
+      border-radius: 6px;
+      color: #ffffff;
+      background: #203d36;
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .roadmap {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(170px, 1fr));
+      gap: 10px;
+      overflow-x: auto;
+    }
+
+    .phase {
+      min-height: 190px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .phase span {
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .phase h3 {
+      margin: 8px 0 8px;
+      font-size: 15px;
+    }
+
+    .phase ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .right-rail {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--line);
+      background: #fbfcfa;
+      min-width: 0;
+    }
+
+    .assistant-head {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .assistant-head h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .assistant-head p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .assistant-body {
+      overflow: auto;
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .insight {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .insight h3 {
+      margin: 0 0 7px;
+      font-size: 13px;
+    }
+
+    .insight p,
+    .insight li {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .insight p {
+      margin: 0;
+    }
+
+    .insight ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .ai-boundary {
+      display: grid;
+      gap: 7px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #f7f4ff;
+      border: 1px solid #dad2ff;
+      color: #443398;
+      font-size: 12px;
+    }
+
+    .drawer {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: none;
+      background: rgba(17, 24, 39, 0.34);
+    }
+
+    .drawer.open {
+      display: block;
+    }
+
+    .drawer-panel {
+      position: absolute;
+      right: 0;
+      top: 0;
+      height: 100%;
+      width: min(560px, 100%);
+      overflow: auto;
+      padding: 18px;
+      background: #ffffff;
+      box-shadow: -24px 0 50px rgba(17, 24, 39, 0.18);
+    }
+
+    .drawer-panel header,
+    .palette header {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .drawer-panel h2,
+    .palette h2 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .drawer-panel p,
+    .palette p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 70;
+      display: none;
+      place-items: start center;
+      padding: 7vh 16px;
+      background: rgba(17, 24, 39, 0.36);
+    }
+
+    .modal.open {
+      display: grid;
+    }
+
+    .palette {
+      width: min(760px, 100%);
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 30px 80px rgba(17, 24, 39, 0.24);
+      overflow: hidden;
+    }
+
+    .palette-search {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .palette-search input {
+      width: 100%;
+      min-height: 42px;
+      border: 0;
+      outline: 0;
+      font-size: 18px;
+    }
+
+    .palette-body {
+      padding: 12px;
+      max-height: 64vh;
+      overflow: auto;
+    }
+
+    .palette-group {
+      margin-bottom: 14px;
+    }
+
+    .palette-group h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .palette-result {
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 50px;
+      padding: 8px;
+      border-radius: 8px;
+    }
+
+    .palette-result:hover {
+      background: var(--panel-2);
+    }
+
+    .palette-result strong {
+      display: block;
+      font-size: 13px;
+    }
+
+    .palette-result span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .mobile-tabs {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      display: none;
+      grid-template-columns: repeat(5, 1fr);
+      border-top: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .mobile-tabs button {
+      min-height: 58px;
+      display: grid;
+      place-items: center;
+      gap: 2px;
+      color: var(--muted);
+      background: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .mobile-tabs button.active {
+      color: #203d36;
+    }
+
+    .fab {
+      position: fixed;
+      right: 16px;
+      bottom: 72px;
+      z-index: 31;
+      display: none;
+      width: 54px;
+      height: 54px;
+      place-items: center;
+      border-radius: 50%;
+      color: #ffffff;
+      background: #203d36;
+      box-shadow: var(--shadow);
+      font-size: 22px;
+      font-weight: 850;
+    }
+
+    .density-compact {
+      --density-row: 36px;
+      --density-pad: 10px;
+    }
+
+    .density-spacious {
+      --density-row: 56px;
+      --density-pad: 18px;
+    }
+
+    @media (max-width: 1280px) {
+      .app {
+        grid-template-columns: 210px minmax(0, 1fr);
+      }
+
+      .right-rail {
+        display: none;
+      }
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        display: block;
+      }
+
+      .left-rail {
+        display: none;
+      }
+
+      .topbar {
+        grid-template-columns: minmax(0, 1fr) auto;
+        padding: 10px;
+      }
+
+      .top-actions .status-chip,
+      .top-actions .pill {
+        display: none;
+      }
+
+      .workspace {
+        padding: 16px 12px 88px;
+      }
+
+      .workspace-title,
+      .record-header,
+      .brief-title {
+        grid-template-columns: 1fr;
+      }
+
+      .command-grid,
+      .three-grid,
+      .two-grid,
+      .metric-row,
+      .record-layout,
+      .ai-layout,
+      .agent-builder,
+      .report-grid,
+      .backend-map,
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .mobile-tabs,
+      .fab {
+        display: grid;
+      }
+
+      .record-action-bar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .scope-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .workspace-title h1 {
+        font-size: 23px;
+      }
+
+      .metric-row,
+      .field-grid,
+      .scope-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .title-actions,
+      .row-actions {
+        justify-content: stretch;
+      }
+
+      .btn,
+      .tiny-btn {
+        flex: 1 1 auto;
+      }
+
+      .timeline-item,
+      .attention-item,
+      .api-row,
+      .capability-row {
+        grid-template-columns: 1fr;
+      }
+
+      .severity {
+        width: 100%;
+        height: 8px;
+        min-height: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="left-rail" aria-label="Primary">
+      <div class="brand">
+        <div class="brand-mark">TK</div>
+        <div>
+          <strong>Task App CRM</strong>
+          <span>Future UI workbench</span>
+        </div>
+      </div>
+
+      <nav class="nav-section" aria-label="Work modes">
+        <div class="nav-label">Modes</div>
+        <button class="nav-btn active" data-workspace="command"><span class="nav-icon">C</span><span>Command Center</span><span class="nav-count">12</span></button>
+        <button class="nav-btn" data-workspace="work"><span class="nav-icon">W</span><span>Work</span><span class="nav-count">31</span></button>
+        <button class="nav-btn" data-workspace="relationships"><span class="nav-icon">R</span><span>Relationships</span><span class="nav-count">8</span></button>
+        <button class="nav-btn" data-workspace="knowledge"><span class="nav-icon">K</span><span>Knowledge</span><span class="nav-count">19</span></button>
+        <button class="nav-btn" data-workspace="intelligence"><span class="nav-icon">I</span><span>Intelligence</span><span class="nav-count">5</span></button>
+        <button class="nav-btn" data-workspace="system"><span class="nav-icon">S</span><span>System</span><span class="nav-count">3</span></button>
+      </nav>
+
+      <nav class="nav-section" aria-label="Mockup screens">
+        <div class="nav-label">Screens</div>
+        <button class="nav-btn" data-workspace="record"><span class="nav-icon">360</span><span>Record 360</span><span></span></button>
+        <button class="nav-btn" data-workspace="agents"><span class="nav-icon">A</span><span>Agent Builder</span><span></span></button>
+        <button class="nav-btn" data-workspace="reports"><span class="nav-icon">B</span><span>Narrative Reports</span><span></span></button>
+        <button class="nav-btn" data-workspace="backend"><span class="nav-icon">API</span><span>Backend Alignment</span><span></span></button>
+      </nav>
+
+      <div class="rail-footer">
+        <strong><span class="dot" style="color: var(--green)"></span>Offline ready</strong>
+        <p>Local vault active. AI writes require approval. Sync is queued for 2 changes.</p>
+      </div>
+    </aside>
+
+    <main class="main-shell">
+      <header class="topbar">
+        <button class="command-search" id="openPalette">
+          <span>?</span>
+          <span>Search records, create work, ask AI, run agents...</span>
+          <span class="kbd">Ctrl K</span>
+        </button>
+        <div class="top-actions">
+          <span class="status-chip"><span class="dot" style="color: var(--green)"></span>Local vault</span>
+          <span class="status-chip"><span class="dot" style="color: var(--amber)"></span>2 sync queued</span>
+          <span class="pill">Approval required</span>
+          <button class="icon-btn" title="Notifications" aria-label="Notifications">!</button>
+          <button class="icon-btn" title="AI status" aria-label="AI status">AI</button>
+        </div>
+      </header>
+
+      <section class="workspace active" id="workspace-command">
+        <div class="workspace-title">
+          <div>
+            <h1>Command Center</h1>
+            <p>A structured operating cockpit for overdue work, waiting clients, recommendations, agent runs, workload, pipeline movement, recent changes, and offline issues.</p>
+          </div>
+          <div class="title-actions">
+            <button class="btn" id="densityBtn">Density: Comfortable</button>
+            <button class="btn primary" data-open-palette>New work</button>
+          </div>
+        </div>
+
+        <div class="grid metric-row">
+          <div class="metric"><span>Needs attention</span><strong>12</strong><em>3 high risk</em></div>
+          <div class="metric"><span>Due today</span><strong>18</strong><em>6 client-facing</em></div>
+          <div class="metric"><span>Pending approvals</span><strong>5</strong><em>AI write previews</em></div>
+          <div class="metric"><span>Offline changes</span><strong>2</strong><em>Ready to sync</em></div>
+        </div>
+
+        <div class="grid command-grid" style="margin-top: 14px;">
+          <section class="panel">
+            <div class="panel-header">
+              <div><h2>Now</h2><p>Deterministic attention list, sorted by risk and due date.</p></div>
+              <span class="pill">Actionable</span>
+            </div>
+            <div class="panel-body attention-list">
+              <div class="attention-item"><span class="severity risk"></span><div><p class="item-title">Acme Corp follow-up risk</p><p class="item-copy">No communication in 14 days. Project Alpha is due in 5 days.</p></div><button class="tiny-btn ai" data-open-drawer="acme">Why</button></div>
+              <div class="attention-item"><span class="severity warn"></span><div><p class="item-title">6 tasks overdue</p><p class="item-copy">Three belong to implementation projects, two are unassigned.</p></div><button class="tiny-btn">Open</button></div>
+              <div class="attention-item"><span class="severity warn"></span><div><p class="item-title">Import requires mapping</p><p class="item-copy">42 rows have ambiguous people/client relationships.</p></div><button class="tiny-btn ai">Map</button></div>
+              <div class="attention-item"><span class="severity good"></span><div><p class="item-title">Weekly plan is ready</p><p class="item-copy">AI drafted a plan using tasks, calendar, and project due dates.</p></div><button class="tiny-btn good">Review</button></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div><h2>Next Best Actions</h2><p>Recommendations show evidence before any action.</p></div>
+              <button class="tiny-btn">Tune</button>
+            </div>
+            <div class="panel-body recommendation-list">
+              <article class="recommendation">
+                <strong>Draft follow-up for Acme Corp</strong>
+                <div class="evidence">Evidence: last email Mar 7, 2 open projects, one high priority deadline this week.</div>
+                <div class="row-actions"><button class="tiny-btn ai">Preview action</button><button class="tiny-btn">Snooze</button><button class="tiny-btn">Open client</button></div>
+              </article>
+              <article class="recommendation">
+                <strong>Create blocker review for Project Atlas</strong>
+                <div class="evidence">Evidence: 4 tasks stalled, no status change in 9 days, owner load at 96%.</div>
+                <div class="row-actions"><button class="tiny-btn ai">Prepare agenda</button><button class="tiny-btn">Assign</button><button class="tiny-btn">Dismiss</button></div>
+              </article>
+              <article class="recommendation">
+                <strong>Clean duplicate client contacts</strong>
+                <div class="evidence">Evidence: 7 matching emails across people records. Approval required before merge.</div>
+                <div class="row-actions"><button class="tiny-btn ai">Review merges</button><button class="tiny-btn">Later</button></div>
+              </article>
+            </div>
+          </section>
+        </div>
+
+        <div class="grid two-grid" style="margin-top: 14px;">
+          <section class="panel">
+            <div class="panel-header"><div><h2>Agent Activity</h2><p>Visible, cancellable, auditable runs.</p></div><span class="pill">5 running</span></div>
+            <div class="panel-body activity-list">
+              <div class="activity-item"><strong>Project Risk Scout</strong><p class="item-copy">Scanning 12 projects. Step 3 of 5: compare deadlines and task velocity.</p><div class="row-actions"><button class="tiny-btn">View run</button><button class="tiny-btn danger">Cancel</button></div></div>
+              <div class="activity-item"><strong>Meeting Notes Summarizer</strong><p class="item-copy">Drafted 3 notes from uploaded transcripts. Waiting for approval to attach to records.</p><div class="row-actions"><button class="tiny-btn good">Approve</button><button class="tiny-btn">Edit</button></div></div>
+              <div class="activity-item"><strong>Weekly Planner</strong><p class="item-copy">Completed. Created a draft schedule and 4 task recommendations.</p><div class="row-actions"><button class="tiny-btn">Open result</button></div></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header"><div><h2>Pipeline Pulse</h2><p>Stage movement and stale opportunities.</p></div><button class="tiny-btn">Filter</button></div>
+            <div class="panel-body">
+              <div class="pipeline">
+                <div class="stage"><h3>Lead <span>9</span></h3><div class="stage-item">Northwind onboarding</div><div class="stage-item">Globex discovery</div></div>
+                <div class="stage"><h3>Qualified <span>6</span></h3><div class="stage-item">Acme expansion</div><div class="stage-item">City Clinic refresh</div></div>
+                <div class="stage"><h3>Active <span>14</span></h3><div class="stage-item">Project Alpha</div><div class="stage-item">Atlas migration</div></div>
+                <div class="stage"><h3>At risk <span>3</span></h3><div class="stage-item">Beacon rollout</div><div class="stage-item">Helio renewal</div></div>
+                <div class="stage"><h3>Complete <span>21</span></h3><div class="stage-item">Q2 audit</div><div class="stage-item">Portal launch</div></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="grid two-grid" style="margin-top: 14px;">
+          <section class="panel">
+            <div class="panel-header"><div><h2>Team Load</h2><p>Assignment distribution and overload warnings.</p></div></div>
+            <div class="panel-body load-bars">
+              <div class="load-row"><span>Maya</span><div class="bar"><span style="width: 68%"></span></div><strong>68%</strong></div>
+              <div class="load-row"><span>Jordan</span><div class="bar"><span class="risk" style="width: 96%"></span></div><strong>96%</strong></div>
+              <div class="load-row"><span>Sam</span><div class="bar"><span class="warn" style="width: 82%"></span></div><strong>82%</strong></div>
+              <div class="load-row"><span>Riley</span><div class="bar"><span style="width: 54%"></span></div><strong>54%</strong></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header"><div><h2>Recent Changes</h2><p>Communications, files, notes, tasks, time, and audit events.</p></div></div>
+            <div class="panel-body timeline">
+              <div class="timeline-item"><div class="timeline-time">09:42</div><div><strong>Client note added</strong><p class="item-copy">Maya added renewal risk notes to Helio Systems.</p></div></div>
+              <div class="timeline-item"><div class="timeline-time">08:18</div><div><strong>File changed</strong><p class="item-copy">Implementation brief v4 linked to Project Alpha.</p></div></div>
+              <div class="timeline-item"><div class="timeline-time">Yesterday</div><div><strong>AI recommendation accepted</strong><p class="item-copy">Weekly Planner generated 4 draft tasks. Two were approved.</p></div></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="workspace" id="workspace-record">
+        <div class="workspace-title">
+          <div>
+            <h1>Record 360 Page</h1>
+            <p>A full split-pane record surface for clients, projects, and tasks: manual editing remains first-class, while AI summaries, risks, relationships, and next actions stay visible.</p>
+          </div>
+          <div class="title-actions"><button class="btn">Open as pane</button><button class="btn primary">Ask about Acme</button></div>
+        </div>
+
+        <div class="record-layout">
+          <div>
+            <div class="record-header">
+              <div class="record-title">
+                <h2>Acme Corp</h2>
+                <p>Strategic client with 2 open projects, 7 active people, and a renewal conversation due this month.</p>
+                <div class="row-actions" style="margin-top: 10px;">
+                  <span class="pill"><span class="dot" style="color: var(--green)"></span>Synced</span>
+                  <span class="pill"><span class="dot" style="color: var(--amber)"></span>Attention</span>
+                  <span class="pill">Owner: Maya</span>
+                </div>
+              </div>
+              <div class="health-ring" aria-label="Client health 76 percent">76</div>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Record sections">
+              <button class="tab-btn active" data-tab="record-details">Details</button>
+              <button class="tab-btn" data-tab="record-timeline">Timeline</button>
+              <button class="tab-btn" data-tab="record-files">Files</button>
+              <button class="tab-btn" data-tab="record-comms">Communications</button>
+            </div>
+
+            <div class="tab-panel active" id="record-details">
+              <section class="panel">
+                <div class="panel-header"><div><h2>Client Details</h2><p>Clear editable fields with status, ownership, value, and last-touch context.</p></div></div>
+                <div class="panel-body field-grid">
+                  <div class="field"><span>Status</span><strong>Active implementation</strong></div>
+                  <div class="field"><span>Last touch</span><strong>14 days ago</strong></div>
+                  <div class="field"><span>Open projects</span><strong>Project Alpha, Data Cleanup</strong></div>
+                  <div class="field"><span>Primary contact</span><strong>Priya Shah, Operations Director</strong></div>
+                  <div class="field"><span>Estimated value</span><strong>$84,000 renewal path</strong></div>
+                  <div class="field"><span>Security</span><strong>Internal plus client-safe docs</strong></div>
+                </div>
+              </section>
+            </div>
+
+            <div class="tab-panel" id="record-timeline">
+              <section class="panel">
+                <div class="panel-header"><div><h2>Unified Timeline</h2><p>Tasks, communications, notes, files, AI actions, and audit events in one ordered stream.</p></div></div>
+                <div class="panel-body timeline">
+                  <div class="timeline-item"><div class="timeline-time">Today</div><div><strong>Recommendation created</strong><p class="item-copy">Follow-up risk detected from communication gap and deadline proximity.</p></div></div>
+                  <div class="timeline-item"><div class="timeline-time">May 18</div><div><strong>File linked</strong><p class="item-copy">Project Alpha implementation brief attached by Jordan.</p></div></div>
+                  <div class="timeline-item"><div class="timeline-time">May 12</div><div><strong>Task completed</strong><p class="item-copy">Data mapping review completed. 2 follow-up items created.</p></div></div>
+                </div>
+              </section>
+            </div>
+
+            <div class="tab-panel" id="record-files">
+              <section class="panel">
+                <div class="panel-header"><div><h2>Files and Documents</h2><p>Evidence-rich file links with permissions and sync state.</p></div></div>
+                <div class="panel-body activity-list">
+                  <div class="record-row"><strong>Implementation Brief v4.docx</strong><div class="meta">Linked to Project Alpha. Internal. Synced.</div></div>
+                  <div class="record-row"><strong>Renewal Notes.md</strong><div class="meta">Draft note. Local only. Needs review before sharing.</div></div>
+                  <div class="record-row"><strong>Data Import Sample.csv</strong><div class="meta">Used by Import Mapper. 42 rows need relationship resolution.</div></div>
+                </div>
+              </section>
+            </div>
+
+            <div class="tab-panel" id="record-comms">
+              <section class="panel">
+                <div class="panel-header"><div><h2>Communications</h2><p>Email, calls, meetings, and follow-up drafts connected to the record.</p></div></div>
+                <div class="panel-body timeline">
+                  <div class="timeline-item"><div class="timeline-time">Mar 7</div><div><strong>Email from Priya Shah</strong><p class="item-copy">Asked for revised rollout dates and support plan.</p></div></div>
+                  <div class="timeline-item"><div class="timeline-time">Mar 5</div><div><strong>Meeting logged</strong><p class="item-copy">Implementation checkpoint. Decision log generated.</p></div></div>
+                </div>
+              </section>
+            </div>
+
+            <div class="record-action-bar">
+              <div class="row-actions">
+                <button class="btn">Create task</button>
+                <button class="btn">Log communication</button>
+                <button class="btn">Attach file</button>
+                <button class="btn">Start timer</button>
+              </div>
+              <button class="btn primary">Ask AI</button>
+            </div>
+          </div>
+
+          <aside class="grid">
+            <section class="panel">
+              <div class="panel-header"><div><h2>AI Account Brief</h2><p>Permission-aware summary with evidence.</p></div></div>
+              <div class="panel-body">
+                <p class="item-copy" style="font-size: 13px;">Acme is healthy but under-contacted. Project Alpha is close to deadline, and the latest client request is not reflected in the task plan.</p>
+                <div class="row-actions" style="margin-top: 10px;"><button class="tiny-btn ai" data-open-drawer="acme">Evidence</button><button class="tiny-btn">Draft outreach</button></div>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="panel-header"><div><h2>Relationships</h2><p>Clients, projects, people, tasks, files, and AI context.</p></div></div>
+              <div class="panel-body">
+                <div class="relationship-map" aria-label="Relationship graph mockup">
+                  <div class="edge" style="left: 142px; top: 82px; width: 128px; transform: rotate(16deg);"></div>
+                  <div class="edge" style="left: 142px; top: 118px; width: 150px; transform: rotate(-12deg);"></div>
+                  <div class="edge" style="left: 170px; top: 160px; width: 116px; transform: rotate(25deg);"></div>
+                  <div class="edge" style="left: 92px; top: 158px; width: 108px; transform: rotate(98deg);"></div>
+                  <div class="node client" style="left: 24px; top: 98px;">Acme Corp<span>Client</span></div>
+                  <div class="node" style="left: 220px; top: 38px;">Project Alpha<span>Due in 5 days</span></div>
+                  <div class="node" style="left: 214px; top: 138px;">Priya Shah<span>Primary contact</span></div>
+                  <div class="node" style="left: 62px; top: 222px;">Renewal Notes<span>Draft</span></div>
+                  <div class="node ai" style="left: 202px; top: 238px;">Risk Signal<span>No touch 14 days</span></div>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <section class="workspace" id="workspace-intelligence">
+        <div class="workspace-title">
+          <div>
+            <h1>AI Workbench</h1>
+            <p>AI is a work layer, not a full-screen chatbot. The workbench separates Ask, Actions, Agents, Memory and Context, and Runs.</p>
+          </div>
+          <div class="title-actions"><button class="btn">Model setup</button><button class="btn primary">Start agent</button></div>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="AI workbench tabs">
+          <button class="tab-btn active" data-tab="ai-ask">Ask</button>
+          <button class="tab-btn" data-tab="ai-actions">Actions</button>
+          <button class="tab-btn" data-tab="ai-agents">Agents</button>
+          <button class="tab-btn" data-tab="ai-memory">Memory and Context</button>
+          <button class="tab-btn" data-tab="ai-runs">Runs</button>
+        </div>
+
+        <div class="tab-panel active" id="ai-ask">
+          <div class="ai-layout">
+            <section class="panel">
+              <div class="panel-header"><div><h2>Ask CRM</h2><p>Conversational answers with used-record disclosure.</p></div><span class="pill">Read-only</span></div>
+              <div class="panel-body chat-stream">
+                <div class="message user">What accounts are at risk this week?</div>
+                <div class="message ai">I found 3 accounts. Acme has the strongest follow-up risk because the last touch was 14 days ago and Project Alpha is due in 5 days.</div>
+                <div class="message ai"><strong>Used records</strong><br>Acme Corp, Project Alpha, Priya Shah, Mar 7 email, open task list.</div>
+                <div class="row-actions"><button class="btn primary">Prepare follow-up</button><button class="btn">Show evidence</button><button class="btn">Save answer</button></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header"><div><h2>Plan Preview</h2><p>Multi-step work is shown before execution.</p></div></div>
+              <div class="panel-body plan-steps">
+                <div class="plan-step"><span>Read allowed client, project, and communication records.</span><span class="pill">Auto-read</span></div>
+                <div class="plan-step"><span>Draft a client-safe follow-up email.</span><span class="pill">Draft</span></div>
+                <div class="plan-step"><span>Create a follow-up task linked to Acme.</span><span class="pill">Approval</span></div>
+                <div class="plan-step"><span>Attach audit event and evidence references.</span><span class="pill">Required</span></div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="ai-actions">
+          <section class="panel">
+            <div class="panel-header"><div><h2>Pending Approvals</h2><p>Every meaningful AI write is reviewable, undoable, and permission-aware.</p></div></div>
+            <div class="panel-body approval-list">
+              <article class="approval">
+                <strong>Create task: Follow up with Priya about rollout dates</strong>
+                <div class="diff">Target: Acme Corp. Change: add task due tomorrow, owner Maya, priority high. Evidence: Mar 7 email and Project Alpha deadline.</div>
+                <div class="row-actions"><button class="tiny-btn good">Approve</button><button class="tiny-btn">Edit</button><button class="tiny-btn danger">Reject</button></div>
+              </article>
+              <article class="approval">
+                <strong>Attach 3 meeting summaries to project records</strong>
+                <div class="diff">Target: Project Alpha, Data Cleanup. Risk: medium because notes include client-visible language.</div>
+                <div class="row-actions"><button class="tiny-btn good">Approve selected</button><button class="tiny-btn">Review text</button><button class="tiny-btn danger">Reject</button></div>
+              </article>
+            </div>
+          </section>
+        </div>
+
+        <div class="tab-panel" id="ai-agents">
+          <section class="panel">
+            <div class="panel-header"><div><h2>Reusable Agents</h2><p>Local drafts and recommendations first; autonomy waits for durable backend controls.</p></div></div>
+            <div class="panel-body activity-list">
+              <div class="agent-row"><strong>Follow-up Assistant</strong><div class="meta">Reads clients, people, communications, tasks. Writes require approval. Trigger: manual or on open.</div><div class="row-actions"><button class="tiny-btn ai">Run</button><button class="tiny-btn">Configure</button></div></div>
+              <div class="agent-row"><strong>Project Risk Scout</strong><div class="meta">Reads projects, tasks, time, files. Output: risk report and draft tasks.</div><div class="row-actions"><button class="tiny-btn ai">Run</button><button class="tiny-btn">Configure</button></div></div>
+              <div class="agent-row"><strong>Import Mapper</strong><div class="meta">Reads imports and existing records. Output: mapping preview; writes blocked until approval.</div><div class="row-actions"><button class="tiny-btn ai">Run</button><button class="tiny-btn">Configure</button></div></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="tab-panel" id="ai-memory">
+          <section class="panel">
+            <div class="panel-header"><div><h2>Memory and Context</h2><p>What AI can access, where data lives, and what is excluded.</p></div></div>
+            <div class="panel-body three-grid grid">
+              <div class="insight"><h3>Allowed sources</h3><p>Clients, projects, tasks, notes, communications, files, time entries, audit events.</p></div>
+              <div class="insight"><h3>Data boundary</h3><p>Local/browser by default. Cloud providers require tenant policy approval and audit metadata.</p></div>
+              <div class="insight"><h3>Blocked by policy</h3><p>Unknown users, cross-tenant records, destructive writes without approval, hidden autonomous runs.</p></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="tab-panel" id="ai-runs">
+          <section class="panel">
+            <div class="panel-header"><div><h2>Run History</h2><p>Results, errors, tool calls, evidence, cancellation, and audit trail.</p></div></div>
+            <div class="panel-body activity-list">
+              <div class="agent-row"><strong>Weekly Planner run 1042</strong><div class="meta">Completed. 7 records used, 4 recommendations, 2 tasks approved, 2 dismissed.</div></div>
+              <div class="agent-row"><strong>Data Cleanup run 1039</strong><div class="meta">Blocked. Missing approval for duplicate merge capability.</div></div>
+              <div class="agent-row"><strong>Risk Scout run 1037</strong><div class="meta">Completed with warning. One project hidden by permissions.</div></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="workspace" id="workspace-agents">
+        <div class="workspace-title">
+          <div>
+            <h1>Agent Builder Lite</h1>
+            <p>A simple, local-first builder for recurring CRM workflows. Templates produce drafts, recommendations, notes, tasks, communications, and reports.</p>
+          </div>
+          <div class="title-actions"><button class="btn">Test safely</button><button class="btn primary">Save agent</button></div>
+        </div>
+
+        <div class="agent-builder">
+          <section class="panel">
+            <div class="panel-header"><div><h2>Initial Agents</h2><p>Template-driven, approval-aware assistants.</p></div></div>
+            <div class="panel-body template-list">
+              <button class="agent-template active"><span class="template-icon">F</span><span><strong>Follow-up Assistant</strong><span class="item-copy">Finds stale client relationships and drafts outreach.</span></span></button>
+              <button class="agent-template"><span class="template-icon">R</span><span><strong>Project Risk Scout</strong><span class="item-copy">Flags blockers, stalled work, and overloaded owners.</span></span></button>
+              <button class="agent-template"><span class="template-icon">M</span><span><strong>Meeting Notes Summarizer</strong><span class="item-copy">Turns transcripts into notes and decisions.</span></span></button>
+              <button class="agent-template"><span class="template-icon">W</span><span><strong>Weekly Planner</strong><span class="item-copy">Creates a week plan from due dates and calendars.</span></span></button>
+              <button class="agent-template"><span class="template-icon">D</span><span><strong>Data Cleanup Assistant</strong><span class="item-copy">Previews dedupe and normalization changes.</span></span></button>
+              <button class="agent-template"><span class="template-icon">I</span><span><strong>Import Mapper</strong><span class="item-copy">Maps imports to clients, people, and projects.</span></span></button>
+              <button class="agent-template"><span class="template-icon">T</span><span><strong>Time Entry Reconciler</strong><span class="item-copy">Finds missing time and suggests entries.</span></span></button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header"><div><h2>Configuration</h2><p>Explicit scopes, tools, triggers, outputs, and write policy.</p></div><span class="pill">Version 1</span></div>
+            <div class="panel-body form-grid">
+              <div class="form-field"><label for="agentName">Name</label><input id="agentName" value="Follow-up Assistant"></div>
+              <div class="form-field"><label for="agentTrigger">Trigger</label><select id="agentTrigger"><option>Manual</option><option>On open</option><option>Scheduled</option><option>Record change</option><option>Import complete</option></select></div>
+              <div class="form-field full"><label for="agentPurpose">Purpose</label><textarea id="agentPurpose">Monitor client relationships for stale communication, upcoming deadlines, and high-priority follow-up opportunities. Produce draft outreach and task recommendations.</textarea></div>
+              <div class="form-field full">
+                <label>Records it can read</label>
+                <div class="scope-grid">
+                  <label class="check-pill"><input type="checkbox" checked> Clients</label>
+                  <label class="check-pill"><input type="checkbox" checked> People</label>
+                  <label class="check-pill"><input type="checkbox" checked> Projects</label>
+                  <label class="check-pill"><input type="checkbox" checked> Tasks</label>
+                  <label class="check-pill"><input type="checkbox" checked> Communications</label>
+                  <label class="check-pill"><input type="checkbox"> Billing</label>
+                </div>
+              </div>
+              <div class="form-field"><label for="writePolicy">Write policy</label><select id="writePolicy"><option>Approval required</option><option>Draft only</option><option>Blocked</option><option>Auto allowed for low risk</option></select></div>
+              <div class="form-field"><label for="outputType">Output</label><select id="outputType"><option>Draft and task</option><option>Note</option><option>Communication</option><option>Report</option><option>Recommendation</option></select></div>
+              <div class="form-field full"><label>Tools it can use</label><div class="scope-grid"><label class="check-pill"><input type="checkbox" checked> Search records</label><label class="check-pill"><input type="checkbox" checked> Draft email</label><label class="check-pill"><input type="checkbox" checked> Create task preview</label><label class="check-pill"><input type="checkbox"> Merge records</label><label class="check-pill"><input type="checkbox" checked> Add audit event</label><label class="check-pill"><input type="checkbox"> Export report</label></div></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="workspace" id="workspace-reports">
+        <div class="workspace-title">
+          <div>
+            <h1>Reports as Narrative Briefs</h1>
+            <p>Reports become interactive operational briefings with summaries, drilldowns, exports, task creation, and evidence links back to records.</p>
+          </div>
+          <div class="title-actions"><button class="btn">Export PDF</button><button class="btn">Export CSV</button><button class="btn primary">Create tasks</button></div>
+        </div>
+
+        <div class="report-grid">
+          <section class="panel">
+            <div class="panel-header"><div><h2>Briefs</h2><p>Outcome-oriented views.</p></div></div>
+            <div class="panel-body brief-list">
+              <button class="brief-btn active"><strong>Weekly operations brief</strong><span>Priorities, risks, completed work, and next actions.</span></button>
+              <button class="brief-btn"><strong>Client health report</strong><span>Health, last touch, risks, renewals, and relationships.</span></button>
+              <button class="brief-btn"><strong>Project risk report</strong><span>Deadlines, blockers, owner load, stale tasks.</span></button>
+              <button class="brief-btn"><strong>Workload report</strong><span>Assignments, overload warnings, available capacity.</span></button>
+              <button class="brief-btn"><strong>Time utilization</strong><span>Tracked time, missing entries, billable mix.</span></button>
+              <button class="brief-btn"><strong>Data quality report</strong><span>Duplicates, missing fields, import conflicts.</span></button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-body">
+              <div class="brief-title">
+                <div><h3>Weekly Operations Brief</h3><p>Plain-English summary with evidence and drilldown.</p></div>
+                <span class="pill"><span class="dot" style="color: var(--green)"></span>Generated locally</span>
+              </div>
+              <div class="grid two-grid">
+                <div class="insight"><h3>Summary</h3><p>Work is mostly on track, but client follow-up and project blockers need attention. Acme, Beacon, and Helio account for most risk.</p></div>
+                <div class="insight"><h3>Findings to convert</h3><p>5 findings can become tasks. 3 require AI write approval. 2 are draft-only notes.</p></div>
+              </div>
+              <div class="chart-row" style="margin-top: 12px;">
+                <div class="chart-bar"><span style="height: 42%;"></span>Mon</div>
+                <div class="chart-bar"><span style="height: 76%; background: var(--green);"></span>Tue</div>
+                <div class="chart-bar"><span style="height: 58%; background: var(--amber);"></span>Wed</div>
+                <div class="chart-bar"><span style="height: 92%; background: var(--red);"></span>Thu</div>
+                <div class="chart-bar"><span style="height: 68%; background: var(--teal);"></span>Fri</div>
+                <div class="chart-bar"><span style="height: 34%; background: var(--blue);"></span>Next</div>
+              </div>
+              <div class="grid two-grid" style="margin-top: 12px;">
+                <div class="recommendation"><strong>Drilldown: stale relationships</strong><div class="evidence">Acme, Helio, and Beacon have no logged touch in more than 10 days.</div><div class="row-actions"><button class="tiny-btn">Open records</button><button class="tiny-btn ai">Draft tasks</button></div></div>
+                <div class="recommendation"><strong>Drilldown: data quality</strong><div class="evidence">42 import rows need mapping; 7 people records appear duplicated.</div><div class="row-actions"><button class="tiny-btn">Review import</button><button class="tiny-btn ai">Run mapper</button></div></div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="workspace" id="workspace-backend">
+        <div class="workspace-title">
+          <div>
+            <h1>Backend Alignment Layer</h1>
+            <p>The future UI assumes a permission-aware work orchestration backend: record graph, timeline, recommendations, agent runs, approvals, audit, semantic search, sync, and agent identity.</p>
+          </div>
+          <div class="title-actions"><button class="btn">View gaps</button><button class="btn primary">Plan phase 1</button></div>
+        </div>
+
+        <div class="grid backend-map">
+          <section class="panel">
+            <div class="panel-header"><div><h2>Recommended APIs</h2><p>Frontend surfaces mapped to backend contracts.</p></div></div>
+            <div class="panel-body activity-list">
+              <div class="api-row"><div><strong>/api/v1/command-center</strong><div class="meta">Attention, stale records, workload, recent activity, approvals, agent status, sync state.</div></div><span class="api-method">GET</span></div>
+              <div class="api-row"><div><strong>/api/v1/timeline?store=clients&id=:id</strong><div class="meta">Record, task, communication, note, file, time, AI, and audit events.</div></div><span class="api-method">GET</span></div>
+              <div class="api-row"><div><strong>/api/v1/graph/record/:store/:id</strong><div class="meta">Nodes and edges across clients, projects, people, files, notes, tasks, and time.</div></div><span class="api-method">GET</span></div>
+              <div class="api-row"><div><strong>/api/v1/recommendations/:id/accept</strong><div class="meta">Recommendation state, evidence, proposed action, status, snooze, dismiss, accept.</div></div><span class="api-method">POST</span></div>
+              <div class="api-row"><div><strong>/api/v1/agent-runs/:id/approve-step</strong><div class="meta">Durable run steps, tool calls, evidence, output, errors, cancellation.</div></div><span class="api-method">POST</span></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header"><div><h2>Data Model Additions</h2><p>Tables needed before durable autonomy.</p></div></div>
+            <div class="panel-body activity-list">
+              <div class="capability-row"><div><strong>activity_events and record_edges</strong><div class="meta">Foundation for timeline, graph, evidence links, and recent changes.</div></div><span class="pill">Phase 1</span></div>
+              <div class="capability-row"><div><strong>recommendations and approvals</strong><div class="meta">Snooze, dismiss, accept, review diffs, risk level, expiration, status.</div></div><span class="pill">Phase 2</span></div>
+              <div class="capability-row"><div><strong>agent_definitions, agent_runs, agent_tool_calls</strong><div class="meta">Identity, scopes, plans, steps, tool results, outcome, cancellation.</div></div><span class="pill">Phase 3</span></div>
+              <div class="capability-row"><div><strong>sync_changes and sync_conflicts</strong><div class="meta">Offline queue, idempotency keys, field-level conflict handling.</div></div><span class="pill">Sync</span></div>
+              <div class="capability-row"><div><strong>capability_registry and ai_context_sources</strong><div class="meta">Machine-readable tools, permission-aware retrieval, AI data boundaries.</div></div><span class="pill">Trust</span></div>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel" style="margin-top: 14px;">
+          <div class="panel-header"><div><h2>Implementation Sequence</h2><p>Backend phases that keep the UI honest.</p></div></div>
+          <div class="panel-body">
+            <div class="roadmap">
+              <div class="phase"><span>Phase 0</span><h3>Fix foundation</h3><ul><li>Workspace integration</li><li>Typecheck, lint, audit</li><li>Docker build</li><li>Auth hardening</li></ul></div>
+              <div class="phase"><span>Phase 1</span><h3>Activity and graph</h3><ul><li>activity_events</li><li>Timeline API</li><li>Graph endpoint</li><li>Saved views</li></ul></div>
+              <div class="phase"><span>Phase 2</span><h3>Recommendations</h3><ul><li>Recommendation API</li><li>Deterministic rules</li><li>Evidence states</li><li>Snooze and dismiss</li></ul></div>
+              <div class="phase"><span>Phase 3</span><h3>Agent control plane</h3><ul><li>Agent definitions</li><li>Runs and steps</li><li>Capability registry</li><li>Approvals and OPA</li></ul></div>
+              <div class="phase"><span>Phase 4</span><h3>Retrieval and telemetry</h3><ul><li>Permission-aware search</li><li>AI gateway telemetry</li><li>Model policy UI</li><li>Evidence exports</li></ul></div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="workspace" id="workspace-work">
+        <div class="workspace-title"><div><h1>Work Mode</h1><p>Tasks, projects, calendar, and time collected around outcomes instead of isolated tables.</p></div><div class="title-actions"><button class="btn">Calendar</button><button class="btn primary">Create task</button></div></div>
+        <div class="grid two-grid">
+          <section class="panel"><div class="panel-header"><div><h2>Today</h2><p>Due work, blockers, dependencies, and timers.</p></div></div><div class="panel-body activity-list"><div class="record-row"><strong>Finish Project Alpha rollout plan</strong><div class="meta">Due today. Client: Acme. Dependency: revised support plan.</div></div><div class="record-row"><strong>Review duplicate contact merge</strong><div class="meta">AI prepared a safe merge preview. Approval required.</div></div><div class="record-row"><strong>Map import rows for City Clinic</strong><div class="meta">42 rows unresolved. Import Mapper can prepare suggestions.</div></div></div></section>
+          <section class="panel"><div class="panel-header"><div><h2>Project Board</h2><p>Compact kanban with relationship and risk context.</p></div></div><div class="panel-body"><div class="pipeline"><div class="stage"><h3>Ready <span>4</span></h3><div class="stage-item">Renewal review</div></div><div class="stage"><h3>Doing <span>8</span></h3><div class="stage-item">Project Alpha</div></div><div class="stage"><h3>Blocked <span>3</span></h3><div class="stage-item">Atlas migration</div></div><div class="stage"><h3>Review <span>5</span></h3><div class="stage-item">Import cleanup</div></div><div class="stage"><h3>Done <span>17</span></h3><div class="stage-item">Q2 audit</div></div></div></div></section>
+        </div>
+      </section>
+
+      <section class="workspace" id="workspace-relationships">
+        <div class="workspace-title"><div><h1>Relationships Mode</h1><p>Clients, people, departments, and their connected work made visible through graph, timeline, and health signals.</p></div><div class="title-actions"><button class="btn">Find duplicates</button><button class="btn primary">Create client</button></div></div>
+        <div class="grid two-grid">
+          <section class="panel"><div class="panel-header"><div><h2>Client Health</h2><p>Outcome-centric relationship list.</p></div></div><div class="panel-body activity-list"><div class="record-row"><strong>Acme Corp</strong><div class="meta">Health 76. 2 open projects. Last touch 14 days ago.</div></div><div class="record-row"><strong>Helio Systems</strong><div class="meta">Health 58. Renewal risk. Decision maker changed.</div></div><div class="record-row"><strong>City Clinic</strong><div class="meta">Health 83. Import work active. No overdue tasks.</div></div></div></section>
+          <section class="panel"><div class="panel-header"><div><h2>Relationship Graph</h2><p>Immediate context for clients, projects, people, tasks, files, and AI explanations.</p></div></div><div class="panel-body"><div class="relationship-map"><div class="edge" style="left: 120px; top: 95px; width: 170px; transform: rotate(7deg);"></div><div class="edge" style="left: 120px; top: 122px; width: 140px; transform: rotate(36deg);"></div><div class="edge" style="left: 120px; top: 152px; width: 160px; transform: rotate(-25deg);"></div><div class="node client" style="left: 24px; top: 106px;">Client<span>Acme</span></div><div class="node" style="left: 250px; top: 64px;">People<span>7 active</span></div><div class="node" style="left: 244px; top: 162px;">Projects<span>2 open</span></div><div class="node ai" style="left: 244px; top: 250px;">Evidence<span>Why relevant</span></div></div></div></section>
+        </div>
+      </section>
+
+      <section class="workspace" id="workspace-knowledge">
+        <div class="workspace-title"><div><h1>Knowledge Mode</h1><p>Documents, files, notes, and communications become permission-aware context, not a separate library users have to remember.</p></div><div class="title-actions"><button class="btn">Upload</button><button class="btn primary">Summarize</button></div></div>
+        <div class="grid three-grid">
+          <section class="panel"><div class="panel-header"><div><h2>Documents</h2><p>Files linked to records.</p></div></div><div class="panel-body activity-list"><div class="record-row"><strong>Implementation Brief v4</strong><div class="meta">Project Alpha. Internal.</div></div><div class="record-row"><strong>Renewal Notes</strong><div class="meta">Acme. Draft.</div></div></div></section>
+          <section class="panel"><div class="panel-header"><div><h2>Notes</h2><p>Decision logs and summaries.</p></div></div><div class="panel-body activity-list"><div class="record-row"><strong>Rollout decision log</strong><div class="meta">Generated from meeting notes.</div></div><div class="record-row"><strong>Support plan concerns</strong><div class="meta">Needs client review.</div></div></div></section>
+          <section class="panel"><div class="panel-header"><div><h2>Communications</h2><p>Emails, calls, and meeting records.</p></div></div><div class="panel-body activity-list"><div class="record-row"><strong>Email from Priya</strong><div class="meta">Follow-up requested.</div></div><div class="record-row"><strong>Implementation call</strong><div class="meta">Transcript summarized.</div></div></div></section>
+        </div>
+      </section>
+
+      <section class="workspace" id="workspace-system">
+        <div class="workspace-title"><div><h1>System Mode</h1><p>Security, storage, sync, import/export, audit, AI policy, model inventory, and evidence readiness.</p></div><div class="title-actions"><button class="btn">Export audit</button><button class="btn primary">Review policy</button></div></div>
+        <div class="grid three-grid">
+          <section class="panel"><div class="panel-header"><div><h2>Sync and Storage</h2><p>Offline confidence without noise.</p></div></div><div class="panel-body activity-list"><div class="record-row"><strong>Local vault active</strong><div class="meta">IndexedDB available. Last backup 08:30.</div></div><div class="record-row"><strong>2 queued changes</strong><div class="meta">Will sync when server is available.</div></div></div></section>
+          <section class="panel"><div class="panel-header"><div><h2>AI Trust</h2><p>Provider, model, policy, audit, and redaction controls.</p></div></div><div class="panel-body activity-list"><div class="record-row"><strong>Writes require approval</strong><div class="meta">OPA policy: approval_required for CRM mutations.</div></div><div class="record-row"><strong>Prompt metadata stored</strong><div class="meta">Sensitive prompt text excluded by default.</div></div></div></section>
+          <section class="panel"><div class="panel-header"><div><h2>Accessibility</h2><p>Focus, keyboard, contrast, screen-reader, and modal verification.</p></div></div><div class="panel-body activity-list"><div class="record-row"><strong>Keyboard paths</strong><div class="meta">Command palette, tabs, approvals, drawers.</div></div><div class="record-row"><strong>WCAG 2.2 AA target</strong><div class="meta">Active browser verification required.</div></div></div></section>
+        </div>
+      </section>
+    </main>
+
+    <aside class="right-rail" aria-label="Contextual assistant">
+      <div class="assistant-head">
+        <h2>Contextual Assistant</h2>
+        <p>Embedded into each CRM surface with evidence, data boundaries, approval state, and audit context.</p>
+      </div>
+      <div class="assistant-body">
+        <div class="ai-boundary">
+          <strong>Boundary: local/browser</strong>
+          <span>Reads are permission filtered. Writes are draft-only until approved.</span>
+        </div>
+        <section class="insight">
+          <h3>Why this matters now</h3>
+          <p>Acme has deadline pressure and no recent communication. A follow-up draft is low risk; task creation requires approval.</p>
+        </section>
+        <section class="insight">
+          <h3>Evidence used</h3>
+          <ul>
+            <li>Acme client record</li>
+            <li>Project Alpha due date</li>
+            <li>Mar 7 email from Priya</li>
+            <li>Open task list</li>
+          </ul>
+        </section>
+        <section class="insight">
+          <h3>Safe actions</h3>
+          <div class="row-actions"><button class="tiny-btn ai">Draft email</button><button class="tiny-btn">Explain risk</button><button class="tiny-btn">Open audit</button></div>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <nav class="mobile-tabs" aria-label="Mobile navigation">
+    <button class="active" data-workspace="command"><span>C</span><span>Home</span></button>
+    <button data-workspace="work"><span>W</span><span>Work</span></button>
+    <button data-workspace="relationships"><span>R</span><span>Relations</span></button>
+    <button data-workspace="knowledge"><span>K</span><span>Knowledge</span></button>
+    <button data-workspace="intelligence"><span>I</span><span>More</span></button>
+  </nav>
+  <button class="fab" data-open-palette aria-label="Open command palette">+</button>
+
+  <div class="drawer" id="evidenceDrawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+    <div class="drawer-panel">
+      <header>
+        <div>
+          <h2 id="drawerTitle">Evidence and Action Preview</h2>
+          <p>Every recommendation explains why it appears, what records were used, what will change, and what approval is required.</p>
+        </div>
+        <button class="icon-btn" id="closeDrawer" aria-label="Close evidence drawer">X</button>
+      </header>
+      <div class="grid">
+        <section class="panel">
+          <div class="panel-header"><div><h3>Recommendation</h3><p>Client follow-up risk</p></div><span class="pill"><span class="dot" style="color: var(--amber)"></span>Medium</span></div>
+          <div class="panel-body">
+            <p class="item-copy" style="font-size: 13px;">Acme Corp has 2 open projects and no communication in 14 days. Project Alpha is due in 5 days, making client silence operationally risky.</p>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><div><h3>Evidence Records</h3><p>Permission-aware references used by AI.</p></div></div>
+          <div class="panel-body activity-list">
+            <div class="record-row"><strong>Last email from Priya Shah</strong><div class="meta">Mar 7. Asked for rollout dates and support plan.</div></div>
+            <div class="record-row"><strong>Project Alpha</strong><div class="meta">Due in 5 days. 3 open tasks. Owner load 96%.</div></div>
+            <div class="record-row"><strong>Acme Corp account</strong><div class="meta">Active implementation. Health 76. Renewal path open.</div></div>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><div><h3>Proposed Changes</h3><p>Preview before write.</p></div></div>
+          <div class="panel-body approval-list">
+            <div class="approval"><strong>Draft email</strong><div class="diff">No CRM write. Creates editable draft only.</div><div class="row-actions"><button class="tiny-btn good">Allow draft</button></div></div>
+            <div class="approval"><strong>Create follow-up task</strong><div class="diff">Adds task linked to Acme, assigned to Maya, due tomorrow, priority high. Requires explicit approval.</div><div class="row-actions"><button class="tiny-btn good">Approve</button><button class="tiny-btn">Edit</button><button class="tiny-btn danger">Reject</button></div></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="paletteModal" role="dialog" aria-modal="true" aria-labelledby="paletteTitle">
+    <div class="palette">
+      <div style="padding: 14px 14px 0;">
+        <header>
+          <div>
+            <h2 id="paletteTitle">Universal Command Palette</h2>
+            <p>Search records, create anything, run commands, ask AI, start agents, and jump to recent views.</p>
+          </div>
+          <button class="icon-btn" id="closePalette" aria-label="Close command palette">X</button>
+        </header>
+      </div>
+      <div class="palette-search">
+        <span>?</span>
+        <input id="paletteInput" placeholder="Try: show overdue tasks for Acme" autocomplete="off">
+      </div>
+      <div class="palette-body">
+        <div class="tabs" role="tablist" aria-label="Palette filters">
+          <button class="tab-btn active">Records</button>
+          <button class="tab-btn">Commands</button>
+          <button class="tab-btn">AI</button>
+          <button class="tab-btn">Agents</button>
+        </div>
+        <div class="palette-group" style="margin-top: 12px;">
+          <h3>Records</h3>
+          <div class="palette-result"><span class="nav-icon">C</span><div><strong>Acme Corp</strong><span>Client. 2 open projects. Follow-up risk.</span></div><span class="kbd">Enter</span></div>
+          <div class="palette-result"><span class="nav-icon">P</span><div><strong>Project Alpha</strong><span>Project. Due in 5 days. 3 open tasks.</span></div><span class="kbd">Enter</span></div>
+        </div>
+        <div class="palette-group">
+          <h3>Commands</h3>
+          <div class="palette-result"><span class="nav-icon">+</span><div><strong>Create task</strong><span>Manual deterministic path. No AI required.</span></div><span class="kbd">T</span></div>
+          <div class="palette-result"><span class="nav-icon">F</span><div><strong>Show overdue tasks for Acme</strong><span>Safe transformation that works offline.</span></div><span class="kbd">O</span></div>
+        </div>
+        <div class="palette-group">
+          <h3>AI and Agents</h3>
+          <div class="palette-result"><span class="nav-icon">AI</span><div><strong>Ask: why is Acme at risk?</strong><span>Answer with evidence and no write.</span></div><span class="kbd">A</span></div>
+          <div class="palette-result"><span class="nav-icon">R</span><div><strong>Run Project Risk Scout</strong><span>Creates recommendations and draft tasks.</span></div><span class="kbd">R</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const app = document.getElementById('app');
+    const navButtons = document.querySelectorAll('[data-workspace]');
+    const workspaces = document.querySelectorAll('.workspace');
+    const paletteModal = document.getElementById('paletteModal');
+    const evidenceDrawer = document.getElementById('evidenceDrawer');
+    const paletteInput = document.getElementById('paletteInput');
+    const densityBtn = document.getElementById('densityBtn');
+    const densityStates = ['Comfortable', 'Compact', 'Spacious'];
+    let densityIndex = 0;
+
+    function showWorkspace(id) {
+      workspaces.forEach((workspace) => {
+        workspace.classList.toggle('active', workspace.id === `workspace-${id}`);
+      });
+      navButtons.forEach((button) => {
+        button.classList.toggle('active', button.dataset.workspace === id);
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    navButtons.forEach((button) => {
+      button.addEventListener('click', () => showWorkspace(button.dataset.workspace));
+    });
+
+    document.querySelectorAll('.tab-btn[data-tab]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const group = button.closest('.workspace') || button.closest('.record-layout') || button.closest('.tab-panel');
+        const target = document.getElementById(button.dataset.tab);
+        if (!target) return;
+        const panelParent = target.parentElement;
+        button.parentElement.querySelectorAll('.tab-btn').forEach((tab) => tab.classList.remove('active'));
+        panelParent.querySelectorAll(':scope > .tab-panel').forEach((panel) => panel.classList.remove('active'));
+        button.classList.add('active');
+        target.classList.add('active');
+      });
+    });
+
+    function openPalette() {
+      paletteModal.classList.add('open');
+      setTimeout(() => paletteInput.focus(), 40);
+    }
+
+    function closePalette() {
+      paletteModal.classList.remove('open');
+    }
+
+    function openDrawer() {
+      evidenceDrawer.classList.add('open');
+      document.getElementById('closeDrawer').focus();
+    }
+
+    function closeDrawer() {
+      evidenceDrawer.classList.remove('open');
+    }
+
+    document.getElementById('openPalette').addEventListener('click', openPalette);
+    document.querySelectorAll('[data-open-palette]').forEach((button) => button.addEventListener('click', openPalette));
+    document.getElementById('closePalette').addEventListener('click', closePalette);
+    document.getElementById('closeDrawer').addEventListener('click', closeDrawer);
+    document.querySelectorAll('[data-open-drawer]').forEach((button) => button.addEventListener('click', openDrawer));
+
+    paletteModal.addEventListener('click', (event) => {
+      if (event.target === paletteModal) closePalette();
+    });
+
+    evidenceDrawer.addEventListener('click', (event) => {
+      if (event.target === evidenceDrawer) closeDrawer();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        openPalette();
+      }
+      if (event.key === 'Escape') {
+        closePalette();
+        closeDrawer();
+      }
+    });
+
+    if (densityBtn) {
+      densityBtn.addEventListener('click', () => {
+        app.classList.remove('density-compact', 'density-spacious');
+        densityIndex = (densityIndex + 1) % densityStates.length;
+        const state = densityStates[densityIndex];
+        if (state === 'Compact') app.classList.add('density-compact');
+        if (state === 'Spacious') app.classList.add('density-spacious');
+        densityBtn.textContent = `Density: ${state}`;
+      });
+    }
+  </script>
+</body>
+</html>
