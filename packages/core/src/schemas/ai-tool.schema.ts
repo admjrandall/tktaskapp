@@ -55,7 +55,9 @@ const AttachFileArgsSchema = v.object({
   url: v.optional(v.string()),
 })
 
-export type ToolValidationResult = { success: true } | { success: false; error: string }
+export type ToolValidationResult =
+  | { success: true; data: Record<string, unknown> }
+  | { success: false; error: string }
 
 type AnySchema = v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>
 
@@ -68,7 +70,7 @@ function _firstMsg(issues: [v.BaseIssue<unknown>, ...v.BaseIssue<unknown>[]]): s
 function _check(schema: AnySchema, args: Record<string, unknown>): ToolValidationResult {
   const result = v.safeParse(schema, args)
   if (!result.success) return { success: false, error: _firstMsg(result.issues) }
-  return { success: true }
+  return { success: true, data: result.output as Record<string, unknown> }
 }
 
 export function validateToolArgs(
@@ -89,6 +91,6 @@ export function validateToolArgs(
     case 'attach_file':
       return _check(AttachFileArgsSchema, args)
     default:
-      return { success: true } // read-only or unknown — skip
+      return { success: true, data: args } // read-only or unknown — pass args through
   }
 }

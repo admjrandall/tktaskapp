@@ -147,6 +147,15 @@ if (!html.includes('Content-Security-Policy')) {
   process.exit(1);
 }
 
+// 2b. Verify that the {{APP_VERSION}} build-var placeholder was replaced by Vite.
+//     If it is still present the build pipeline is broken and the wrong version
+//     will be shown in the app UI. Fail fast before the CSP hash is updated.
+if (html.includes('{{APP_VERSION}}')) {
+  console.error('❌ ERROR: {{APP_VERSION}} placeholder was not replaced in build output.');
+  console.error('   Check vite.config.ts → transformIndexHtml and ensure the root package.json has a "version" field.');
+  process.exit(1);
+}
+
 // 3. Reset placeholders (makes script idempotent across multiple runs)
 html = resetPlaceholders(html);
 

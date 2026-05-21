@@ -27,6 +27,7 @@ import {
   getAdapter,
   getStore,
   clearDbState,
+  setDbAuditHook,
 } from './storage/db.js'
 import { _migrateLocalStorageToIDB, verifyPassword } from './security/vault.js'
 import {
@@ -201,6 +202,9 @@ export async function lockApp(reason = 'manual'): Promise<void> {
   // Clear in-memory decrypted data
   clearDbState()
   await clearSessionKey().catch(() => {})
+  // Clear File System Access handle so the next user on a shared device cannot
+  // write to the previous user's vault file (H3 — FS handle cleared on logout).
+  await fsUnlink().catch(() => {})
   // Disconnect AI
   try {
     void resetAIConnection()
@@ -434,61 +438,73 @@ export function fullRender(state: AppState): void {
     appEl.innerHTML = '<div style="padding:2rem;color:red">Render error — please reload.</div>'
   }
 
-  bindSidebar()
-  bindTopbar(state)
+  try {
+    bindSidebar()
+    bindTopbar(state)
 
-  switch (currentView) {
-    case 'dashboard':
-      bindDashboard(state)
-      break
-    case 'clients':
-    case 'departments':
-    case 'projects':
-    case 'tasks':
-    case 'people':
-    case 'standaloneNotes':
-      bindWorkspaceView(currentView)
-      break
-    case 'calendar':
-      bindCalendar()
-      break
-    case 'time':
-      bindTimeTracker()
-      break
-    case 'reports':
-      bindReports(state)
-      break
-    case 'ai':
-      bindAIChatWorkspace()
-      break
-    case 'library':
-      bindLibrary()
-      break
-    case 'settings':
-      bindSettings(state)
-      break
-    case 'trash':
-      bindTrash()
-      break
-  }
-
-  if (docModal) bindDocModal()
-  if (fileViewer) bindFileViewer()
-  if (commandOpen) bindCommandPalette()
-  if (confirmDialog)
-    bindConfirmDialog(
-      confirmDialog as unknown as { message: string; onConfirm: () => void; onCancel?: () => void },
-    )
-  if (recordModal) bindRecordModal(recordModal)
-  if (aiPanelOpen) bindAIPanel()
-  if (_aiWizard?.open) {
-    try {
-      bindAIWizard()
-    } catch (e) {
-      console.warn('[AI wizard] bind:', (e as Error).message)
+    switch (currentView) {
+      case 'dashboard':
+        bindDashboard(state)
+        break
+      case 'clients':
+      case 'departments':
+      case 'projects':
+      case 'tasks':
+      case 'people':
+      case 'standaloneNotes':
+        bindWorkspaceView(currentView)
+        break
+      case 'calendar':
+        bindCalendar()
+        break
+      case 'time':
+        bindTimeTracker()
+        break
+      case 'reports':
+        bindReports(state)
+        break
+      case 'ai':
+        bindAIChatWorkspace()
+        break
+      case 'library':
+        bindLibrary()
+        break
+      case 'settings':
+        bindSettings(state)
+        break
+      case 'trash':
+        bindTrash()
+        break
     }
+
+    if (docModal) bindDocModal()
+    if (fileViewer) bindFileViewer()
+    if (commandOpen) bindCommandPalette()
+    if (confirmDialog)
+      bindConfirmDialog(
+        confirmDialog as unknown as {
+          message: string
+          onConfirm: () => void
+          onCancel?: () => void
+        },
+      )
+    if (recordModal) bindRecordModal(recordModal)
+    if (aiPanelOpen) bindAIPanel()
+    if (_aiWizard?.open) {
+      try {
+        bindAIWizard()
+      } catch (e) {
+        console.warn('[AI wizard] bind:', (e as Error).message)
+      }
+    }
+    bindNanoDownloadModal()
+  } catch (bindErr) {
+    console.error('[bind error]', bindErr)
+    setState({
+      toast: { id: Date.now(), message: 'UI error — please reload.', type: 'error' },
+    })
   }
-  bindNanoDownloadModal()
+
   if (notifPanelOpen) {
     document.getElementById('mark-all-read')?.addEventListener('click', async () => {
       await markAllNotificationsRead()
@@ -517,6 +533,11 @@ export function fullRender(state: AppState): void {
 
 // ── Wire all hooks ────────────────────────────────────────────────────────────
 function _wireHooks(): void {
+  // Audit hook for db-layer destructive operations (permanentDelete, adapter.clear).
+  setDbAuditHook((event, details) => {
+    auditLog(event as Parameters<typeof auditLog>[0], details)
+  })
+
   // AI state/nav hooks into state.ts
   setAIHooks(aiNeedsOnboarding, openAIWizard)
 

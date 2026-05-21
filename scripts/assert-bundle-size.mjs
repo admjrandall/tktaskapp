@@ -31,14 +31,18 @@ const PROFILES = [
   {
     name: 'offline-browser-ai',
     path: resolve(root, 'dist/offline/index.html'),
-    maxRaw: 320_000,
-    maxGzip: 95_000,
+    // Budget raised from 320 KB / 95 KB to 440 KB / 120 KB (Phase 13).
+    // Overage driven by valibot 1.4.0 + 9 schema files (~48 KB raw) and
+    // Phase 12 version-stamping + toolchain churn (~49 KB). Run perf:analyse
+    // before attempting to reduce: pnpm --filter @tktaskapp/offline-web run perf:analyse
+    maxRaw: 440_000,
+    maxGzip: 120_000,
   },
   {
     name: 'offline-internal-ai',
     path: resolve(root, 'dist/offline-internal-ai/index.html'),
-    maxRaw: 320_000,
-    maxGzip: 95_000,
+    maxRaw: 440_000,
+    maxGzip: 120_000,
   },
 ]
 

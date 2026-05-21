@@ -12,6 +12,17 @@ import { _idbLoadStore, _idbPutRecord, _idbDeleteRecord, _idbClearStore } from '
 import type { SyncAdapter } from '../adapter-interface.js'
 import { parseDateLocal } from '../utils.js'
 
+// Lazily resolved at call time to avoid circular import with state.ts.
+// db.ts is imported before state.ts is fully initialised on some paths.
+function _showIdbError(msg: string): void {
+  // Dynamic import keeps state.ts out of db.ts's static import graph.
+  import('../state.js')
+    .then((m) => {
+      m.showToast(msg, 'error')
+    })
+    .catch(() => {})
+}
+
 // fs.ts hook — imported lazily inside dbFlush to avoid circular import.
 // fs.ts depends on vault meta getters; db.ts depends on fs only for the
 // post-flush disk write notification.
@@ -31,6 +42,19 @@ export function setAdapter(a: SyncAdapter): void {
 }
 export function getAdapter(): SyncAdapter | null {
   return _adapter
+}
+
+// ── Audit hook injection ─────────────────────────────────────────────────────
+// Injected from main.ts after the audit module is wired up.
+// Keeps db.ts free of a direct dependency on audit.ts.
+let _auditHook: ((event: string, details?: Record<string, string>) => void) | null = null
+export function setDbAuditHook(
+  fn: (event: string, details?: Record<string, string>) => void,
+): void {
+  _auditHook = fn
+}
+function _audit(event: string, details?: Record<string, string>): void {
+  _auditHook?.(event, details)
 }
 
 // ── DB initialization ────────────────────────────────────────────────
@@ -73,11 +97,19 @@ export async function dbFlush(): Promise<void> {
   const payload = _buildCrmPayload()
   await saveVault(_dbKey, payload)
 
-  // Adapter push (fire-and-forget — failures shouldn't block local save).
+  // Adapter push — fire-and-forget for failures but conflicts are surfaced to the user.
   if (_adapter) {
-    _adapter.push(payload).catch((e: unknown) => {
-      console.warn('[db] adapter.push failed:', (e as Error).message)
-    })
+    _adapter
+      .push(payload)
+      .then(({ conflicts }) => {
+        if (conflicts.length > 0) {
+          console.warn('[db] sync conflicts:', conflicts)
+          _showIdbError('Sync conflict detected — some changes may not have been saved.')
+        }
+      })
+      .catch((e: unknown) => {
+        console.warn('[db] adapter.push failed:', (e as Error).message)
+      })
   }
 
   // Disk file mirror (Chrome/Edge File System Access). Loaded lazily so
@@ -150,7 +182,14 @@ export async function dbCreate(s: string, rec: Record<string, unknown>): Promise
   const item = { ...rec, id: uid(), createdAt: nowISO(), updatedAt: nowISO() }
   getStore(s).push(item)
   if (IDB_STORES.includes(s)) {
-    if (_dbKey) await _idbPutRecord(s, item, _dbKey)
+    if (_dbKey) {
+      try {
+        await _idbPutRecord(s, item, _dbKey)
+      } catch (e) {
+        _showIdbError('Save failed — data may not be persisted. Check available storage.')
+        throw e
+      }
+    }
   } else {
     _scheduleFlush()
   }
@@ -171,7 +210,14 @@ export async function dbUpdate(
   }
   arr[idx] = up
   if (IDB_STORES.includes(s)) {
-    if (_dbKey) await _idbPutRecord(s, up, _dbKey)
+    if (_dbKey) {
+      try {
+        await _idbPutRecord(s, up, _dbKey)
+      } catch (e) {
+        _showIdbError('Save failed — data may not be persisted. Check available storage.')
+        throw e
+      }
+    }
   } else {
     _scheduleFlush()
   }
@@ -184,7 +230,14 @@ export async function dbDelete(s: string, id: string): Promise<boolean> {
   if (idx === -1) return false
   arr.splice(idx, 1)
   if (IDB_STORES.includes(s)) {
-    await _idbDeleteRecord(s, id)
+    try {
+      await _idbDeleteRecord(s, id)
+    } catch (e) {
+      _showIdbError(
+        'Delete failed — record may not be removed from storage. Check available storage.',
+      )
+      throw e
+    }
   } else {
     _scheduleFlush()
   }
@@ -210,6 +263,12 @@ export async function restoreFromTrash(tid: string): Promise<boolean> {
 }
 
 export async function permanentDelete(tid: string): Promise<boolean> {
+  const item = dbGetById('trash', tid) as Record<string, unknown> | null
+  _audit('record_permanent_delete', {
+    trashId: tid,
+    store: typeof item?.['_store'] === 'string' ? item['_store'] : 'unknown',
+    originalId: typeof item?.['id'] === 'string' ? item['id'] : tid,
+  })
   return dbDelete('trash', tid)
 }
 
@@ -334,11 +393,24 @@ export function globalSearch(
   ss('tasks', (r) => (r.title as string) || 'Task', '✅')
   ss('people', (r) => (r.name as string) || 'Person', '👤')
   ss('documents', (r) => (r.title as string) || 'Document', '📄')
-  return results.slice(0, 20)
+  // Deduplicate: a record matching multiple fields would be pushed multiple times.
+  const seen = new Set<string>()
+  const unique = results.filter((r) => {
+    const key = `${r.store}::${r.id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  return unique.slice(0, 20)
 }
 
 // ── App lock — wipes all in-memory decrypted state ─────────────────────────────
 export function clearDbState(): void {
+  // Cancel any pending debounced flush so a stale key is never used after logout.
+  if (_flushTimer) {
+    clearTimeout(_flushTimer)
+    _flushTimer = null
+  }
   _dbKey = null
   _dbData = {}
   STORES.forEach((s) => {

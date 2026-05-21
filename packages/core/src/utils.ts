@@ -155,21 +155,18 @@ export function downloadText(name: string, content: BlobPart, mime = 'text/plain
 
 export function toCSV(recs: AnyRec[], fields: string[]): string {
   if (!recs.length) return ''
-  return [
-    fields.join(','),
-    ...recs.map((r) =>
-      fields
-        .map((f) => {
-          const v = r[f]
-          const sv =
-            typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
-              ? String(v)
-              : ''
-          return `"${sv.replace(/"/g, '""')}"`
-        })
-        .join(','),
-    ),
-  ].join('\n')
+  const cell = (v: unknown): string => {
+    let sv: string
+    if (v === null || v === undefined) {
+      sv = ''
+    } else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+      sv = String(v)
+    } else {
+      sv = JSON.stringify(v)
+    }
+    return `"${sv.replace(/"/g, '""')}"`
+  }
+  return [fields.join(','), ...recs.map((r) => fields.map((f) => cell(r[f])).join(','))].join('\n')
 }
 
 export function plural(n: number, w: string): string {

@@ -78,6 +78,10 @@ export function subscribe(fn: (s: AppState) => void): () => void {
     _listeners.delete(fn)
   }
 }
+
+let _isNotifying = false
+const _pendingPatches: Partial<AppState>[] = []
+
 function _notify(): void {
   _listeners.forEach((fn) => {
     fn(_state)
@@ -87,8 +91,30 @@ export function getState(): AppState {
   return _state
 }
 export function setState(patch: Partial<AppState>): void {
+  if (_isNotifying) {
+    // Re-entrant call from inside a subscriber: queue and drain after the
+    // current notification round completes (prevents infinite loops).
+    _pendingPatches.push(patch)
+    return
+  }
   _state = { ..._state, ...patch }
-  _notify()
+  _isNotifying = true
+  try {
+    _notify()
+  } finally {
+    _isNotifying = false
+  }
+  // Drain any patches that were queued by subscribers during notification.
+  while (_pendingPatches.length > 0) {
+    const next = _pendingPatches.shift()!
+    _state = { ..._state, ...next }
+    _isNotifying = true
+    try {
+      _notify()
+    } finally {
+      _isNotifying = false
+    }
+  }
 }
 
 export function setTheme(t: string): void {

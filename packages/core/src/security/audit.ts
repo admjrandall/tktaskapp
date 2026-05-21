@@ -29,6 +29,8 @@ export type AuditEventType =
   | 'ai_key_removed'
   | 'ai_query'
   | 'ai_tool_rejected'
+  | 'record_permanent_delete'
+  | 'adapter_clear'
 
 export interface AuditEntry {
   id: string

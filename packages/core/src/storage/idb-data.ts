@@ -40,16 +40,30 @@ export async function _idbLoadStore(storeName: string, cryptoKey: CryptoKey): Pr
         rej(req.error ?? new Error('IDB open failed'))
       }
     })
+    let skippedCount = 0
     const decrypted = await Promise.all(
       records.map(async (r) => {
         try {
-          return await aesDecrypt(cryptoKey, r.enc)
-        } catch {
-          console.warn(`[idb] Failed to decrypt ${storeName}/${r.id}`)
+          return await Promise.race([
+            aesDecrypt(cryptoKey, r.enc),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => {
+                reject(new Error('decrypt timeout'))
+              }, 5000),
+            ),
+          ])
+        } catch (e) {
+          console.warn(`[idb] Failed to decrypt ${storeName}/${r.id}:`, (e as Error).message)
+          skippedCount++
           return null
         }
       }),
     )
+    if (skippedCount > 0) {
+      console.warn(
+        `[idb] ${skippedCount} record(s) in "${storeName}" could not be decrypted and were skipped.`,
+      )
+    }
     return decrypted.filter(Boolean)
   } catch (e) {
     console.warn(`[idb] Could not load ${storeName}:`, (e as Error).message)
@@ -78,6 +92,7 @@ export async function _idbPutRecord(
     })
   } catch (e) {
     console.warn(`[idb] Write failed for ${storeName}/${record.id}:`, (e as Error).message)
+    throw e
   }
 }
 
@@ -97,6 +112,7 @@ export async function _idbDeleteRecord(storeName: string, id: string): Promise<v
     })
   } catch (e) {
     console.warn(`[idb] Delete failed for ${storeName}/${id}:`, (e as Error).message)
+    throw e
   }
 }
 
