@@ -14,7 +14,7 @@ import {
 } from '../storage/db.js'
 import { getState, showToast, showConfirm, closeRecordModal, reloadData } from '../state.js'
 import { Icons } from '../ui/icons.js'
-import { renderPriorityBadge } from '../ui/components.js'
+import { renderPriorityBadge, trapFocus } from '../ui/components.js'
 import { PRIORITIES, PROJECT_STAGES, TASK_STATUSES, TAG_COLORS, COMM_TYPES } from '../constants.js'
 import { openProjectCanvas, _pcFromCanvas, setPcFromCanvas } from './project-canvas.js'
 
@@ -250,7 +250,16 @@ export function bindRecordModal(config: {
   if (!schema) return
   const record = id ? (dbGetById(store, id) as AnyRecord | null) : null
   _pendingNotes = Array.isArray(record?.notes) ? [...(record.notes as AnyRecord[])] : []
+
+  let _releaseTrap: (() => void) | null = null
+  const handleEsc = (e: KeyboardEvent) => {
+    // Defer to confirm dialog's ESC handler when it is open
+    if (e.key === 'Escape' && !document.getElementById('confirm-backdrop')) close()
+  }
+
   const close = () => {
+    _releaseTrap?.()
+    document.removeEventListener('keydown', handleEsc)
     closeRecordModal()
   }
 
@@ -259,6 +268,10 @@ export function bindRecordModal(config: {
   document.getElementById('record-modal-backdrop')?.addEventListener('click', (e: Event) => {
     if ((e.target as HTMLElement).id === 'record-modal-backdrop') close()
   })
+
+  const modalEl = document.querySelector<HTMLElement>('.modal[role="dialog"]')
+  if (modalEl) _releaseTrap = trapFocus(modalEl)
+  document.addEventListener('keydown', handleEsc)
 
   document.getElementById('add-note-btn')?.addEventListener('click', () => {
     const ta = document.getElementById('new-note') as HTMLTextAreaElement | null

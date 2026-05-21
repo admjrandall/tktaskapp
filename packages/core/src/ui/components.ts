@@ -31,7 +31,41 @@ type NotificationItem = {
   createdAt?: string | null
 }
 
-// AI hook (filled by main.ts).
+// ── Focus trap ────────────────────────────────────────────────────────────────
+const FOCUSABLE_SELECTORS =
+  'a[href],area[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),[tabindex]:not([tabindex="-1"])'
+
+export function trapFocus(container: HTMLElement): () => void {
+  const getFocusable = () =>
+    Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS))
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Tab') return
+    const focusable = getFocusable()
+    if (!focusable.length) {
+      e.preventDefault()
+      return
+    }
+    const first = focusable[0]!
+    const last = focusable[focusable.length - 1]!
+    if (e.shiftKey) {
+      if (document.activeElement === first || !container.contains(document.activeElement)) {
+        e.preventDefault()
+        last.focus()
+      }
+    } else {
+      if (document.activeElement === last || !container.contains(document.activeElement)) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+  }
+  container.addEventListener('keydown', handleKeyDown)
+  return () => {
+    container.removeEventListener('keydown', handleKeyDown)
+  }
+}
+
+// ── AI hook (filled by main.ts) ───────────────────────────────────────────────
 let aiNeedsOnboarding: () => boolean = () => false
 let openAIWizard: (step: number) => void = () => {}
 export function setComponentsAIHooks(needs: () => boolean, open: (step: number) => void): void {
@@ -61,20 +95,35 @@ export function renderConfirmDialog(d: ConfirmDialog): string {
   return `<div class="modal-backdrop" id="confirm-backdrop"><div class="modal" style="max-width:400px" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg"><div class="modal-header"><span class="modal-title" id="confirm-title">Confirm</span></div><div class="modal-body"><p id="confirm-msg" style="color:var(--text-secondary);font-size:.9375rem;line-height:1.6">${escH(d.message)}</p></div><div class="modal-footer"><button class="btn btn-secondary" id="confirm-cancel">Cancel</button><button class="btn btn-danger" id="confirm-ok">Confirm</button></div></div></div>`
 }
 export function bindConfirmDialog(d: ConfirmDialog): void {
-  document.getElementById('confirm-ok')?.addEventListener('click', () => {
-    closeConfirm()
-    d?.onConfirm?.()
-  })
-  document.getElementById('confirm-cancel')?.addEventListener('click', () => {
+  const cancel = () => {
     closeConfirm()
     d?.onCancel?.()
-  })
+  }
+  const confirm = () => {
+    closeConfirm()
+    d?.onConfirm?.()
+  }
+
+  document.getElementById('confirm-ok')?.addEventListener('click', confirm)
+  document.getElementById('confirm-cancel')?.addEventListener('click', cancel)
   document.getElementById('confirm-backdrop')?.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement | null)?.id === 'confirm-backdrop') {
-      closeConfirm()
-      d?.onCancel?.()
-    }
+    if ((e.target as HTMLElement | null)?.id === 'confirm-backdrop') cancel()
   })
+
+  const dialogEl = document.querySelector<HTMLElement>('[role="alertdialog"]')
+  if (dialogEl) trapFocus(dialogEl)
+
+  // Focus Cancel by default (safer than Confirm for destructive dialogs)
+  document.getElementById('confirm-cancel')?.focus()
+
+  const handleEsc = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.stopImmediatePropagation()
+      document.removeEventListener('keydown', handleEsc)
+      cancel()
+    }
+  }
+  document.addEventListener('keydown', handleEsc)
 }
 export function renderAvatar(name: string | null | undefined, size = 'md', style = ''): string {
   const [bg, fg] = avatarColor(name)
@@ -302,7 +351,8 @@ export function getCmdItems(): CommandAction[] {
 export function renderCommandPalette(open: boolean): string {
   if (!open) return ''
   const items = getCmdItems()
-  return `<div class="command-backdrop" id="cmd-backdrop"><div class="command-palette"><div class="command-input-wrap">${Icons.Search(18)}<input class="command-input" id="cmd-input" placeholder="Search or type a command…" value="${escH(_cmdQuery)}" autocomplete="off" spellcheck="false"><span class="kbd">ESC</span></div><div class="command-results">${items.length ? items.map((item, i) => `<button class="command-item ${i === _cmdSel ? 'selected' : ''}" data-cmd="${i}"><span style="opacity:.6">${typeof item.icon === 'string' ? item.icon : ''}</span><span>${escH(item.label)}</span></button>`).join('') : '<p style="padding:1.5rem;text-align:center;color:var(--text-tertiary);font-size:.875rem">No results</p>'}</div></div></div>`
+  const activeId = items.length ? `cmd-item-${_cmdSel}` : ''
+  return `<div class="command-backdrop" id="cmd-backdrop" role="dialog" aria-modal="true" aria-label="Command palette"><div class="command-palette"><div class="command-input-wrap">${Icons.Search(18)}<input class="command-input" id="cmd-input" placeholder="Search or type a command…" value="${escH(_cmdQuery)}" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="cmd-listbox" aria-autocomplete="list"${activeId ? ` aria-activedescendant="${activeId}"` : ''}><span class="kbd">ESC</span></div><div class="command-results" id="cmd-listbox" role="listbox" aria-label="Results">${items.length ? items.map((item, i) => `<button class="command-item ${i === _cmdSel ? 'selected' : ''}" id="cmd-item-${i}" role="option" aria-selected="${i === _cmdSel}" data-cmd="${i}"><span style="opacity:.6">${typeof item.icon === 'string' ? item.icon : ''}</span><span>${escH(item.label)}</span></button>`).join('') : '<p style="padding:1.5rem;text-align:center;color:var(--text-tertiary);font-size:.875rem">No results</p>'}</div></div></div>`
 }
 export function bindCommandPalette(): void {
   const input = document.getElementById('cmd-input') as HTMLInputElement | null
@@ -325,7 +375,7 @@ export function bindCommandPalette(): void {
         ? items
             .map(
               (item, i) =>
-                `<button class="command-item ${i === _cmdSel ? 'selected' : ''}" data-cmd="${i}"><span style="opacity:.6">${typeof item.icon === 'string' ? item.icon : ''}</span><span>${escH(item.label)}</span></button>`,
+                `<button class="command-item ${i === _cmdSel ? 'selected' : ''}" id="cmd-item-${i}" role="option" aria-selected="${i === _cmdSel}" data-cmd="${i}"><span style="opacity:.6">${typeof item.icon === 'string' ? item.icon : ''}</span><span>${escH(item.label)}</span></button>`,
             )
             .join('')
         : '<p style="padding:1.5rem;text-align:center;color:var(--text-tertiary);font-size:.875rem">No results</p>'
@@ -344,7 +394,10 @@ export function bindCommandPalette(): void {
     const updateSelected = () => {
       document.querySelectorAll('.command-item').forEach((el, i) => {
         el.classList.toggle('selected', i === _cmdSel)
+        el.setAttribute('aria-selected', String(i === _cmdSel))
       })
+      const inp = document.getElementById('cmd-input')
+      if (inp) inp.setAttribute('aria-activedescendant', `cmd-item-${_cmdSel}`)
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault()

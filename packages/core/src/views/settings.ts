@@ -231,6 +231,18 @@ let _totpSetupSecret = ''
 let _totpSetupStep: 'idle' | 'setup' | 'verify' = 'idle'
 let _totpSetupTimerInterval: ReturnType<typeof setInterval> | null = null
 
+function _getDensity(): string {
+  return localStorage.getItem('taskapp_density') || 'comfortable'
+}
+function _setDensity(d: string): void {
+  localStorage.setItem('taskapp_density', d)
+  if (d === 'comfortable') {
+    document.documentElement.removeAttribute('data-density')
+  } else {
+    document.documentElement.setAttribute('data-density', d)
+  }
+}
+
 let _settingsSection = 'general'
 export function setSettingsSection(s: string): void {
   _settingsSection = s
@@ -330,7 +342,8 @@ export function renderSettings(state: AppState): string {
         <button class="btn btn-primary btn-sm" id="notif-prefs-save" style="margin-top:.875rem">${Icons.Save(14)} Save Preferences</button>
       </div>`
   } else if (_settingsSection === 'general') {
-    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">General</h2><div class="card" style="padding:1.25rem"><div style="font-weight:600;margin-bottom:.75rem">Appearance</div><div style="display:flex;gap:.75rem"><button class="btn ${state.theme === 'light' ? 'btn-primary' : 'btn-secondary'}" data-theme="light">${Icons.Sun(16)} Light</button><button class="btn ${state.theme === 'dark' ? 'btn-primary' : 'btn-secondary'}" data-theme="dark">${Icons.Moon(16)} Dark</button></div></div>`
+    const curDensity = _getDensity()
+    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">General</h2><div class="card" style="padding:1.25rem;margin-bottom:1rem"><div style="font-weight:600;margin-bottom:.75rem">Theme</div><div style="display:flex;gap:.75rem"><button class="btn ${state.theme === 'light' ? 'btn-primary' : 'btn-secondary'}" data-theme="light">${Icons.Sun(16)} Light</button><button class="btn ${state.theme === 'dark' ? 'btn-primary' : 'btn-secondary'}" data-theme="dark">${Icons.Moon(16)} Dark</button></div></div><div class="card" style="padding:1.25rem"><div style="font-weight:600;margin-bottom:.25rem">Density</div><div style="font-size:.8125rem;color:var(--text-secondary);margin-bottom:.75rem">Controls spacing and text size across list views</div><div style="display:flex;gap:.75rem">${(['compact', 'comfortable', 'spacious'] as const).map((d) => `<button class="btn ${curDensity === d ? 'btn-primary' : 'btn-secondary'}" data-density-set="${d}" style="text-transform:capitalize">${d}</button>`).join('')}</div></div>`
   } else if (_settingsSection === 'ai') {
     const p = _aiPrefs
     const aiReady = _getAIReady()
@@ -817,6 +830,16 @@ export function bindSettings(state: AppState): void {
   document.querySelectorAll<HTMLElement>('[data-theme]').forEach((btn) => {
     btn.addEventListener('click', () => {
       setTheme((btn.dataset as DOMStringMap & { theme: string }).theme)
+    })
+  })
+  document.querySelectorAll<HTMLElement>('[data-density-set]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      _setDensity((btn.dataset as DOMStringMap & { densitySet: string }).densitySet)
+      document.querySelectorAll<HTMLElement>('[data-density-set]').forEach((b) => {
+        const active = b.dataset.densitySet === _getDensity()
+        b.classList.toggle('btn-primary', active)
+        b.classList.toggle('btn-secondary', !active)
+      })
     })
   })
 

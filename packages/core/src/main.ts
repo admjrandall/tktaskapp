@@ -7,6 +7,7 @@ import './styles/main.css'
 import { _rawPolicy } from './security/trusted-types.js'
 import {
   initTheme,
+  initDensity,
   setState,
   getState,
   subscribe,
@@ -701,6 +702,7 @@ function _wireHooks(): void {
 // ── init ──────────────────────────────────────────────────────────────────────
 export async function init(): Promise<void> {
   initTheme()
+  initDensity()
 
   // File integrity self-check (non-blocking, skipped on file:// origins)
   void (async function checkFileIntegrity() {

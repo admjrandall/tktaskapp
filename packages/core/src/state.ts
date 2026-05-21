@@ -127,6 +127,10 @@ export function setTheme(t: string): void {
 export function initTheme(): void {
   document.documentElement.setAttribute('data-theme', _state.theme)
 }
+export function initDensity(): void {
+  const d = localStorage.getItem('taskapp_density') || 'comfortable'
+  if (d !== 'comfortable') document.documentElement.setAttribute('data-density', d)
+}
 
 export function reloadData(): void {
   const stores = [
