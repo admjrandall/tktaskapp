@@ -16,7 +16,7 @@ If you get stuck in a loop trying to fix an issue, try twice, then stop and disc
 
 ## What this is
 
-**Task App CRM** — a fully offline-first, AES-256-GCM encrypted CRM. It is developed as a **TypeScript monorepo** (pnpm workspaces, Vite build) and deployed as a **single self-contained HTML file** (`dist/offline/index.html`, ~276 kB). No server needed. Open in Chrome or Edge and it runs from `file://`.
+**Task App CRM** — a fully offline-first, AES-256-GCM encrypted CRM. It is developed as a **TypeScript monorepo** (pnpm workspaces, Vite build) and deployed as a **single self-contained HTML file** (`dist/offline/index.html`). No server needed. Open in Chrome or Edge and it runs from `file://`.
 
 The legacy single-file source (`taskapp.html`, ~7,853 lines) still exists in the repo root as a reference but is **no longer the active codebase**. All development happens in the monorepo packages.
 
@@ -31,38 +31,67 @@ d:\techkeycrmapp\
 ├── packages/
 │   ├── core/src/                 ← all app logic (TypeScript)
 │   │   ├── constants.ts
-│   │   ├── trusted-types.ts      ← MUST be first import in main.ts
-│   │   ├── crypto.ts
-│   │   ├── session.ts
-│   │   ├── vault.ts
-│   │   ├── idb-data.ts
-│   │   ├── db.ts
-│   │   ├── fs.ts
+│   │   ├── adapter-interface.ts
+│   │   ├── deployment-policy.ts
 │   │   ├── state.ts
 │   │   ├── utils.ts
-│   │   ├── icons.ts
-│   │   ├── components.ts
-│   │   ├── auth.ts
 │   │   ├── main.ts               ← entry point, exported init()
-│   │   ├── adapter-interface.ts
 │   │   ├── styles/main.css
+│   │   ├── security/             ← auth and crypto modules
+│   │   │   ├── trusted-types.ts  ← MUST be first import in main.ts
+│   │   │   ├── crypto.ts
+│   │   │   ├── session.ts
+│   │   │   ├── vault.ts
+│   │   │   ├── sanitize.ts
+│   │   │   ├── totp.ts
+│   │   │   ├── webauthn.ts
+│   │   │   ├── mfa.ts
+│   │   │   ├── audit.ts
+│   │   │   └── auth.ts
+│   │   ├── storage/              ← IDB and file-system persistence
+│   │   │   ├── idb-data.ts
+│   │   │   ├── db.ts
+│   │   │   └── fs.ts
+│   │   ├── ui/                   ← shared UI primitives
+│   │   │   ├── components.ts
+│   │   │   └── icons.ts
+│   │   ├── schemas/              ← Zod / runtime schemas
+│   │   │   ├── index.ts
+│   │   │   ├── client.schema.ts
+│   │   │   ├── project.schema.ts
+│   │   │   ├── task.schema.ts
+│   │   │   ├── person.schema.ts
+│   │   │   ├── document.schema.ts
+│   │   │   ├── file.schema.ts
+│   │   │   ├── import.schema.ts
+│   │   │   ├── audit.schema.ts
+│   │   │   └── ai-tool.schema.ts
 │   │   ├── views/                ← one file per view
 │   │   └── ai/                   ← ai-prefs.ts, ai-runtime.ts, ai-tools.ts, ai-settings.ts, ai-ui.ts, providers/
-│   ├── adapter-null/src/index.ts ← NullAdapter (offline-only, no-op)
-│   ├── adapter-rxdb/src/index.ts ← RxDBAdapter stub
-│   └── adapter-dataverse/src/index.ts ← DataverseAdapter stub
+│   ├── adapter-null/src/index.ts       ← NullAdapter (offline-only, no-op)
+│   ├── adapter-rxdb/src/index.ts       ← RxDBAdapter stub
+│   ├── adapter-dataverse/src/index.ts  ← DataverseAdapter stub
+│   ├── adapter-kms/src/index.ts        ← KMS adapter interface (Azure KV / AWS KMS / HashiCorp; GDPR crypto-shredding contract)
+│   └── adapter-mobile-native/src/      ← Mobile native adapters (Capacitor)
+│       ├── index.ts
+│       ├── mobile-vault-adapter.ts
+│       ├── mobile-backup-adapter.ts
+│       ├── biometric-unlock-adapter.ts
+│       └── network-policy.ts
 ├── apps/
-│   ├── offline-web/              ← Vite entry for all offline build profiles (was apps/offline)
+│   ├── offline-web/              ← Vite entry for all offline build profiles
 │   │   ├── index.html            ← entry-browser-ai.ts (default build)
 │   │   ├── src/
 │   │   │   ├── entry-browser-ai.ts  ← browser AI only (Gemini Nano / Phi-4-mini); default build:offline
-│   │   │   ├── entry-no-ai.ts       ← zero AI code; Phase 1 adds dedicated Vite config
+│   │   │   ├── entry-no-ai.ts       ← zero AI code
 │   │   │   └── entry-internal-ai.ts ← browser AI + private Ollama endpoints; OT_AI_CONNECT_SRC at build
 │   │   ├── vite.config.ts        ← builds browser-ai profile → dist/offline/index.html
 │   │   └── README.md             ← documents three sub-profiles
-│   ├── pwa-sync/                 ← PWA build placeholder (was apps/sync; NullAdapter for now)
+│   ├── pwa-sync/                 ← PWA build (NullAdapter for now)
 │   ├── dataverse/                ← Power Apps Code App build
-│   └── mobile/                   ← Capacitor config stub
+│   ├── mobile/                   ← Capacitor config stub
+│   └── enterprise-web/           ← Phase 9 stub; server-backed enterprise build (NOT production-ready)
+│       └── src/entry.ts          ← documented design stub with acceptance checklist
 ├── dist/
 │   └── offline/index.html        ← built single-file output (open this in browser)
 ├── generate-csp.mjs              ← regenerates CSP hashes in dist file
@@ -115,33 +144,33 @@ OT_AI_CONNECT_SRC="http://ai-server.internal:11434" pnpm run build:offline:inter
 Modules must be imported in this order (deeper dependencies first):
 
 ```
-1.  constants.ts          — no dependencies
-2.  crypto.ts             — constants
-3.  session.ts            — constants
-4.  vault.ts              — constants, crypto
-5.  idb-data.ts           — constants, crypto
-6.  db.ts                 — constants, vault, idb-data, adapter-interface
-7.  fs.ts                 — constants, vault, db
-8.  state.ts              — db
-9.  utils.ts              — constants
-10. icons.ts              — no dependencies
-11. trusted-types.ts      — no dependencies (side-effect IIFE — MUST import first in main.ts)
-12. components.ts         — state, utils, icons, db
-13. sanitize.ts           — dompurify (XSS sanitization for HTML/URLs)
-14. totp.ts               — no dependencies (pure WebCrypto TOTP, RFC 6238)
-15. webauthn.ts           — no dependencies (WebAuthn PRF passkeys; hooks injected by main.ts)
-16. mfa.ts                — totp; hooks injected by main.ts
-17. audit.ts              — no app deps (hooks injected by main.ts via setAuditHooks)
-18. views/*               — state, db, utils, icons, components, sanitize
-19. ai/ai-prefs.ts        — no dependencies (localStorage only)
-20. deployment-policy.ts  — no dependencies; build/profile policy
-21. ai/providers/*        — stateless; no app-layer deps
-22. ai/ai-runtime.ts      — state, ai-prefs, deployment-policy, providers, (lazy: state.js)
-23. ai/ai-tools.ts        — ai-runtime, (injected: SCHEMAS, streamToBubble, finalRender)
-24. ai/ai-settings.ts     — ai-prefs, ai-runtime, deployment-policy, providers/ollama
-25. ai/ai-ui.ts           — ai-runtime, ai-tools, ai-settings, ai-prefs, deployment-policy, state, utils, icons
-26. auth.ts               — crypto, vault, session, state, utils, icons, fs, mfa
-27. main.ts               — all of the above
+1.  constants.ts                   — no dependencies
+2.  security/crypto.ts             — constants
+3.  security/session.ts            — constants
+4.  security/vault.ts              — constants, crypto
+5.  storage/idb-data.ts            — constants, crypto
+6.  storage/db.ts                  — constants, vault, idb-data, adapter-interface
+7.  storage/fs.ts                  — constants, vault, db
+8.  state.ts                       — db
+9.  utils.ts                       — constants
+10. ui/icons.ts                    — no dependencies
+11. security/trusted-types.ts      — no dependencies (side-effect IIFE — MUST import first in main.ts)
+12. ui/components.ts               — state, utils, icons, db
+13. security/sanitize.ts           — dompurify (XSS sanitization for HTML/URLs)
+14. security/totp.ts               — no dependencies (pure WebCrypto TOTP, RFC 6238)
+15. security/webauthn.ts           — no dependencies (WebAuthn PRF passkeys; hooks injected by main.ts)
+16. security/mfa.ts                — totp; hooks injected by main.ts
+17. security/audit.ts              — no app deps (hooks injected by main.ts via setAuditHooks)
+18. views/*                        — state, db, utils, icons, components, sanitize
+19. ai/ai-prefs.ts                 — no dependencies (localStorage only)
+20. deployment-policy.ts           — no dependencies; build/profile policy
+21. ai/providers/*                 — stateless; no app-layer deps
+22. ai/ai-runtime.ts               — state, ai-prefs, deployment-policy, providers, (lazy: state.js)
+23. ai/ai-tools.ts                 — ai-runtime, (injected: SCHEMAS, streamToBubble, finalRender)
+24. ai/ai-settings.ts              — ai-prefs, ai-runtime, deployment-policy, providers/ollama
+25. ai/ai-ui.ts                    — ai-runtime, ai-tools, ai-settings, ai-prefs, deployment-policy, state, utils, icons
+26. security/auth.ts               — crypto, vault, session, state, utils, icons, fs, mfa
+27. main.ts                        — all of the above
 ```
 
 ---
@@ -183,7 +212,7 @@ setFooHooks(appRenderWorkspace)
 
 ### Adapter interface
 
-The sync layer is abstracted behind a four-method interface (`packages/core/src/adapter-interface.ts`):
+The sync layer is abstracted behind a four-method interface ([`packages/core/src/adapter-interface.ts`](packages/core/src/adapter-interface.ts)):
 
 ```ts
 pull(checkpoint)      → { records, checkpoint }
@@ -192,7 +221,7 @@ stream(onRemoteChange) → unsubscribe fn
 clear()               → void
 ```
 
-`NullAdapter` (the default) inherits all four as no-ops. The app never imports a concrete adapter directly — `setAdapter()` in `db.ts` injects it, called from the app entry file (e.g. `apps/offline-web/src/entry-browser-ai.ts`) before `init()`.
+`NullAdapter` (the default) inherits all four as no-ops. The app never imports a concrete adapter directly — `setAdapter()` in `storage/db.ts` injects it, called from the app entry file (e.g. `apps/offline-web/src/entry-browser-ai.ts`) before `init()`.
 
 ---
 
@@ -217,7 +246,7 @@ clear()               → void
 
 ## Crypto layer
 
-- **PBKDF2-HMAC-SHA-256** at **600,000 iterations** (OWASP 2026 recommendation) — `crypto.ts`
+- **PBKDF2-HMAC-SHA-256** at **600,000 iterations** (OWASP 2026 recommendation) — `security/crypto.ts`
 - **AES-256-GCM** for all data at rest
 - Key is **non-extractable** (`extractable: false`); never exists as a JS string
 - **Base64**: uses `Uint8Array.prototype.toBase64()` (Sep 2025) with chunked `btoa` fallback. Never use `btoa(String.fromCharCode(...array))` — stack overflow on large arrays.
@@ -227,12 +256,12 @@ clear()               → void
 
 ## Trusted Types
 
-Two policies created once at module scope in `trusted-types.ts`:
+Two policies created once at module scope in `security/trusted-types.ts`:
 
 - `nexus-crm` (`_ttPolicy`) — sanitises plain-text user data for `innerHTML`
 - `nexus-crm-raw` (`_rawPolicy`) — passes already-safe template HTML through unchanged
 
-`patchInnerHTML()` IIFE overrides `Element.prototype.innerHTML` — all string assignments auto-route through `_rawPolicy`. **`trusted-types.ts` must be the first import in `main.ts`.**
+`patchInnerHTML()` IIFE overrides `Element.prototype.innerHTML` — all string assignments auto-route through `_rawPolicy`. **`security/trusted-types.ts` must be the first import in `main.ts`.**
 
 **Never call `trustedTypes.createPolicy('nexus-crm-raw', ...)` again** — throws `TypeError` on duplicate names.
 
@@ -263,7 +292,7 @@ runningTimer, timerElapsed
 
 ## Database helpers (`db.ts`)
 
-All UI code uses these — never touches IDB or the vault directly:
+All UI code uses these — never touches IDB or the vault directly. Source: `storage/db.ts`.
 
 ```ts
 dbGetAll(store) // returns copy of in-memory store array
@@ -284,7 +313,7 @@ permanentDelete(trashId)
 
 **Debounced flush:** `dbCreate/Update/Delete` call `_scheduleFlush()` (300ms debounce). `beforeunload` forces immediate flush. IDB-backed stores (`documents`, `conversations`) write immediately, not via the flush.
 
-To add a new large-content store: add to `IDB_STORES` in `constants.ts`, create its object store in `_dataDbOpen()` in `idb-data.ts`, route through `_idbPutRecord` / `_idbLoadStore`. Do **not** add to `STORES`.
+To add a new large-content store: add to `IDB_STORES` in `constants.ts`, create its object store in `_dataDbOpen()` in `storage/idb-data.ts`, route through `_idbPutRecord` / `_idbLoadStore`. Do **not** add to `STORES`.
 
 ---
 
@@ -335,7 +364,7 @@ Cloud API keys stored encrypted in IDB under `__ai_secrets__`. Prefs in `localSt
 
 ---
 
-## File System persistence (`fs.ts`)
+## File System persistence (`storage/fs.ts`)
 
 Dual-save: IDB vault (primary) + `.vault` disk file (survives cache clear).
 
@@ -346,7 +375,7 @@ Dual-save: IDB vault (primary) + `.vault` disk file (survives cache clear).
 - `isFsReady()` — returns whether a writable handle is active
 - File System Access API available in Chrome/Edge only; graceful degradation elsewhere
 
-In `db.ts`, `dbFlush()` calls `fsWriteVault()` lazily (dynamic import) to avoid a circular import at module-evaluation time.
+In `storage/db.ts`, `dbFlush()` calls `fsWriteVault()` lazily (dynamic import) to avoid a circular import at module-evaluation time.
 
 ---
 
@@ -357,8 +386,8 @@ In `db.ts`, `dbFlush()` calls `fsWriteVault()` lazily (dynamic import) to avoid 
 3. The four IndexedDB databases must remain separate: `nexus_keys_v1`, `nexus_vault_v2`, `nexus_data_v1`, `nexus_fs_v1`.
 4. `IDB_STORES = ['documents', 'conversations']` — any new large-content store must be added here and routed through `_idbPutRecord` / `_idbLoadStore`, not `dbFlush`.
 5. Never call `trustedTypes.createPolicy` with an already-registered name.
-6. Never use `btoa(String.fromCharCode(...array))` — use `u8ToBase64(array)` from `crypto.ts`.
-7. `trusted-types.ts` must be the first import in `main.ts`.
+6. Never use `btoa(String.fromCharCode(...array))` — use `u8ToBase64(array)` from `security/crypto.ts`.
+7. `security/trusted-types.ts` must be the first import in `main.ts`.
 8. After every build, `generate-csp.mjs` runs automatically. If editing source and testing via dev server, CSP hashes won't match — use the built `dist/offline/index.html` for production testing.
 
 ---
@@ -374,7 +403,7 @@ For Built-in AI (the only AI tier in the offline build — Gemini Nano in Chrome
 - After the flag is enabled and the model is present, the app auto-presents the built-in AI modal when you navigate to the AI view. The one-time download disclaimer appears only if the browser still needs to fetch the model; subsequent enable/disable cycles skip it and go straight to the progress bar or connecting state.
   For Ollama (sync/enterprise builds only, not the offline profile): prefer `OLLAMA_ORIGINS=null ollama serve` (or the specific served origin if not using `file://`).
 
-Do not edit `taskapp.html` — it is the legacy reference file, not the active source. All edits go in `packages/core/src/`.
+Do not edit `taskapp.html` — it is the legacy reference file, not the active source. All edits go in `packages/core/src/` (and its subdirectories: `security/`, `storage/`, `ui/`, `views/`, `ai/`, `schemas/`).
 
 ---
 

@@ -8,7 +8,7 @@
 // The Info.plist and network_security_config.xml static checks can be done now.
 
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 
 const ROOT = resolve(__dirname, '../..')
@@ -77,6 +77,34 @@ describe('Android network security config', () => {
     const baseConfigMatch = nsc.match(/<base-config[\s\S]*?<\/base-config>/)
     expect(baseConfigMatch).not.toBeNull()
     expect(baseConfigMatch![0]).not.toContain('src="user"')
+  })
+})
+
+describe('Offline bundle — mobile JS bundle content gates', () => {
+  const bundlePath = resolve(ROOT, 'dist/offline/index.html')
+
+  it('offline bundle exists (run pnpm run build:offline if this fails)', () => {
+    expect(existsSync(bundlePath), 'dist/offline/index.html must exist').toBe(true)
+  })
+
+  it('offline bundle contains no cloud AI API endpoint strings (MASVS-NETWORK-1)', () => {
+    // The offline/browser-ai build profile disables all cloud providers via Vite aliases
+    // (apps/offline-web/vite.config.ts). These domains must not appear in the bundle.
+    if (!existsSync(bundlePath)) return
+    const bundle = readFileSync(bundlePath, 'utf8')
+    const forbidden = ['api.anthropic.com', 'api.openai.com', 'generativelanguage.googleapis.com']
+    for (const domain of forbidden) {
+      expect(bundle, `bundle must not contain "${domain}"`).not.toContain(domain)
+    }
+  })
+
+  it('offline bundle contains no console.log calls (production build gate)', () => {
+    // Vite removes console.log in production builds.
+    // If this fails: check that vite.config.ts has esbuild.drop: ['console'] or
+    // that minification is active.
+    if (!existsSync(bundlePath)) return
+    const bundle = readFileSync(bundlePath, 'utf8')
+    expect(bundle, 'production bundle must not contain console.log').not.toContain('console.log')
   })
 })
 

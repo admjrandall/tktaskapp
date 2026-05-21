@@ -13,6 +13,7 @@ export default defineConfig({
       '**/node_modules/**',
       'tests/adapters/adapter-contract.ts',
       'tests/adapters/kms-mock.ts',
+      'tests/adapters/mock-mobile-adapters.ts',
       // Playwright E2E tests run via pnpm exec playwright test, not vitest.
       'tests/e2e/**',
     ],
