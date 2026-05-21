@@ -1,0 +1,222 @@
+name: Release Offline Artifact
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # Trigger when changeset files land on main — either a new changeset
+      # being merged or the version-bump PR being merged (which deletes them).
+      # The job itself checks whether changesets are pending and acts accordingly.
+      - '.changeset/*.md'
+  workflow_dispatch:
+    inputs:
+      skip_changeset:
+        description: 'Release current version without consuming changesets'
+        type: boolean
+        default: false
+
+# Prevent concurrent releases — a second push while a release is in progress
+# would race on the version number and the GitHub Release tag.
+concurrency:
+  group: release-offline
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # push version-bump commit, create GitHub Release
+  pull-requests: write  # changesets/changelog-github creates PR links
+
+jobs:
+  release:
+    name: Version, build, and release
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ───────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history needed by changeset version to read commit messages
+          # for the generated CHANGELOG entries.
+          fetch-depth: 0
+          # Use a token with write access so the version-bump commit can be pushed.
+          # GITHUB_TOKEN is sufficient for same-repo pushes.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Toolchain ──────────────────────────────────────────────────────────
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Quality gates (pre-version) ────────────────────────────────────────
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      # ── Changeset detection ────────────────────────────────────────────────
+      - name: Detect pending changesets
+        id: changesets
+        run: |
+          # Count .md files in .changeset/ excluding the permanent README.md.
+          # A count > 0 means there are unreleased changesets to consume.
+          count=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "has_changesets=$([ "$count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "Pending changesets: $count"
+
+      # ── Version bump ───────────────────────────────────────────────────────
+      # Consumes .changeset/*.md files, updates package.json versions,
+      # and prepends to CHANGELOG.md. Skipped when no changesets are pending
+      # (e.g. manual dispatch with skip_changeset=true, or re-release).
+      - name: Run changeset version
+        if: steps.changesets.outputs.has_changesets == 'true' && inputs.skip_changeset != true
+        env:
+          # Required by @changesets/changelog-github to generate PR links
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm changeset version
+
+      - name: Commit version bump
+        if: steps.changesets.outputs.has_changesets == 'true' && inputs.skip_changeset != true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: version packages [skip ci]"
+          git push
+
+      # ── Read version ───────────────────────────────────────────────────────
+      # Read after the potential version bump so we always get the final version.
+      - name: Read release version
+        id: version
+        run: |
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: $VERSION"
+
+      # ── Check for duplicate release ────────────────────────────────────────
+      - name: Check for existing release
+        id: existing_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if gh release view "$TAG" &>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG already exists — skipping artifact upload."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Build ──────────────────────────────────────────────────────────────
+      # Build:offline already runs generate-csp.mjs and writes dist/offline/index.sha256.
+      # __APP_VERSION__ is injected by vite.config.ts from root package.json,
+      # so the version stamped in the <meta name="version"> tag matches the release.
+      - name: Build offline artifact
+        if: steps.existing_release.outputs.exists == 'false'
+        run: pnpm run build:offline
+
+      # ── Assertions ─────────────────────────────────────────────────────────
+      - name: Assert offline bundle (no forbidden strings)
+        if: steps.existing_release.outputs.exists == 'false'
+        run: pnpm run assert:offline-bundle
+
+      - name: Assert bundle size (within budget)
+        if: steps.existing_release.outputs.exists == 'false'
+        run: pnpm run assert:bundle-size
+
+      # Re-run generate-csp.mjs after build to verify hashes are stable.
+      # The script is idempotent: it resets and recomputes, so a second run
+      # produces byte-identical output if the build was clean.
+      - name: Verify CSP hashes (idempotency check)
+        if: steps.existing_release.outputs.exists == 'false'
+        run: |
+          node generate-csp.mjs dist/offline/index.html
+          # Confirm the file was not changed by the second run (hashes were already correct).
+          if git diff --quiet dist/offline/index.html; then
+            echo "CSP hashes verified — file is stable."
+          else
+            echo "::error::CSP hashes changed on second run — build may be non-deterministic."
+            git diff dist/offline/index.html
+            exit 1
+          fi
+
+      # ── Artifact preparation ───────────────────────────────────────────────
+      - name: Prepare release artifacts
+        if: steps.existing_release.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Rename the artifact to include the version for clarity in the release.
+          cp dist/offline/index.html "dist/offline/taskapp-crm-${VERSION}.html"
+
+          # Generate a SHA256SUMS file covering both the versioned and canonical names.
+          cd dist/offline
+          sha256sum "taskapp-crm-${VERSION}.html" index.html > SHA256SUMS
+          echo "--- SHA256SUMS ---"
+          cat SHA256SUMS
+
+      # ── Verify version stamp in built HTML ─────────────────────────────────
+      - name: Verify version stamp in built HTML
+        if: steps.existing_release.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if grep -q "name=\"version\" content=\"${VERSION}\"" dist/offline/index.html; then
+            echo "Version stamp verified: $VERSION"
+          else
+            echo "::error::Version stamp missing or incorrect in dist/offline/index.html"
+            grep 'name="version"' dist/offline/index.html || echo "(meta version tag not found)"
+            exit 1
+          fi
+
+      # ── GitHub Release ─────────────────────────────────────────────────────
+      - name: Create GitHub Release and upload artifacts
+        if: steps.existing_release.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+
+          # Read CHANGELOG entry for this version to use as release notes.
+          # Extracts the section between this version's heading and the next.
+          NOTES=$(awk "/^## ${VERSION}/{flag=1; next} /^## [0-9]/{flag=0} flag" CHANGELOG.md || echo "")
+          if [ -z "$NOTES" ]; then
+            NOTES="See CHANGELOG.md for details."
+          fi
+
+          RELEASE_BODY="$(printf '%s\n' \
+            "## Task App CRM ${TAG}" \
+            "" \
+            "Single-file offline-first encrypted CRM. No server, no install — open in Chrome or Edge." \
+            "" \
+            "### Download and run" \
+            "Download \`taskapp-crm-${VERSION}.html\` and open it in Chrome 127+ or Edge 127+." \
+            "Enable the built-in AI flag if you want on-device AI features (see README)." \
+            "" \
+            "### Verify integrity" \
+            "\`\`\`" \
+            "sha256sum taskapp-crm-${VERSION}.html" \
+            "\`\`\`" \
+            "Compare against \`SHA256SUMS\` attached to this release." \
+            "" \
+            "---" \
+            "${NOTES}")"
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "$RELEASE_BODY" \
+            "dist/offline/taskapp-crm-${VERSION}.html" \
+            "dist/offline/SHA256SUMS" \
+            "dist/offline/index.sha256"
+
+          echo "Release $TAG created."
+          echo "Artifact: taskapp-crm-${VERSION}.html"
