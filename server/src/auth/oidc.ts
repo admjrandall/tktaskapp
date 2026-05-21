@@ -124,3 +124,80 @@ export interface OidcService {
 //   - server/src/auth/saml.ts — SAML 2.0 SP-initiated (only if buyer requires; prefer OIDC)
 //   - server/src/auth/scim.ts — SCIM 2.0 provisioning/deprovisioning
 //   - server/src/auth/step-up.ts — re-authentication gate for high-risk operations
+
+// ── Entra ID token validation ─────────────────────────────────────────────────
+
+import { createRemoteJWKSet, jwtVerify } from 'jose'
+import type { GetKeyFunction } from 'jose'
+
+export interface AuthenticatedContext {
+  userId: string // tenant_users.id (internal UUID)
+  orgId: string // org UUID derived from Entra tenant ID
+  externalId: string // Entra object ID (oid claim)
+  email: string
+  role: 'owner' | 'admin' | 'editor' | 'viewer'
+}
+
+export interface EntraIdClaims {
+  externalId: string // oid claim
+  tenantId: string // tid claim — must be mapped to internal orgId via DB lookup
+  email: string // preferred_username or upn
+}
+
+// JWKS cache: one instance per Entra tenant ID, 24h TTL
+const _jwksCache = new Map<string, { getKey: GetKeyFunction; createdAt: number }>()
+const _JWKS_TTL_MS = 24 * 60 * 60 * 1000
+
+function _getJwksForTenant(tenantId: string): GetKeyFunction {
+  const now = Date.now()
+  const cached = _jwksCache.get(tenantId)
+  if (cached !== undefined && now - cached.createdAt < _JWKS_TTL_MS) {
+    return cached.getKey
+  }
+  const url = new URL(`https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`)
+  const getKey = createRemoteJWKSet(url, { cacheMaxAge: _JWKS_TTL_MS })
+  _jwksCache.set(tenantId, { getKey, createdAt: now })
+  return getKey
+}
+
+function _decodePayloadUnsafe(jwt: string): Record<string, unknown> {
+  const parts = jwt.split('.')
+  const payloadPart = parts[1]
+  if (parts.length !== 3 || !payloadPart) throw new Error('Invalid JWT format')
+  return JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf-8')) as Record<
+    string,
+    unknown
+  >
+}
+
+/**
+ * Validate a Microsoft Entra ID v2.0 access token.
+ * Throws on any validation failure — never return partial claims.
+ *
+ * DPoP (RFC 9449) support is on the roadmap — design accommodates it as a near-term addition.
+ */
+export async function validateEntraIdToken(jwt: string): Promise<EntraIdClaims> {
+  // Decode payload (no signature check yet) to extract tid for JWKS selection
+  const rawPayload = _decodePayloadUnsafe(jwt)
+  const tid = rawPayload['tid']
+  if (typeof tid !== 'string' || !tid) throw new Error('Missing tid claim')
+
+  const clientId = process.env['ENTRA_CLIENT_ID']
+  if (!clientId) throw new Error('ENTRA_CLIENT_ID env var not set')
+
+  const getKey = _getJwksForTenant(tid)
+
+  const { payload } = await jwtVerify(jwt, getKey, {
+    issuer: `https://login.microsoftonline.com/${tid}/v2.0`,
+    audience: clientId,
+    algorithms: ['RS256'],
+  })
+
+  const oid = payload['oid']
+  if (typeof oid !== 'string' || !oid) throw new Error('Missing oid claim')
+
+  const upn = payload['preferred_username'] ?? payload['upn'] ?? payload['email']
+  if (typeof upn !== 'string' || !upn) throw new Error('Missing email claim')
+
+  return { externalId: oid, tenantId: tid, email: upn }
+}

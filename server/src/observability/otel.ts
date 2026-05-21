@@ -105,13 +105,116 @@ export interface OtelService {
 }
 
 // TODO: implement OtelServiceImpl implements OtelService
-//   - @opentelemetry/sdk-node for NodeSDK init
-//   - @opentelemetry/exporter-trace-otlp-grpc for trace export
-//   - @opentelemetry/exporter-metrics-otlp-grpc for metric export
 //   - pino or winston with OTel log bridge (@opentelemetry/winston-transport)
-//   - server/src/observability/middleware.ts
-//       root span per request; inject tenant_id, user_id, request_id as span attributes
-//   - server/src/observability/metrics.ts
-//       RED metrics: http_requests_total, http_request_duration_seconds (histogram)
-//   - server/src/observability/slo.ts
-//       SLO burn-rate alerting rules (Prometheus recording rules or Grafana alert definitions)
+//   - server/src/observability/middleware.ts — root span per request
+//   - server/src/observability/metrics.ts — RED metrics histogram
+//   - server/src/observability/slo.ts — SLO burn-rate alerting rules
+
+// ── Concrete OTel SDK implementation ─────────────────────────────────────────
+// SLO targets (enforced by alerting, not code):
+//   P99 latency < 500ms | Error rate < 0.1% | Uptime > 99.9%
+
+import { NodeSDK } from '@opentelemetry/sdk-node'
+import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node'
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc'
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-grpc'
+
+const _PII_FIELDS = new Set([
+  'email',
+  'password',
+  'token',
+  'accessToken',
+  'refreshToken',
+  'name',
+  'displayName',
+  'phone',
+  'address',
+  'nationalInsuranceNumber',
+  'ssn',
+])
+
+let _sdk: NodeSDK | null = null
+let _config: OtelConfig | null = null
+
+// Fields from extra that would leak PII or secrets are stripped before logging.
+function _sanitiseExtra(
+  extra: Readonly<Record<string, string | number | boolean>> | undefined,
+): Readonly<Record<string, string | number | boolean>> | undefined {
+  if (!extra) return undefined
+  const out: Record<string, string | number | boolean> = {}
+  for (const [k, v] of Object.entries(extra)) {
+    if (!_PII_FIELDS.has(k)) out[k] = v
+  }
+  return out
+}
+
+export class OtelServiceImpl implements OtelService {
+  init(config: OtelConfig): void {
+    if (_sdk !== null) return // already initialised
+    _config = config
+
+    const endpoint =
+      config.exporterEndpoint ||
+      (process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'http://localhost:4317')
+
+    const traceExporter = new OTLPTraceExporter({ url: endpoint })
+    const metricReader = new OTLPMetricExporter({ url: endpoint })
+
+    _sdk = new NodeSDK({
+      serviceName: config.serviceName,
+      serviceVersion: config.serviceVersion,
+      traceExporter,
+      metricReader,
+      instrumentations: [getNodeAutoInstrumentations()],
+    })
+
+    _sdk.start()
+
+    process.on('SIGTERM', () => {
+      _sdk?.shutdown().catch((err: unknown) => {
+        console.error('[otel] shutdown error', err)
+      })
+    })
+  }
+
+  startRequestSpan(attributes: SpanAttributes): { end: (statusCode: number) => void } {
+    // Phase 14+: use @opentelemetry/api trace.getTracer() for real span management.
+    // For now, return a lightweight timer that logs on end.
+    const startMs = Date.now()
+    return {
+      end: (statusCode: number) => {
+        const durationMs = Date.now() - startMs
+        this.log({
+          timestamp: new Date().toISOString(),
+          level: statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info',
+          service: _config?.serviceName ?? 'tktaskapp-server',
+          tenantId: attributes.tenantId,
+          requestId: attributes.requestId,
+          message: `request completed`,
+          extra: { statusCode, durationMs },
+          ...(attributes.userId !== undefined ? { userId: attributes.userId } : {}),
+        })
+      },
+    }
+  }
+
+  log(entry: Omit<StructuredLogEntry, 'traceId' | 'spanId'>): void {
+    const sanitised = _sanitiseExtra(entry.extra)
+    const line: StructuredLogEntry = {
+      ...entry,
+      timestamp: new Date().toISOString(),
+      service: entry.service || (_config?.serviceName ?? 'tktaskapp-server'),
+      traceId: 'unknown', // Phase 14+: extract from @opentelemetry/api context
+      spanId: 'unknown',
+      ...(sanitised !== undefined ? { extra: sanitised } : {}),
+    }
+    const out = JSON.stringify(line)
+    if (entry.level === 'error' || entry.level === 'warn') {
+      process.stderr.write(out + '\n')
+    } else {
+      process.stdout.write(out + '\n')
+    }
+  }
+}
+
+export const otel: OtelService = new OtelServiceImpl()

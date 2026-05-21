@@ -18,6 +18,7 @@ import { getState, navigate, reloadData, showToast } from '../state.js'
 import type { AppState } from '../state.js'
 import { callBackend, aiRuntime, setRuntimePromptBuilder } from './ai-runtime.js'
 import { validateToolArgs } from '../schemas/ai-tool.schema.js'
+import { auditLog } from '../security/audit.js'
 
 type AnyRecord = Record<string, unknown>
 type SchemaField = {
@@ -226,6 +227,7 @@ export async function routeToolCall(tc: AnyRecord, ctx: string): Promise<void> {
   }
   const argsValidation = validateToolArgs(tool, args)
   if (!argsValidation.success) {
+    auditLog('ai_tool_rejected', { tool, reason: argsValidation.error })
     aiRuntime.history.push({
       role: 'assistant',
       content: `Invalid arguments for "${tool}": ${argsValidation.error}`,

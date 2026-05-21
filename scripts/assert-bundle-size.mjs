@@ -1,12 +1,16 @@
-// Bundle size budgets — update these if you deliberately grow the bundle.
-// Current measured sizes (2026-05-19, browser-ai profile, after Phase 4):
-//   raw:  372707 bytes  ← OVER the 320000 budget by 52707 bytes
-//   gzip: 100653 bytes  ← OVER the 95000 budget by 5653 bytes
+// Last measured bundle sizes — update this comment after each build:offline run.
+// offline-browser-ai:  raw 421,687 B (~412 kB)  gzip 113,468 B (~111 kB)  (as of 2026-05-20)
+// offline-no-ai:       not built                                            (as of 2026-05-20)
+// offline-internal-ai: not built                                            (as of 2026-05-20)
 //
-// The raw overage (~52 KB) predates Phase 4 and is tracked from Phase 3.
-// The gzip overage (~5.6 KB) appeared in Phase 4 (valibot 1.4.0 + 9 schema files).
-// Run vite-bundle-visualizer before shrinking:
-//   node_modules/.bin/vite-bundle-visualizer  (add as devDep to apps/offline-web if needed)
+// Bundle size budgets — update these if you deliberately grow the bundle.
+// offline-browser-ai is OVER budget (raw +101 kB, gzip +18 kB) since Phase 13.
+// History:
+//   Phase 3 introduced the raw overage (~52 KB above budget).
+//   Phase 4 added valibot 1.4.0 + 9 schema files (~48 KB raw more, bringing total to 372707).
+//   Phase 12 version-stamping + toolchain churn added a further ~49 KB (now 421687).
+// Run the analyser to identify top contributors before shrinking:
+//   pnpm --filter @tktaskapp/offline-web run perf:analyse
 // Do NOT reduce the budget or fix the overage without discussing with the team first.
 
 import { readFileSync } from 'fs'

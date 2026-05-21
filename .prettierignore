@@ -1,0 +1,3 @@
+# GitHub Actions workflow with multiline shell string at col 0 inside run: | block.
+# Prettier's YAML parser misreads the unindented continuation lines as top-level YAML.
+.github/workflows/release-offline.yml

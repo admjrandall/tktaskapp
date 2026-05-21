@@ -1,7 +1,25 @@
-# Global code owners — all files require review from the primary maintainer
-* @techkeydeveloper
+# Global fallback
+*                           @techkeycloud/core-team
 
-# Security-sensitive areas require explicit review
-packages/core/src/security/ @techkeydeveloper
-packages/core/src/storage/ @techkeydeveloper
-.github/workflows/ @techkeydeveloper
+# Security-sensitive paths — require security team review on any PR
+packages/core/src/security/ @techkeycloud/security-team @techkeycloud/core-team
+server/src/auth/            @techkeycloud/security-team
+server/src/kms/             @techkeycloud/security-team
+packages/adapter-kms/       @techkeycloud/security-team
+infra/                      @techkeycloud/security-team @techkeycloud/devops-team
+
+# Server / API — require backend team review
+server/                     @techkeycloud/backend-team
+docs/api/                   @techkeycloud/backend-team
+
+# CI/CD workflows — require devops team review
+.github/workflows/          @techkeycloud/devops-team
+
+# Compliance documentation — require security and legal review
+docs/compliance/            @techkeycloud/security-team
+docs/architecture/          @techkeycloud/core-team
+
+# Adapter packages
+packages/adapter-rxdb/      @techkeycloud/core-team
+packages/adapter-dataverse/ @techkeycloud/core-team
+packages/adapter-mobile-native/ @techkeycloud/core-team

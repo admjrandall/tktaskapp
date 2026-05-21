@@ -103,7 +103,6 @@ export interface KeyService {
 }
 
 // TODO: implement AwsKmsKeyService implements KeyService
-// TODO: implement AzureKeyVaultKeyService implements KeyService
 // TODO: implement GcpKmsKeyService implements KeyService
 //
 // TODO: server/src/kms/erasure-workflow.ts
@@ -113,3 +112,116 @@ export interface KeyService {
 // TODO: server/src/kms/legal-hold.ts
 //   suspend erasure for legal hold; hold is time-bounded; requires named approver
 //   LegalHoldActiveError extends Error { holdId: string; approver: string; expiresAt: Date }
+
+// ── Azure Key Vault implementation ────────────────────────────────────────────
+
+import { DefaultAzureCredential } from '@azure/identity'
+import { KeyClient, CryptographyClient } from '@azure/keyvault-keys'
+import { db } from '../db/index.js'
+import { kmsKeyLifecycle } from '../db/schema/kms-keys.js'
+
+export class KeyDestroyedError extends Error {
+  constructor(userId: string) {
+    super(`KEK for user ${userId} has been destroyed — data is permanently inaccessible`)
+    this.name = 'KeyDestroyedError'
+  }
+}
+
+export class LegalHoldActiveError extends Error {
+  constructor(userId: string) {
+    super(`Legal hold is active for user ${userId} — erasure is suspended`)
+    this.name = 'LegalHoldActiveError'
+  }
+}
+
+export class AzureKeyVaultKeyService implements KeyService {
+  private readonly _keyClient: KeyClient
+  private readonly _vaultUrl: string
+
+  constructor(vaultUrl: string) {
+    this._vaultUrl = vaultUrl
+    const credential = new DefaultAzureCredential()
+    this._keyClient = new KeyClient(vaultUrl, credential)
+  }
+
+  private _keyName(userId: string): string {
+    return `tktaskapp-user-${userId}`
+  }
+
+  async issueKey(userId: string, tenantId: string): Promise<KeyHandle> {
+    const keyName = this._keyName(userId)
+    const key = await this._keyClient.createKey(keyName, 'RSA-HSM', {
+      keySize: 4096,
+      keyOperations: ['wrapKey', 'unwrapKey'],
+    })
+    if (!key.id || !key.properties.version) {
+      throw new Error('Azure Key Vault did not return key id or version')
+    }
+    await db.insert(kmsKeyLifecycle).values({
+      orgId: tenantId,
+      userId,
+      keyVaultUri: key.id,
+      keyVersion: key.properties.version,
+      event: 'ISSUED',
+      effectiveAt: new Date(),
+    })
+    return {
+      keyId: key.id,
+      userId,
+      tenantId,
+      createdAt: key.properties.createdOn ?? new Date(),
+      status: 'active',
+    }
+  }
+
+  async wrapKey(dek: Uint8Array, kek: KeyHandle): Promise<WrappedKey> {
+    if (kek.status === 'destroyed') throw new KeyDestroyedError(kek.userId)
+    const credential = new DefaultAzureCredential()
+    const cryptoClient = new CryptographyClient(kek.keyId, credential)
+    const result = await cryptoClient.wrapKey('RSA-OAEP-256', dek)
+    return {
+      ciphertext: result.result,
+      kmsKeyId: kek.keyId,
+      iv: new Uint8Array(0), // Azure KV handles IV internally
+      wrappedAt: new Date(),
+    }
+  }
+
+  async unwrapKey(wrapped: WrappedKey, kek: KeyHandle): Promise<Uint8Array> {
+    if (kek.status === 'destroyed') throw new KeyDestroyedError(kek.userId)
+    const credential = new DefaultAzureCredential()
+    const cryptoClient = new CryptographyClient(wrapped.kmsKeyId, credential)
+    const result = await cryptoClient.unwrapKey('RSA-OAEP-256', wrapped.ciphertext)
+    return result.result
+  }
+
+  async scheduleKeyDestruction(userId: string, tenantId: string, destroyAt: Date): Promise<void> {
+    const keyName = this._keyName(userId)
+    const key = await this._keyClient.getKey(keyName)
+    if (!key.id || !key.properties.version) {
+      throw new Error('Key not found in Azure Key Vault')
+    }
+    await db.insert(kmsKeyLifecycle).values({
+      orgId: tenantId,
+      userId,
+      keyVaultUri: key.id,
+      keyVersion: key.properties.version,
+      event: 'SCHEDULE_DESTRUCTION',
+      effectiveAt: destroyAt,
+    })
+  }
+
+  async getKeyStatus(userId: string, _tenantId: string): Promise<KeyStatus> {
+    try {
+      const keyName = this._keyName(userId)
+      await this._keyClient.getKey(keyName)
+      return 'active'
+    } catch {
+      return 'destroyed'
+    }
+  }
+
+  get vaultUrl(): string {
+    return this._vaultUrl
+  }
+}

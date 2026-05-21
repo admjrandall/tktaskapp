@@ -28,6 +28,7 @@ export type AuditEventType =
   | 'ai_key_added'
   | 'ai_key_removed'
   | 'ai_query'
+  | 'ai_tool_rejected'
 
 export interface AuditEntry {
   id: string

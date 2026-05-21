@@ -1,29 +1,27 @@
 /// <reference types="node" />
 import { defineConfig } from 'vite'
-import { viteSingleFile } from 'vite-plugin-singlefile'
+import type { Alias } from 'vite'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
+import { baseConfig } from '../../config/vite/base.config.ts'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
+const base = baseConfig()
+
 export default defineConfig({
   root: __dirname,
-  plugins: [viteSingleFile()],
-  build: {
-    target: 'esnext',
-    assetsInlineLimit: 100_000_000,
-    cssCodeSplit: false,
-    outDir: '../../dist/sync',
-    emptyOutDir: true,
-  },
+  plugins: [...((base.plugins ?? []) as NonNullable<(typeof base)['plugins']>)],
   define: {
     __OT_ONLY_BUILD__: 'false',
   },
+  build: {
+    ...base.build,
+    outDir: '../../dist/sync',
+    emptyOutDir: true,
+  },
   resolve: {
-    alias: {
-      '@core': resolve(__dirname, '../../packages/core/src'),
-      '@adapter-null': resolve(__dirname, '../../packages/adapter-null/src'),
-    },
+    alias: [...((base.resolve?.alias ?? []) as Alias[])],
   },
 })

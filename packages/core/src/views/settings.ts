@@ -805,8 +805,8 @@ export function bindSettings(state: AppState): void {
         reloadData()
         showToast('Imported successfully', 'success')
       }
-    } catch {
-      showToast('Import failed — wrong password?', 'error')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Import failed', 'error')
     }
   })
 
