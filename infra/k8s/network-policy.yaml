@@ -1,0 +1,95 @@
+# Kubernetes NetworkPolicy for tktaskapp-server
+#
+# Default posture: deny all ingress and egress.
+# Only the explicitly listed traffic is permitted.
+#
+# Adjust namespace selectors, labels, and CIDR blocks to match your cluster layout
+# before applying to a real environment.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tktaskapp-server
+  namespace: tktaskapp
+  labels:
+    app: tktaskapp-server
+spec:
+  podSelector:
+    matchLabels:
+      app: tktaskapp-server
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # ── Ingress ────────────────────────────────────────────────────────────────
+  # Allow inbound traffic on port 3000 from the load balancer / ingress controller only.
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              # Adjust to match the namespace where your ingress controller runs.
+              # nginx-ingress: kubernetes.io/metadata.name: ingress-nginx
+              # AWS ALB controller: kubernetes.io/metadata.name: kube-system
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+
+  # ── Egress ─────────────────────────────────────────────────────────────────
+  # Explicitly allow only the four required destinations.
+  # All other outbound connections are dropped by the default-deny posture.
+  egress:
+    # 1. PostgreSQL (in-cluster)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    # 2. KMS endpoint
+    #    Replace the CIDR below with the actual IP range of your KMS service,
+    #    or use a namespaceSelector if the KMS is in-cluster.
+    - to:
+        - ipBlock:
+            cidr: 10.0.1.0/24 # replace with your KMS CIDR
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # 3. Identity Provider (IdP / OIDC issuer)
+    #    Replace the CIDR below with the actual IP range of your IdP.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0 # tighten to your IdP CIDR in production
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # 4. OpenTelemetry Collector (in-cluster)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: otel-collector
+      ports:
+        - protocol: TCP
+          port: 4317 # gRPC OTLP
+
+    # 5. DNS — required for hostname resolution of external endpoints
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

@@ -1,0 +1,112 @@
+# Kubernetes Deployment for tktaskapp-server
+#
+# Security posture:
+#   - Runs as non-root (UID 65532, the distroless "nonroot" user)
+#   - Read-only root filesystem — writable volumes must be explicitly mounted
+#   - No privilege escalation
+#   - No host network, no host PID, no host IPC
+#
+# Replace all <placeholder> values before applying to a real cluster.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tktaskapp-server
+  namespace: tktaskapp
+  labels:
+    app: tktaskapp-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tktaskapp-server
+  template:
+    metadata:
+      labels:
+        app: tktaskapp-server
+      annotations:
+        # Restart pods when the secret changes (requires Reloader or similar controller)
+        secret.reloader.stakater.com/reload: 'tktaskapp-server-secrets'
+    spec:
+      # Reject scheduling on nodes that do not meet the security requirements
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532 # distroless nonroot UID
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: server
+          image: <registry>/tktaskapp-server:<tag>
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+
+          # ── Security context ─────────────────────────────────────────────
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop:
+                - ALL
+
+          # ── Environment ──────────────────────────────────────────────────
+          envFrom:
+            - secretRef:
+                name: tktaskapp-server-secrets # contains DATABASE_URL, OIDC_CLIENT_SECRET, etc.
+            - configMapRef:
+                name: tktaskapp-server-config # contains NODE_ENV, PORT, LOG_LEVEL, etc.
+
+          # ── Resource limits ──────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          # ── Health probes ────────────────────────────────────────────────
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          # ── Writable scratch volumes ─────────────────────────────────────
+          # readOnlyRootFilesystem requires any writable paths to be explicit mounts.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      # Spread replicas across availability zones
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: tktaskapp-server
+
+      terminationGracePeriodSeconds: 30
