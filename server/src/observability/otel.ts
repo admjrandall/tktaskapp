@@ -104,20 +104,15 @@ export interface OtelService {
   log(entry: Omit<StructuredLogEntry, 'traceId' | 'spanId'>): void
 }
 
-// TODO: implement OtelServiceImpl implements OtelService
-//   - pino or winston with OTel log bridge (@opentelemetry/winston-transport)
-//   - server/src/observability/middleware.ts — root span per request
-//   - server/src/observability/metrics.ts — RED metrics histogram
-//   - server/src/observability/slo.ts — SLO burn-rate alerting rules
-
 // ── Concrete OTel SDK implementation ─────────────────────────────────────────
 // SLO targets (enforced by alerting, not code):
 //   P99 latency < 500ms | Error rate < 0.1% | Uptime > 99.9%
 
 import { NodeSDK } from '@opentelemetry/sdk-node'
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node'
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc'
-import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-grpc'
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+import { trace, context, SpanStatusCode } from '@opentelemetry/api'
+import type { Span } from '@opentelemetry/api'
 
 const _PII_FIELDS = new Set([
   'email',
@@ -155,16 +150,14 @@ export class OtelServiceImpl implements OtelService {
 
     const endpoint =
       config.exporterEndpoint ||
-      (process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'http://localhost:4317')
+      (process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'http://localhost:4318')
 
-    const traceExporter = new OTLPTraceExporter({ url: endpoint })
-    const metricReader = new OTLPMetricExporter({ url: endpoint })
+    const traceExporter = new OTLPTraceExporter({ url: `${endpoint}/v1/traces` })
 
     _sdk = new NodeSDK({
       serviceName: config.serviceName,
       serviceVersion: config.serviceVersion,
       traceExporter,
-      metricReader,
       instrumentations: [getNodeAutoInstrumentations()],
     })
 
@@ -177,35 +170,69 @@ export class OtelServiceImpl implements OtelService {
     })
   }
 
+  getTracer() {
+    return trace.getTracer(_config?.serviceName ?? 'tktaskapp-server', _config?.serviceVersion)
+  }
+
+  startSpan(name: string, attributes?: Record<string, string | number | boolean>): Span {
+    const span = this.getTracer().startSpan(name)
+    if (attributes) span.setAttributes(attributes)
+    return span
+  }
+
+  recordDbQuery(operation: string, table: string, durationMs: number): void {
+    const span = this.getTracer().startSpan(`db.${operation}`)
+    span.setAttributes({ 'db.operation': operation, 'db.table': table, durationMs })
+    span.end()
+  }
+
+  recordKmsCall(operation: string, durationMs: number): void {
+    const span = this.getTracer().startSpan(`kms.${operation}`)
+    span.setAttributes({ 'kms.operation': operation, durationMs })
+    span.end()
+  }
+
   startRequestSpan(attributes: SpanAttributes): { end: (statusCode: number) => void } {
-    // Phase 14+: use @opentelemetry/api trace.getTracer() for real span management.
-    // For now, return a lightweight timer that logs on end.
     const startMs = Date.now()
+    const span = this.getTracer().startSpan('http.request', { attributes: { ...attributes } })
+    const ctx = trace.setSpan(context.active(), span)
+
     return {
       end: (statusCode: number) => {
         const durationMs = Date.now() - startMs
+        span.setAttribute('http.status_code', statusCode)
+        if (statusCode >= 500) span.setStatus({ code: SpanStatusCode.ERROR })
+        span.end()
         this.log({
           timestamp: new Date().toISOString(),
           level: statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info',
           service: _config?.serviceName ?? 'tktaskapp-server',
           tenantId: attributes.tenantId,
           requestId: attributes.requestId,
-          message: `request completed`,
+          message: 'request completed',
           extra: { statusCode, durationMs },
           ...(attributes.userId !== undefined ? { userId: attributes.userId } : {}),
         })
+        void ctx
       },
     }
   }
 
+  recordRequest(method: string, route: string, status: number, durationMs: number): void {
+    const { recordRequest: record } = require('./metrics.js') as typeof import('./metrics.js')
+    record(method, route, status, durationMs)
+  }
+
   log(entry: Omit<StructuredLogEntry, 'traceId' | 'spanId'>): void {
     const sanitised = _sanitiseExtra(entry.extra)
+    const activeSpan = trace.getActiveSpan()
+    const spanCtx = activeSpan?.spanContext()
     const line: StructuredLogEntry = {
       ...entry,
       timestamp: new Date().toISOString(),
       service: entry.service || (_config?.serviceName ?? 'tktaskapp-server'),
-      traceId: 'unknown', // Phase 14+: extract from @opentelemetry/api context
-      spanId: 'unknown',
+      traceId: spanCtx?.traceId ?? 'none',
+      spanId: spanCtx?.spanId ?? 'none',
       ...(sanitised !== undefined ? { extra: sanitised } : {}),
     }
     const out = JSON.stringify(line)

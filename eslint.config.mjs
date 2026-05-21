@@ -14,6 +14,9 @@ export default tseslint.config(
       'taskapp.html',
       'tests/**',
       'vitest.config.ts',
+      // Server is a separate package with its own tsconfig and dep tree.
+      // Excluded from the root frontend ESLint config.
+      'server/**',
     ],
   },
   ...tseslint.configs.strictTypeChecked,

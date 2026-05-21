@@ -52,12 +52,44 @@ const _ALLOWED_MODELS = new Set([
   'gemini-1.5-flash',
 ])
 
-// ── Per-user rate limiting (in-memory sliding window) ─────────────────────────
-// Phase 9+: migrate to Redis for multi-instance deployments.
+// ── Per-user rate limiting ────────────────────────────────────────────────────
+// Uses Redis if AI_GATEWAY_REDIS_URL is set; otherwise falls back to in-memory
+// sliding window (acceptable for single-instance dev deployments, resets on restart).
 const _RATE_LIMIT_RPM = 20
 const _rateWindows = new Map<string, number[]>()
 
-function _isRateLimited(userId: string): boolean {
+type RedisClient = {
+  get: (k: string) => Promise<string | null>
+  set: (k: string, v: string, ...args: unknown[]) => Promise<unknown>
+  incrby: (k: string, n: number) => Promise<number>
+  expire: (k: string, s: number) => Promise<unknown>
+}
+let _redis: RedisClient | null = null
+
+async function _getRedis(): Promise<RedisClient | null> {
+  const url = process.env['AI_GATEWAY_REDIS_URL']
+  if (!url) return null
+  if (_redis) return _redis
+  try {
+    const { default: Redis } = (await import('ioredis')) as unknown as {
+      default: new (url: string) => RedisClient
+    }
+    _redis = new Redis(url)
+    return _redis
+  } catch {
+    return null
+  }
+}
+
+async function _isRateLimited(userId: string): Promise<boolean> {
+  const redis = await _getRedis()
+  if (redis) {
+    const key = `ratelimit:${userId}:${Math.floor(Date.now() / 60_000)}`
+    const current = await redis.incrby(key, 1)
+    await redis.expire(key, 60)
+    return current > _RATE_LIMIT_RPM
+  }
+  // In-memory fallback
   const now = Date.now()
   const windowMs = 60_000
   const timestamps = _rateWindows.get(userId) ?? []
@@ -68,14 +100,25 @@ function _isRateLimited(userId: string): boolean {
   return false
 }
 
-// ── Per-tenant budget (in-memory; Phase 9+: DB-backed) ─────────────────────────
-const _DEFAULT_MONTHLY_TOKEN_BUDGET = 1_000_000
+// ── Per-tenant budget ─────────────────────────────────────────────────────────
+// In-memory resets on pod restart — use Redis for multi-instance deployments.
+const _MONTHLY_BUDGET = Number(process.env['AI_GATEWAY_MONTHLY_BUDGET_TOKENS'] ?? 1_000_000)
 const _monthlyUsage = new Map<string, number>()
 
-function _isOverBudget(orgId: string, promptTokenEstimate: number): boolean {
-  const key = `${orgId}:${new Date().toISOString().slice(0, 7)}`
+async function _isOverBudget(orgId: string, promptTokenEstimate: number): Promise<boolean> {
+  const redis = await _getRedis()
+  const key = `budget:${orgId}:${new Date().toISOString().slice(0, 7)}`
+  if (redis) {
+    const current = await redis.incrby(key, promptTokenEstimate)
+    if (current === promptTokenEstimate) {
+      // First increment this month — set TTL to 35 days
+      await redis.expire(key, 35 * 24 * 60 * 60)
+    }
+    return current > _MONTHLY_BUDGET
+  }
+  // In-memory fallback
   const used = _monthlyUsage.get(key) ?? 0
-  if (used + promptTokenEstimate > _DEFAULT_MONTHLY_TOKEN_BUDGET) return true
+  if (used + promptTokenEstimate > _MONTHLY_BUDGET) return true
   _monthlyUsage.set(key, used + promptTokenEstimate)
   return false
 }
@@ -94,13 +137,13 @@ export async function evaluateAiGatewayRequest(
   }
 
   // 2. Per-user rate limit
-  if (_isRateLimited(context.userId)) {
+  if (await _isRateLimited(context.userId)) {
     await _auditLog(context, model, 'failure', 'rate_limited')
     return { allowed: false, reason: 'Rate limit exceeded — maximum 20 requests per minute' }
   }
 
   // 3. Per-tenant budget
-  if (_isOverBudget(context.orgId, promptTokenEstimate)) {
+  if (await _isOverBudget(context.orgId, promptTokenEstimate)) {
     await _auditLog(context, model, 'failure', 'budget_exceeded')
     return { allowed: false, reason: 'Monthly AI token budget exceeded for this organisation' }
   }
@@ -134,7 +177,14 @@ async function _auditLog(
       outcome,
       metadata: { reason },
     })
-  } catch {
+  } catch (err) {
     // Fire-and-forget — never let audit failure block the request
+    process.stderr.write(
+      JSON.stringify({
+        level: 'error',
+        message: 'AI gateway audit log failed',
+        error: String(err),
+      }) + '\n',
+    )
   }
 }

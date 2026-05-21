@@ -1,31 +1,44 @@
 {
   "name": "@tktaskapp/server",
   "private": true,
-  "version": "0.0.1",
-  "description": "Task App CRM enterprise server — scaffold stub (backend implementation pending)",
+  "version": "0.1.0",
+  "description": "Task App CRM enterprise server — Hono v4, Drizzle ORM, PostgreSQL, OPA, OTel",
   "type": "module",
   "engines": {
     "node": ">=22.20.0",
     "pnpm": ">=11"
   },
-  "scripts": {
-    "typecheck": "tsc --noEmit",
-    "build": "tsc --outDir dist",
-    "dev": "echo 'Server not yet implemented — see server/src/ for interface stubs'",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+  "dependencies": {
+    "hono": "^4",
+    "@hono/node-server": "^1",
+    "drizzle-orm": "^0.44",
+    "pg": "^8",
+    "@azure/identity": "^4",
+    "@azure/keyvault-keys": "^4",
+    "@opentelemetry/sdk-node": "^0.57",
+    "@opentelemetry/auto-instrumentations-node": "^0.57",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57",
+    "@opentelemetry/api": "^1",
+    "@open-policy-agent/opa-wasm": "^1",
+    "jose": "^5",
+    "zod": "^3"
   },
   "devDependencies": {
-    "@azure/identity": "^4.6.0",
-    "@azure/keyvault-keys": "^4.9.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.60.0",
-    "@opentelemetry/exporter-metrics-otlp-grpc": "^0.200.0",
-    "@opentelemetry/exporter-trace-otlp-grpc": "^0.200.0",
-    "@opentelemetry/sdk-node": "^0.200.0",
-    "drizzle-kit": "^0.31.1",
-    "drizzle-orm": "^0.43.1",
-    "jose": "^5.9.6",
-    "pg": "^8.16.0"
+    "drizzle-kit": "^0.31",
+    "@types/pg": "^8",
+    "tsx": "^4",
+    "typescript": "^5",
+    "vitest": "^2"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json --noEmit && esbuild src/index.ts --bundle --platform=node --target=node22 --outfile=dist/server.js",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx src/db/seed.ts",
+    "test": "vitest run"
   }
 }

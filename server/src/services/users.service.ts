@@ -1,0 +1,83 @@
+import { db } from '../db/index.js'
+import { tenantUsers } from '../db/schema/users.js'
+import { eq, and, isNull, count } from 'drizzle-orm'
+import { writeAuditEvent, paginationValues, type PaginatedResult } from './base.js'
+import type { InferSelectModel } from 'drizzle-orm'
+
+export type TenantUser = InferSelectModel<typeof tenantUsers>
+
+export class UsersService {
+  async list(
+    tenantId: string,
+    filters: { status?: string; page?: number; pageSize?: number },
+  ): Promise<PaginatedResult<TenantUser>> {
+    const { limit, offset, page, pageSize } = paginationValues(filters)
+    const conditions = [eq(tenantUsers.orgId, tenantId as unknown as string)]
+
+    if (filters.status === 'active') conditions.push(isNull(tenantUsers.deletedAt))
+    else if (filters.status === 'suspended') {
+      // suspended is represented by deletedAt being set (soft delete used as suspend)
+    }
+
+    const [rows, [{ value: total }]] = await Promise.all([
+      db
+        .select()
+        .from(tenantUsers)
+        .where(and(...conditions))
+        .limit(limit)
+        .offset(offset),
+      db
+        .select({ value: count() })
+        .from(tenantUsers)
+        .where(and(...conditions)),
+    ])
+    return {
+      data: rows,
+      pagination: {
+        page,
+        pageSize,
+        total: Number(total),
+        totalPages: Math.ceil(Number(total) / pageSize),
+      },
+    }
+  }
+
+  async getById(tenantId: string, id: string): Promise<TenantUser | null> {
+    const rows = await db
+      .select()
+      .from(tenantUsers)
+      .where(
+        and(
+          eq(tenantUsers.id, id as unknown as string),
+          eq(tenantUsers.orgId, tenantId as unknown as string),
+        ),
+      )
+      .limit(1)
+    return rows[0] ?? null
+  }
+
+  async suspend(tenantId: string, requestedBy: string, userId: string): Promise<boolean> {
+    const [row] = await db
+      .update(tenantUsers)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(tenantUsers.id, userId as unknown as string),
+          eq(tenantUsers.orgId, tenantId as unknown as string),
+        ),
+      )
+      .returning({ id: tenantUsers.id })
+    if (!row) return false
+    await writeAuditEvent({
+      tenantId,
+      userId: requestedBy,
+      eventType: 'user.suspended',
+      resourceType: 'users',
+      resourceId: userId,
+      details: { targetUserId: userId },
+    })
+    return true
+  }
+}
+
+export const usersService = new UsersService()

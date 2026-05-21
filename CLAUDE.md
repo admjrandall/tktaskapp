@@ -94,6 +94,41 @@ d:\techkeycrmapp\
 │       └── src/entry.ts          ← documented design stub with acceptance checklist
 ├── dist/
 │   └── offline/index.html        ← built single-file output (open this in browser)
+├── server/                       ← Hono v4 REST API backend (Node.js, TypeScript)
+│   ├── src/
+│   │   ├── index.ts              ← entry point; OTel init, Hono app, graceful shutdown
+│   │   ├── db/
+│   │   │   ├── index.ts          ← Drizzle ORM pg pool + closeDb()
+│   │   │   ├── migrate.ts        ← run Drizzle migrations
+│   │   │   ├── seed.ts           ← dev seed data (idempotent)
+│   │   │   └── schema/           ← Drizzle table definitions (14 CRM entities + audit + KMS + users)
+│   │   ├── auth/
+│   │   │   ├── oidc.ts           ← OidcService interface + validateEntraIdToken
+│   │   │   ├── oidc-service.ts   ← OidcServiceImpl (PKCE, token exchange, JWKS validation via jose)
+│   │   │   └── middleware.ts     ← authMiddleware — sets userId/tenantId/role on context
+│   │   ├── middleware/
+│   │   │   ├── cors.ts           ← ALLOW_ORIGINS whitelist; no wildcards
+│   │   │   └── opa.ts            ← opaMiddleware(action) factory; REST → WASM → in-process fallback
+│   │   ├── observability/
+│   │   │   ├── otel.ts           ← OtelServiceImpl; OTLPTraceExporter (HTTP); must init first
+│   │   │   ├── middleware.ts     ← otelMiddleware; root span per request; X-Trace-Id header
+│   │   │   └── metrics.ts        ← RED metrics (requests counter, duration histogram, connections gauge)
+│   │   ├── services/             ← one service file per CRM entity; all use withTenant() + writeAuditEvent()
+│   │   ├── api/routes/           ← one Hono router per entity; Zod validation; OPA per route
+│   │   ├── kms/
+│   │   │   ├── key-service.ts    ← AzureKeyVaultKeyService; scheduleKeyDestruction / getKeyUri
+│   │   │   ├── legal-hold.ts     ← LegalHoldService; placeHold / liftHold / isUserOnHold
+│   │   │   ├── erasure-workflow.ts ← runErasureWorkflow; legal hold check → KMS schedule → soft-delete → audit
+│   │   │   └── destruction-scheduler.ts ← polls kmsKeyLifecycle every 60s; calls Azure KV beginDeleteKey
+│   │   └── ai-gateway/
+│   │       └── policy-engine.ts  ← evaluateAiGatewayRequest; model allowlist, rate limit, budget, PII scrub
+│   ├── policies/
+│   │   └── crm.rego              ← OPA policy (role-based allow/deny + cross-tenant deny)
+│   ├── drizzle/                  ← generated SQL migrations
+│   ├── drizzle.config.ts
+│   ├── tsconfig.json
+│   ├── package.json
+│   └── .env.example              ← all required env vars documented
 ├── generate-csp.mjs              ← regenerates CSP hashes in dist file
 ├── taskapp.html                  ← legacy reference (not active codebase)
 └── *.md                          ← documentation
@@ -404,6 +439,104 @@ For Built-in AI (the only AI tier in the offline build — Gemini Nano in Chrome
   For Ollama (sync/enterprise builds only, not the offline profile): prefer `OLLAMA_ORIGINS=null ollama serve` (or the specific served origin if not using `file://`).
 
 Do not edit `taskapp.html` — it is the legacy reference file, not the active source. All edits go in `packages/core/src/` (and its subdirectories: `security/`, `storage/`, `ui/`, `views/`, `ai/`, `schemas/`).
+
+---
+
+## Server (`server/`)
+
+The server is a **Hono v4** REST API running on Node.js with `@hono/node-server`. It backs the enterprise-web build profile; offline builds do not require it.
+
+### Entry point
+
+`server/src/index.ts` — OTel **must** be initialised first (before any other import that creates spans). Middleware stack: CORS → connection tracking → OTel spans → auth (`/api/v1/*`) → routes. Graceful shutdown on `SIGTERM`/`SIGINT`: stops destruction scheduler, closes DB pool, exits.
+
+### HTTP routes
+
+All CRM routes are mounted at `/api/v1/<entity>`. Public routes: `GET /healthz`, `GET /readyz`.
+
+| Prefix                     | Entity                            |
+| -------------------------- | --------------------------------- |
+| `/api/v1/clients`          | Clients                           |
+| `/api/v1/departments`      | Departments                       |
+| `/api/v1/projects`         | Projects                          |
+| `/api/v1/tasks`            | Tasks                             |
+| `/api/v1/people`           | People                            |
+| `/api/v1/tags`             | Tags                              |
+| `/api/v1/communications`   | Communications                    |
+| `/api/v1/time-entries`     | Time entries                      |
+| `/api/v1/notifications`    | Notifications                     |
+| `/api/v1/files`            | Files                             |
+| `/api/v1/documents`        | Documents                         |
+| `/api/v1/standalone-notes` | Standalone notes                  |
+| `/api/v1/conversations`    | Conversations (+ `/messages`)     |
+| `/api/v1/audit`            | Audit log (+ `/export`)           |
+| `/api/v1/admin`            | Admin: users, suspend, GDPR erase |
+
+### Database (Drizzle ORM + PostgreSQL)
+
+`server/src/services/base.ts` exports `withTenant(tenantId, fn)` — wraps every query in a transaction that runs `SET LOCAL app.tenant_id = <id>` before calling `fn(tx)`. All service methods call this; never query without it.
+
+RLS policies on every CRM table (`server/drizzle/0002_crm_entities.sql`):
+
+```sql
+CREATE POLICY tenant_isolation ON <table>
+  USING (tenant_id = current_setting('app.tenant_id', true)::text);
+```
+
+Audit events write to the existing `audit_events` table via `writeAuditEvent()` in `base.ts`. Every create/update/delete/suspend/erase operation writes one.
+
+### Auth (Entra ID OIDC + PKCE)
+
+`server/src/auth/middleware.ts` — reads `Authorization: Bearer <token>`, calls `validateEntraIdToken()` (JWKS via `jose`), looks up user in DB, sets `userId`/`tenantId`/`role` on the Hono context. Returns 401 on failure. Never expose raw errors to HTTP responses.
+
+### Authorization (OPA)
+
+`server/src/middleware/opa.ts` — `opaMiddleware(action)` factory. Evaluation chain:
+
+1. **REST sidecar** — `POST ${OPA_URL}/v1/data/crm/allow` if `OPA_URL` env var is set
+2. **WASM** — loads `policies/crm.wasm` via `@open-policy-agent/opa-wasm` (compile with `opa build crm.rego`)
+3. **In-process TypeScript fallback** — role-based logic in `opa.ts`
+
+Policy: `admin`/`owner` → all actions; `editor` → read/create/update; `viewer` → read only. Cross-tenant access always denied.
+
+### KMS / GDPR
+
+- `server/src/kms/key-service.ts` — `AzureKeyVaultKeyService`; schedules key destruction in `kms_key_lifecycle` (append-only table; update trigger prevents row modification)
+- `server/src/kms/legal-hold.ts` — `LegalHoldService`; blocks erasure if an active hold exists
+- `server/src/kms/erasure-workflow.ts` — `runErasureWorkflow(userId, tenantId, requestedBy)`: checks legal hold → schedules KMS key destruction → soft-deletes all user records across CRM tables → writes `gdpr_erasure_requested` audit event
+- `server/src/kms/destruction-scheduler.ts` — polls every 60s; calls `beginDeleteKey()` on Azure Key Vault; writes `DESTROYED` lifecycle event
+
+### AI Gateway
+
+`server/src/ai-gateway/policy-engine.ts` — `evaluateAiGatewayRequest()`: model allowlist → per-user rate limit (20 RPM; Redis if `AI_GATEWAY_REDIS_URL` set, else in-memory) → per-tenant monthly token budget → PII scrubbing (regex redaction). All decisions are audit-logged.
+
+### Environment variables
+
+All configuration via env vars (see `server/.env.example`):
+`PORT`, `NODE_ENV`, `DATABASE_URL`, `AZURE_KV_URL`, `AZURE_CLIENT_ID/SECRET/TENANT_ID`, `ENTRA_TENANT_ID/CLIENT_ID/CLIENT_SECRET`, `OIDC_REDIRECT_URI`, `ALLOW_ORIGINS`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OPA_URL` (optional), `AI_GATEWAY_MONTHLY_BUDGET_TOKENS`, `AI_GATEWAY_REDIS_URL` (optional).
+
+### Server development commands
+
+```bash
+cd server
+pnpm dev           # tsx watch src/index.ts
+pnpm build         # tsc → dist/
+pnpm start         # node dist/index.js
+pnpm typecheck     # tsc --noEmit
+pnpm db:generate   # drizzle-kit generate
+pnpm db:migrate    # drizzle-kit migrate
+pnpm db:seed       # tsx src/db/seed.ts
+pnpm test          # vitest
+```
+
+### Server security rules — never bypass
+
+1. Never log raw SQL errors or stack traces to HTTP responses — always `{ error: 'Internal server error' }`.
+2. Every DB query must go through `withTenant()` — never query CRM tables without RLS set.
+3. Every create/update/delete/suspend/erase endpoint writes an audit event via `writeAuditEvent()`.
+4. All secrets from environment variables — never hardcode credentials.
+5. Zod validation on all request bodies — return 400 with error details on failure.
+6. Do not edit files in `packages/core/src/` from server code — frontend and server are separate packages.
 
 ---
 
