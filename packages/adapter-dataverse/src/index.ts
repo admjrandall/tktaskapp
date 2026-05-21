@@ -50,48 +50,11 @@ export class DataverseAdapter extends SyncAdapter {
     }
   }
 
-  override pull(
-    _checkpoint: unknown,
-  ): Promise<{ records: Record<string, unknown[]>; checkpoint: unknown }> {
-    // TODO: implement per-entity _changes fetch using modifiedon filter
-    // Pattern:
-    //   const since = _checkpoint as string ?? '1970-01-01T00:00:00Z'
-    //   for (const [store, entity] of Object.entries(this._config.entityMap)) {
-    //     const url = `${this._config.environmentUrl}/api/data/v9.2/${entity}?$filter=modifiedon gt ${since}`
-    //     const res = await fetch(url, { headers: this._headers() })
-    //     const data = await res.json()
-    //     records[store] = data.value.map(mapDataverseToRecord)
-    //   }
-    void this._headers // suppress unused warning until implemented
-    return Promise.reject(new DataverseNotImplementedError('pull'))
-  }
-
-  override push(_changes: Record<string, unknown[]>): Promise<{ conflicts: unknown[] }> {
-    // TODO: implement per-entity upsert using PATCH with If-Match: * or If-None-Match: *
-    // Dataverse uses OData upsert semantics:
-    //   If-None-Match: * → create only (409 if exists)
-    //   If-Match: *      → update only (404 if not found)
-    //   Omit both        → upsert (create or update)
-    return Promise.reject(new DataverseNotImplementedError('push'))
-  }
-
-  override stream(_onRemoteChange: (changes: Record<string, unknown[]>) => void): () => void {
-    // TODO: Dataverse Change Notifications via webhook registration
-    // Dataverse does not support EventSource. Options:
-    //   1. Polling: call pull() on a short interval (simplest)
-    //   2. Dataverse webhook: register a server-side webhook endpoint that calls
-    //      the onRemoteChange callback via a server-push mechanism
-    //   3. Azure Service Bus trigger from Dataverse plugin
-    // Return a no-op unsubscribe for now — callers must tolerate no real-time sync.
-    return () => {}
-  }
-
-  override clear(): Promise<void> {
-    // TODO: implement bulk delete via $batch OData request
-    // DELETE /api/data/v9.2/{entity}({id}) for each record
-    // Use $batch to stay within Dataverse API rate limits
-    return Promise.reject(new DataverseNotImplementedError('clear'))
-  }
+  // pull() / push() / stream() / clear() — inherit SyncAdapter no-ops until OData is wired.
+  // Implementation plan for each method is in the module header comment above.
+  // When implementing, inject this._headers() and this._config into the fetch calls.
+  // Throw DataverseNotImplementedError from the production app entry (apps/dataverse/src/entry.ts)
+  // to surface a clear error to the user rather than silently returning empty data.
 }
 
 export class DataverseNotImplementedError extends Error {
