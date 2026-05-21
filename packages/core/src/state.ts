@@ -25,6 +25,7 @@ export interface AppState {
   trash: unknown[]
   documents: unknown[]
   conversations: unknown[]
+  activeConversationId: string | null
   aiPanelOpen: boolean
   commandOpen: boolean
   notifPanelOpen: boolean
@@ -57,6 +58,7 @@ let _state: AppState = {
   trash: [],
   documents: [],
   conversations: [],
+  activeConversationId: null,
   aiPanelOpen: false,
   commandOpen: false,
   notifPanelOpen: false,

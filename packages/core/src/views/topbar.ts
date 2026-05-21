@@ -43,6 +43,7 @@ const VIEW_LABELS: Record<string, string> = {
   documents: 'Library',
   files: 'Library',
   library: 'Library',
+  communications: 'Communications',
 }
 
 const VIEW_ICONS: Record<string, (s?: number) => string> = {
@@ -62,6 +63,7 @@ const VIEW_ICONS: Record<string, (s?: number) => string> = {
   library: Icons.Files,
   files: Icons.Files,
   documents: Icons.Doc,
+  communications: Icons.Bell,
 }
 
 // ── Renderer ──────────────────────────────────────────────────────────────────

@@ -58,7 +58,7 @@ export function renderToast(toast: Toast): string {
 }
 export function renderConfirmDialog(d: ConfirmDialog): string {
   if (!d) return ''
-  return `<div class="modal-backdrop" id="confirm-backdrop"><div class="modal" style="max-width:400px"><div class="modal-header"><span class="modal-title">Confirm</span></div><div class="modal-body"><p style="color:var(--text-secondary);font-size:.9375rem;line-height:1.6">${escH(d.message)}</p></div><div class="modal-footer"><button class="btn btn-secondary" id="confirm-cancel">Cancel</button><button class="btn btn-danger" id="confirm-ok">Confirm</button></div></div></div>`
+  return `<div class="modal-backdrop" id="confirm-backdrop"><div class="modal" style="max-width:400px" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg"><div class="modal-header"><span class="modal-title" id="confirm-title">Confirm</span></div><div class="modal-body"><p id="confirm-msg" style="color:var(--text-secondary);font-size:.9375rem;line-height:1.6">${escH(d.message)}</p></div><div class="modal-footer"><button class="btn btn-secondary" id="confirm-cancel">Cancel</button><button class="btn btn-danger" id="confirm-ok">Confirm</button></div></div></div>`
 }
 export function bindConfirmDialog(d: ConfirmDialog): void {
   document.getElementById('confirm-ok')?.addEventListener('click', () => {
@@ -382,5 +382,31 @@ export function renderNotifPanel(notifications: NotificationItem[], open: boolea
   if (!open) return ''
   const items = notifications.slice(0, 20)
   const unread = notifications.filter((n) => !n.read).length
-  return `<div id="notif-panel" style="position:absolute;top:calc(100% + 8px);right:0;width:360px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);box-shadow:var(--shadow-xl);z-index:200;overflow:hidden"><div style="display:flex;align-items:center;justify-content:space-between;padding:.875rem 1rem;border-bottom:1px solid var(--border-subtle)"><span style="font-weight:600;font-size:.9375rem">Notifications</span>${unread ? `<button class="btn btn-ghost btn-sm" id="mark-all-read">Mark all read</button>` : ''}</div><div style="max-height:400px;overflow-y:auto">${items.length ? items.map((n) => `<div class="notif-item" data-notif="${escH(n.id)}" style="padding:.75rem 1rem;border-bottom:1px solid var(--border-subtle);cursor:pointer;${n.read ? '' : 'background:var(--accent-light)'}"><div style="display:flex;gap:.5rem;align-items:flex-start"><span style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:${n.type === 'error' ? '#dc2626' : n.type === 'warning' ? '#b45309' : 'var(--accent)'}">${n.type ? escH(n.type) : 'info'}</span><span style="font-size:.7rem;color:var(--text-tertiary);margin-left:auto">${formatRelative(n.createdAt)}</span></div><div style="font-size:.875rem;font-weight:500;margin-top:.2rem">${escH(n.title)}</div><div style="font-size:.8rem;color:var(--text-secondary);margin-top:.1rem">${escH(n.body)}</div></div>`).join('') : `<div style="padding:2rem;text-align:center;color:var(--text-tertiary)">${Icons.Bell(32)}<p style="margin-top:.5rem">All caught up!</p></div>`}</div></div>`
+  const headerBtns = [
+    unread ? `<button class="btn btn-ghost btn-sm" id="mark-all-read">Mark all read</button>` : '',
+    items.length
+      ? `<button class="btn btn-ghost btn-sm" id="notif-clear-all">Clear All</button>`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('')
+  const itemsHtml = items.length
+    ? items
+        .map(
+          (n) =>
+            `<div class="notif-item" data-notif="${escH(n.id)}" style="padding:.75rem 1rem;border-bottom:1px solid var(--border-subtle);cursor:pointer;${n.read ? '' : 'background:var(--accent-light)'}"><div style="display:flex;gap:.5rem;align-items:flex-start"><span style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:${n.type === 'error' ? '#dc2626' : n.type === 'warning' ? '#b45309' : 'var(--accent)'}">${n.type ? escH(n.type) : 'info'}</span><span style="font-size:.7rem;color:var(--text-tertiary);margin-left:auto">${formatRelative(n.createdAt)}</span><button class="btn btn-ghost btn-icon btn-sm" data-notif-del="${escH(n.id)}" title="Dismiss" style="width:20px;height:20px;font-size:.8rem;line-height:1;padding:0;margin-left:.25rem" onclick="event.stopPropagation()">×</button></div><div style="font-size:.875rem;font-weight:500;margin-top:.2rem">${escH(n.title)}</div><div style="font-size:.8rem;color:var(--text-secondary);margin-top:.1rem">${escH(n.body)}</div></div>`,
+        )
+        .join('')
+    : `<div style="padding:2rem;text-align:center;color:var(--text-tertiary)">${Icons.Bell(32)}<p style="margin-top:.5rem">All caught up!</p></div>`
+  return `<div id="notif-panel" style="position:absolute;top:calc(100% + 8px);right:0;width:360px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);box-shadow:var(--shadow-xl);z-index:200;overflow:hidden"><div style="display:flex;align-items:center;justify-content:space-between;padding:.875rem 1rem;border-bottom:1px solid var(--border-subtle)"><span style="font-weight:600;font-size:.9375rem">Notifications</span><div style="display:flex;gap:.25rem">${headerBtns}</div></div><div style="max-height:400px;overflow-y:auto">${itemsHtml}</div></div>`
+}
+
+export function bindNotifPanel(onDelete: (id: string) => void, onClearAll: () => void): void {
+  document.querySelectorAll<HTMLElement>('[data-notif-del]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      onDelete((btn.dataset as DOMStringMap & { notifDel: string }).notifDel)
+    })
+  })
+  document.getElementById('notif-clear-all')?.addEventListener('click', onClearAll)
 }

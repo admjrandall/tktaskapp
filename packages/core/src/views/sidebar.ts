@@ -31,6 +31,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   { kind: 'item', id: 'clients', label: 'Clients', icon: 'Clients' },
   { kind: 'item', id: 'projects', label: 'Projects', icon: 'Projects' },
   { kind: 'item', id: 'tasks', label: 'Tasks', icon: 'Tasks' },
+  { kind: 'item', id: 'communications', label: 'Communications', icon: 'Bell' },
   { kind: 'divider' },
   { kind: 'item', id: 'people', label: 'People', icon: 'People' },
   { kind: 'item', id: 'departments', label: 'Departments', icon: 'Departments' },
@@ -67,6 +68,27 @@ export function renderSidebar(state: AppState): string {
     ? `<span class="fs-logo-badge ${fsReady ? 'fs-logo-ok' : 'fs-logo-warn'}" title="${fsTooltip}">${fsReady ? '✓' : '!'}</span>`
     : ''
 
+  const profile = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('taskapp_user_profile_v1') || '{}') as {
+        displayName?: string
+        initials?: string
+      }
+    } catch {
+      return {}
+    }
+  })()
+  const displayName = profile.displayName || 'Your Name'
+  const profileInitials =
+    profile.initials ||
+    displayName
+      .split(' ')
+      .map((w) => w[0] || '')
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() ||
+    'U'
+
   const entries = NAV_ENTRIES.map((entry) => {
     if (entry.kind === 'divider') return `<div class="nav-divider"></div>`
     if (entry.kind === 'label') return `<div class="nav-entry-label">${entry.text}</div>`
@@ -79,8 +101,8 @@ export function renderSidebar(state: AppState): string {
     <div class="sidebar-logo"><div class="sidebar-logo-mark" style="position:relative">N${fsBadge}</div><span class="sidebar-logo-text">Task App CRM</span></div>
     <nav class="sidebar-nav">${entries}</nav>
     <div class="sidebar-footer-user">
-      <div class="avatar avatar-sm sidebar-user-avatar">U</div>
-      <span class="sidebar-user-name">Your Name</span>
+      <div class="avatar avatar-sm sidebar-user-avatar">${profileInitials}</div>
+      <span class="sidebar-user-name">${displayName}</span>
       <button class="btn btn-ghost btn-icon sidebar-settings-btn" data-nav="settings" title="Settings">${Icons.Settings(18)}</button>
     </div>
     <div class="sidebar-footer"><button class="collapse-btn" id="sidebar-collapse">${sidebarCollapsed ? Icons.ChevronRight(18) : Icons.ChevronLeft(18)}</button></div>
@@ -121,6 +143,7 @@ export function renderBottomTabs(state: AppState): string {
     { kind: 'item', id: 'clients', label: 'Clients', icon: 'Clients' },
     { kind: 'item', id: 'projects', label: 'Projects', icon: 'Projects' },
     { kind: 'item', id: 'tasks', label: 'Tasks', icon: 'Tasks' },
+    { kind: 'item', id: 'communications', label: 'Communications', icon: 'Bell' },
     { kind: 'divider' },
     { kind: 'item', id: 'people', label: 'People', icon: 'People' },
     { kind: 'item', id: 'departments', label: 'Departments', icon: 'Departments' },

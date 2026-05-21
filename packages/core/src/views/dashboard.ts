@@ -23,6 +23,7 @@ const DASH_DEFAULTS: Record<string, { x: number; y: number; w: number; h: number
   team: { x: 24, y: 620, w: 480, h: 280 },
   clients: { x: 928, y: 600, w: 380, h: 300 },
   actions: { x: 528, y: 320, w: 380, h: 580 },
+  timer: { x: 528, y: 920, w: 380, h: 200 },
 }
 
 let _dashLayouts: Record<string, { x: number; y: number; w: number; h: number }> | null = null
@@ -60,11 +61,12 @@ function saveDashLayouts(): void {
 }
 
 export function renderDashboard(state: AppState): string {
-  const { projects, tasks, clients, people } = state
+  const { projects, tasks, clients, people, communications, runningTimer, timerElapsed } = state
   const pArr = projects as AnyRecord[],
     tArr = tasks as AnyRecord[],
     cArr = clients as AnyRecord[],
-    pPArr = people as AnyRecord[]
+    pPArr = people as AnyRecord[],
+    commArr = communications as AnyRecord[]
   const ap = pArr.filter((p) => !['Done', 'Cancelled'].includes(String(p.stage || '')))
   const ot = tArr.filter((t) => t.status !== 'Done' && !t.done)
   const od = ot.filter((t) => {
@@ -126,26 +128,38 @@ export function renderDashboard(state: AppState): string {
     },
     {
       id: 'activity',
-      title: 'Activity',
+      title: 'Recent Activity',
       body: () => {
-        const items = [
-          ...pArr.flatMap((p) =>
+        const commItems = commArr
+          .slice()
+          .sort(
+            (a, b) =>
+              new Date(String(b.occurredAt || b.createdAt || '')).getTime() -
+              new Date(String(a.occurredAt || a.createdAt || '')).getTime(),
+          )
+          .slice(0, 5)
+          .map((c) => ({
+            label: String(c.subject || ''),
+            type: String(c.type || 'Note'),
+            ts: String(c.occurredAt || c.createdAt || ''),
+          }))
+        const noteItems = pArr
+          .flatMap((p) =>
             ((p.notes as AnyRecord[] | undefined) || []).map((n) => ({
               label: String(p.name || ''),
               type: 'Note',
               ts: String(n.date || ''),
-              text: String(n.text || ''),
             })),
-          ),
-        ]
+          )
           .filter((i) => i.ts)
+        const items = [...commItems, ...noteItems]
           .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
           .slice(0, 10)
         return items.length
           ? items
               .map(
                 (i) =>
-                  `<div style="padding:.5rem;border-radius:var(--radius-md);background:var(--bg-base);margin-bottom:.375rem"><div style="display:flex;justify-content:space-between;margin-bottom:.2rem"><span style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:var(--accent)">${i.type}</span><span style="font-size:.7rem;color:var(--text-tertiary)">${formatRelative(i.ts)}</span></div><div style="font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(i.label)}</div></div>`,
+                  `<div style="padding:.5rem;border-radius:var(--radius-md);background:var(--bg-base);margin-bottom:.375rem"><div style="display:flex;justify-content:space-between;margin-bottom:.2rem"><span style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:var(--accent)">${escH(i.type)}</span><span style="font-size:.7rem;color:var(--text-tertiary)">${formatRelative(i.ts)}</span></div><div style="font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(i.label)}</div></div>`,
               )
               .join('')
           : `<p style="font-size:.8rem;color:var(--text-tertiary);text-align:center;padding:1rem">No recent activity</p>`
@@ -213,6 +227,26 @@ export function renderDashboard(state: AppState): string {
               `<button class="btn btn-secondary" style="flex-direction:column;gap:.375rem;padding:1rem;height:auto;text-align:center" data-quick="${a}"><span style="font-size:1.25rem">${icons[a] ?? ''}</span><span style="font-size:.8rem">${l}</span></button>`,
           )
           .join('')}</div>`
+      },
+    },
+    {
+      id: 'timer',
+      title: 'Timer',
+      body: () => {
+        const running = runningTimer as AnyRecord | null
+        if (running) {
+          const task = tArr.find((t) => t.id === running.taskId)
+          const elapsed = timerElapsed || 0
+          const h = Math.floor(elapsed / 3600)
+          const m = Math.floor((elapsed % 3600) / 60)
+          const s = elapsed % 60
+          const dur =
+            h > 0
+              ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+              : `${m}:${String(s).padStart(2, '0')}`
+          return `<div style="text-align:center;padding:.5rem 0"><div class="timer-display" style="font-size:1.5rem;margin-bottom:.375rem">${dur}</div><div style="font-size:.8rem;color:var(--text-secondary);margin-bottom:.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(String(task?.title || running.description || 'Timer running'))}</div><button class="btn btn-secondary btn-sm" data-nav="time">Open Time Tracker</button></div>`
+        }
+        return `<div style="text-align:center;padding:1rem;color:var(--text-tertiary)"><div style="font-size:.8rem;margin-bottom:.5rem">No timer running</div><button class="btn btn-secondary btn-sm" data-nav="time">${Icons.Clock(14)} Start Timer</button></div>`
       },
     },
   ]

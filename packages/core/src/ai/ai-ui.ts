@@ -4,9 +4,9 @@
 //          ai-settings (wizard guard). Nothing in ai-runtime or ai-tools
 //          imports from here — no circular deps.
 
-import { escH } from '../utils.js'
+import { escH, formatRelative } from '../utils.js'
 import { Icons } from '../ui/icons.js'
-import { getState, setState, navigate } from '../state.js'
+import { getState, setState, navigate, showConfirm, showToast } from '../state.js'
 import type { AppState } from '../state.js'
 import { isAITierAllowed, isOTOnlyMode } from '../deployment-policy.js'
 import {
@@ -21,6 +21,8 @@ import {
   selectModel,
   startAILoad,
   callBackend,
+  setActiveConversation,
+  saveConversationMessages,
 } from './ai-runtime.js'
 import { aiPrefs } from './ai-prefs.js'
 import {
@@ -143,6 +145,48 @@ export function renderAIPanel(open: boolean): string {
   </div>`
 }
 
+function renderConversationSidebar(): string {
+  const state = getState()
+  const convs = (
+    state.conversations as Array<{
+      id: string
+      title?: string
+      updatedAt?: string
+      createdAt?: string
+    }>
+  )
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt || '').getTime() -
+        new Date(a.updatedAt || a.createdAt || '').getTime(),
+    )
+
+  const items = convs.length
+    ? convs
+        .map((c) => {
+          const isActive = c.id === state.activeConversationId
+          const title = c.title || 'New Conversation'
+          const displayTitle = title.length > 40 ? title.slice(0, 40) + '…' : title
+          return `<div class="conv-item${isActive ? ' active' : ''}" data-conv-id="${escH(c.id)}" style="display:flex;align-items:center;gap:.375rem;padding:.5rem .625rem;border-radius:var(--radius-sm);cursor:pointer;${isActive ? 'background:var(--bg-base);font-weight:600;' : ''}margin-bottom:.125rem">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.8125rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-conv-title="${escH(c.id)}">${escH(displayTitle)}</div>
+            <div style="font-size:.7rem;color:var(--text-tertiary);margin-top:.125rem">${formatRelative(c.updatedAt || c.createdAt)}</div>
+          </div>
+          <button class="btn btn-ghost btn-icon" style="width:20px;height:20px;flex-shrink:0;font-size:.7rem;color:var(--text-tertiary)" data-conv-del="${escH(c.id)}" title="Delete conversation" aria-label="Delete conversation">×</button>
+        </div>`
+        })
+        .join('')
+    : `<p style="font-size:.8rem;color:var(--text-tertiary);padding:.5rem .625rem;line-height:1.5">No past conversations. Start chatting to create one.</p>`
+
+  return `<div style="width:220px;flex-shrink:0;border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:.625rem .625rem .5rem;border-bottom:1px solid var(--border-subtle)">
+      <button class="btn btn-primary btn-sm" style="width:100%" id="ai-new-conv">${Icons.Plus(14)} New Conversation</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:.375rem .375rem">${items}</div>
+  </div>`
+}
+
 export function renderAIChatWorkspace(): string {
   return `<div style="display:flex;flex-direction:column;height:100%">
     <div class="workspace-toolbar" style="justify-content:space-between">
@@ -153,7 +197,7 @@ export function renderAIChatWorkspace(): string {
         ${!aiPrefs.hasCompletedOnboarding ? `<button class="btn btn-primary btn-sm" id="ai-open-wizard-toolbar">Set up AI</button>` : ''}
       </div>
     </div>
-    <div style="flex:1;display:flex;overflow:hidden">${renderChatBody(false)}</div>
+    <div style="flex:1;display:flex;overflow:hidden">${renderConversationSidebar()}<div style="flex:1;overflow:hidden;display:flex;flex-direction:column">${renderChatBody(false)}</div></div>
   </div>`
 }
 
@@ -380,6 +424,91 @@ export function bindAIChatWorkspace(): void {
     })
   }
 
+  // ── Conversation sidebar bindings ──────────────────────────────────────
+  document.getElementById('ai-new-conv')?.addEventListener('click', async () => {
+    const { dbCreate } = await import('../storage/db.js')
+    const rec = (await dbCreate('conversations', {
+      title: 'New Conversation',
+      messages: [],
+    })) as { id: string }
+    const { getState: gs, setState: ss, reloadData } = await import('../state.js')
+    const state = gs()
+    ss({ conversations: [...state.conversations, rec], activeConversationId: rec.id })
+    reloadData()
+    setActiveConversation(rec.id)
+    _appRenderWorkspace('ai')
+  })
+
+  document.querySelectorAll<HTMLElement>('[data-conv-id]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('[data-conv-del]')) return
+      const id = (el.dataset as DOMStringMap & { convId: string }).convId
+      setState({ activeConversationId: id })
+      setActiveConversation(id)
+      _appRenderWorkspace('ai')
+    })
+  })
+
+  document.querySelectorAll<HTMLElement>('[data-conv-del]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const id = (btn.dataset as DOMStringMap & { convDel: string }).convDel
+      showConfirm('Delete this conversation?', async () => {
+        const { _idbDeleteRecord } = await import('../storage/idb-data.js')
+        await _idbDeleteRecord('conversations', id)
+        const { getState: gs, setState: ss } = await import('../state.js')
+        const state = gs()
+        const remaining = (state.conversations as Array<{ id: string }>).filter((c) => c.id !== id)
+        const nextId = remaining.length > 0 ? remaining[0]!.id : null
+        ss({ conversations: remaining, activeConversationId: nextId })
+        if (aiRuntime.conversationId === id) {
+          setActiveConversation(nextId)
+        }
+        _appRenderWorkspace('ai')
+      })
+    })
+  })
+
+  // Inline rename on double-click
+  document.querySelectorAll<HTMLElement>('[data-conv-title]').forEach((el) => {
+    el.addEventListener('dblclick', () => {
+      const convId = (el.dataset as DOMStringMap & { convTitle: string }).convTitle
+      const oldText = el.textContent || ''
+      const input = document.createElement('input')
+      input.value = oldText.replace(/…$/, '')
+      input.style.cssText =
+        'font-size:.8125rem;width:100%;border:1px solid var(--accent);border-radius:4px;padding:0 .25rem;background:var(--bg-surface)'
+      el.replaceWith(input)
+      input.focus()
+      input.select()
+      const save = async () => {
+        const newTitle = input.value.trim() || 'New Conversation'
+        const { _idbPutRecord } = await import('../storage/idb-data.js')
+        const { _getDbKey } = await import('../storage/db.js')
+        const { getState: gs, setState: ss } = await import('../state.js')
+        const key = _getDbKey()
+        const state = gs()
+        const convs = state.conversations as Array<{ id: string; [k: string]: unknown }>
+        const conv = convs.find((c) => c.id === convId)
+        if (conv && key) {
+          conv.title = newTitle
+          conv.updatedAt = new Date().toISOString()
+          await _idbPutRecord('conversations', conv, key)
+          ss({ conversations: [...convs] })
+        }
+        _appRenderWorkspace('ai')
+      }
+      input.addEventListener('blur', () => void save())
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          ev.preventDefault()
+          void save()
+        }
+        if (ev.key === 'Escape') _appRenderWorkspace('ai')
+      })
+    })
+  })
+
   document.getElementById('ai-load-btn')?.addEventListener('click', () => {
     if (isOTOnlyMode()) _openAIWizard(1)
     else void startAILoad()
@@ -589,6 +718,8 @@ export async function sendAIMessage(text: string, ctx: string): Promise<void> {
   }
   aiRuntime.streaming = false
   aiRuntime.abortController = null
+  // Persist conversation to IDB after every assistant reply
+  void saveConversationMessages()
   finalRender(ctx)
   scrollChatBottom()
 }

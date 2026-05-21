@@ -20,6 +20,7 @@ import {
 import type { AppState } from './state.js'
 import {
   dbInit,
+  dbDelete,
   checkDueDates,
   markNotificationRead,
   markAllNotificationsRead,
@@ -70,6 +71,11 @@ import { renderDashboard, bindDashboard, setDashHooks, setDashAIHooks } from './
 import { renderWorkspaceView, bindWorkspaceView, setWorkspaceHooks } from './views/workspace.js'
 import { renderCalendar, bindCalendar, setCalendarHooks } from './views/calendar.js'
 import { renderTimeTracker, bindTimeTracker } from './views/time-tracker.js'
+import {
+  renderCommunications,
+  bindCommunications,
+  setCommunicationsHooks,
+} from './views/communications.js'
 import { renderReports, bindReports } from './views/reports.js'
 import { renderTrash, bindTrash } from './views/trash.js'
 import {
@@ -118,6 +124,7 @@ import {
   renderCommandPalette,
   bindCommandPalette,
   renderNotifPanel,
+  bindNotifPanel,
   setComponentsAIHooks,
 } from './ui/components.js'
 
@@ -128,6 +135,7 @@ import {
   startAILoad,
   disconnectAI as resetAIConnection,
   callBackend,
+  setActiveConversation,
 } from './ai/ai-runtime.js'
 import {
   renderAIPanel,
@@ -294,6 +302,9 @@ export function appRenderWorkspace(view: string): void {
     case 'time':
       html = renderTimeTracker(state)
       break
+    case 'communications':
+      html = renderCommunications(state)
+      break
     case 'reports':
       html = renderReports(state)
       break
@@ -331,6 +342,9 @@ export function appRenderWorkspace(view: string): void {
       break
     case 'time':
       bindTimeTracker()
+      break
+    case 'communications':
+      bindCommunications(state)
       break
     case 'reports':
       bindReports(state)
@@ -382,6 +396,9 @@ export function fullRender(state: AppState): void {
       break
     case 'time':
       wsHtml = renderTimeTracker(state)
+      break
+    case 'communications':
+      wsHtml = renderCommunications(state)
       break
     case 'reports':
       wsHtml = renderReports(state)
@@ -460,6 +477,9 @@ export function fullRender(state: AppState): void {
       case 'time':
         bindTimeTracker()
         break
+      case 'communications':
+        bindCommunications(state)
+        break
       case 'reports':
         bindReports(state)
         break
@@ -519,6 +539,17 @@ export function fullRender(state: AppState): void {
         }
       })
     })
+    bindNotifPanel(
+      async (id) => {
+        await dbDelete('notifications', id)
+        reloadData()
+      },
+      async () => {
+        const notifs = getState().notifications as Array<{ id: string }>
+        for (const n of notifs) await dbDelete('notifications', n.id)
+        reloadData()
+      },
+    )
     setTimeout(() => {
       document.addEventListener('click', function cn(e) {
         const t = e.target as HTMLElement | null
@@ -611,6 +642,9 @@ function _wireHooks(): void {
     setDocDirty,
     setDocEditorActive,
   })
+  // Communications view hooks
+  setCommunicationsHooks(appRenderWorkspace)
+
   // Components AI hooks (for command palette AI nav guard)
   setComponentsAIHooks(aiNeedsOnboarding, openAIWizard)
 
@@ -784,6 +818,25 @@ export async function init(): Promise<void> {
 
     setState({ authed: true, cryptoKey: key })
     reloadData()
+
+    // Load conversations from IDB and set active conversation
+    try {
+      const convs = (await _idbLoadStore('conversations', key)) as Array<Record<string, unknown>>
+      const sorted = [...convs].sort(
+        (a, b) =>
+          new Date((b.updatedAt as string) || (b.createdAt as string) || '').getTime() -
+          new Date((a.updatedAt as string) || (a.createdAt as string) || '').getTime(),
+      )
+      setState({ conversations: convs })
+      const latest = sorted[0]
+      if (latest?.id) {
+        setState({ activeConversationId: latest.id as string })
+        setActiveConversation(latest.id as string)
+      }
+    } catch (e) {
+      console.warn('[conversations] load failed:', (e as Error).message)
+    }
+
     try {
       await checkDueDates()
       reloadData()

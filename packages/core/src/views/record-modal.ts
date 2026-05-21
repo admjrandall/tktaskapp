@@ -15,7 +15,7 @@ import {
 import { getState, showToast, showConfirm, closeRecordModal, reloadData } from '../state.js'
 import { Icons } from '../ui/icons.js'
 import { renderPriorityBadge } from '../ui/components.js'
-import { PRIORITIES, PROJECT_STAGES, TASK_STATUSES, TAG_COLORS } from '../constants.js'
+import { PRIORITIES, PROJECT_STAGES, TASK_STATUSES, TAG_COLORS, COMM_TYPES } from '../constants.js'
 import { openProjectCanvas, _pcFromCanvas, setPcFromCanvas } from './project-canvas.js'
 
 // circular-safe: set by main.ts after both modules load
@@ -104,6 +104,24 @@ const SCHEMAS: Record<string, SchemaDef> = {
       { key: 'projectId', label: 'Project', type: 'relation', store: 'projects' },
       { key: 'taskId', label: 'Task', type: 'relation', store: 'tasks' },
       { key: 'personId', label: 'Person', type: 'relation', store: 'people' },
+    ],
+  },
+  communications: {
+    label: 'Communication',
+    fields: [
+      {
+        key: 'type',
+        label: 'Type',
+        type: 'select',
+        options: COMM_TYPES,
+        required: true,
+      },
+      { key: 'subject', label: 'Subject', type: 'text', required: true },
+      { key: 'body', label: 'Notes', type: 'textarea' },
+      { key: 'occurredAt', label: 'Date/Time', type: 'datetime-local', required: true },
+      { key: 'durationMinutes', label: 'Duration (minutes)', type: 'number' },
+      { key: 'personId', label: 'Person', type: 'relation', store: 'people' },
+      { key: 'clientId', label: 'Client', type: 'relation', store: 'clients' },
     ],
   },
 }
@@ -217,7 +235,7 @@ export function renderRecordModal(
         }</div><div style="display:flex;gap:.5rem;margin-top:.5rem"><textarea class="textarea" id="new-note" placeholder="Add a note…" rows="2" style="font-size:.8rem;flex:1"></textarea><button class="btn btn-secondary btn-sm" id="add-note-btn" style="align-self:flex-end">${Icons.Plus(14)}</button></div></div>`
       : ''
 
-  return `<div class="${backdropClass}" id="record-modal-backdrop"><div class="${modalClass}"><div class="modal-header"><span class="modal-title">${id ? 'Edit' : 'New'} ${schema.label}</span><button class="btn btn-ghost btn-icon" id="modal-close">${Icons.Close()}</button></div><div class="modal-body"><form id="record-form" autocomplete="off"><div style="display:grid;grid-template-columns:1fr 1fr;gap:.875rem">${fields}</div>${allTags.length ? `<div class="form-group" style="margin-top:1rem"><label class="form-label">Tags</label><div style="display:flex;flex-wrap:wrap;gap:.375rem;margin-top:.25rem">${tagHTML}</div></div>` : ''}</form>${notesSection}${filesSection}</div><div class="modal-footer">${id ? `<button class="btn btn-danger" id="delete-record-btn" style="margin-right:auto">${Icons.Trash(14)} Delete</button>` : ''}<button class="btn btn-secondary" id="modal-cancel">Cancel</button><button class="btn btn-primary" id="modal-save">${Icons.Save(14)} ${id ? 'Save' : 'Create'}</button></div></div></div>`
+  return `<div class="${backdropClass}" id="record-modal-backdrop"><div class="${modalClass}" role="dialog" aria-modal="true" aria-labelledby="modal-title-lbl"><div class="modal-header"><span class="modal-title" id="modal-title-lbl">${id ? 'Edit' : 'New'} ${schema.label}</span><button class="btn btn-ghost btn-icon" id="modal-close">${Icons.Close()}</button></div><div class="modal-body"><form id="record-form" autocomplete="off"><div style="display:grid;grid-template-columns:1fr 1fr;gap:.875rem">${fields}</div>${allTags.length ? `<div class="form-group" style="margin-top:1rem"><label class="form-label">Tags</label><div style="display:flex;flex-wrap:wrap;gap:.375rem;margin-top:.25rem">${tagHTML}</div></div>` : ''}</form>${notesSection}${filesSection}</div><div class="modal-footer">${id ? `<button class="btn btn-danger" id="delete-record-btn" style="margin-right:auto">${Icons.Trash(14)} Delete</button>` : ''}<button class="btn btn-secondary" id="modal-cancel">Cancel</button><button class="btn btn-primary" id="modal-save">${Icons.Save(14)} ${id ? 'Save' : 'Create'}</button></div></div></div>`
 }
 
 let _pendingNotes: AnyRecord[] = []

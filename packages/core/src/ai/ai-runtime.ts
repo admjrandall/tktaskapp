@@ -44,6 +44,72 @@ export const aiRuntime = {
   ollamaModelsCache: null as AnyRecord[] | null,
   modelPickerOpen: null as string | null,
   downloadProgress: null as { loaded: number; total: number } | null,
+  conversationId: null as string | null,
+  savedMessageCount: 0,
+}
+
+// ── Conversation helpers ───────────────────────────────────────────────────────
+
+export function setActiveConversation(id: string | null): void {
+  aiRuntime.conversationId = id
+  if (!id) {
+    aiRuntime.history = []
+    aiRuntime.savedMessageCount = 0
+    return
+  }
+  import('../state.js')
+    .then((m) => {
+      const state = m.getState()
+      const conv = (state.conversations as Array<{ id: string; messages?: Message[] }>).find(
+        (c) => c.id === id,
+      )
+      if (conv) {
+        aiRuntime.history = (conv.messages || []).map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }))
+        aiRuntime.savedMessageCount = aiRuntime.history.length
+      } else {
+        aiRuntime.history = []
+        aiRuntime.savedMessageCount = 0
+      }
+    })
+    .catch(() => {})
+}
+
+export async function saveConversationMessages(): Promise<void> {
+  const id = aiRuntime.conversationId
+  if (!id) return
+  try {
+    const { getState } = await import('../state.js')
+    const { _idbPutRecord } = await import('../storage/idb-data.js')
+    const { _getDbKey } = await import('../storage/db.js')
+    const key = _getDbKey()
+    if (!key) return
+    const state = getState()
+    const convList = state.conversations as Array<AnyRecord>
+    const conv = convList.find((c) => c.id === id)
+    if (!conv) return
+    const messages = aiRuntime.history.map((m) => ({
+      role: m.role,
+      content: m.content,
+      timestamp: new Date().toISOString(),
+    }))
+    const firstUserMsg = messages.find((m) => m.role === 'user')
+    const excerpt = firstUserMsg ? firstUserMsg.content.slice(0, 200) : undefined
+    const updated: AnyRecord = { ...conv, messages, updatedAt: new Date().toISOString(), excerpt }
+    if ((updated.title as string | undefined) === 'New Conversation' && firstUserMsg) {
+      updated.title = firstUserMsg.content.split(/\s+/).slice(0, 6).join(' ')
+    }
+    Object.assign(conv, updated)
+    await _idbPutRecord('conversations', updated as unknown as { id: string } & AnyRecord, key)
+    aiRuntime.savedMessageCount = messages.length
+    // Reflect title update in state without triggering a full re-render
+    const { setState } = await import('../state.js')
+    setState({ conversations: [...convList] })
+  } catch (e) {
+    console.warn('[AI] saveConversationMessages failed:', (e as Error).message)
+  }
 }
 
 // ── Hook injection ─────────────────────────────────────────────────────────────

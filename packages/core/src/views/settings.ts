@@ -13,6 +13,7 @@ import {
 import { Icons } from '../ui/icons.js'
 import {
   dbCreate,
+  dbUpdate,
   softDelete,
   dbGetAll,
   permanentDelete,
@@ -204,6 +205,10 @@ export function setSettingsSecurityHooks(hooks: {
   _getLastActivityAt = hooks.getLastActivityAt
 }
 
+// Tag editing state
+let _editingTagId: string | null = null
+let _editTagColor: string = 'Slate'
+
 // Async security state — loaded lazily when section is rendered
 let _secMFAStatus: { totpEnabled: boolean; totpSecret: string } | null = null
 let _secPasskeys: Array<{ id: string; deviceHint?: string; createdAt: string }> | null = null
@@ -246,7 +251,9 @@ export function resetSecurityState(): void {
 
 export function renderSettings(state: AppState): string {
   const secs = [
+    { id: 'profile', label: 'Profile' },
     { id: 'general', label: 'General' },
+    { id: 'notifications', label: 'Notifications' },
     { id: 'ai', label: 'AI' },
     { id: 'security', label: 'Security' },
     { id: 'storage', label: 'Storage' },
@@ -264,7 +271,65 @@ export function renderSettings(state: AppState): string {
     .join('')
   let body = ''
 
-  if (_settingsSection === 'general') {
+  if (_settingsSection === 'profile') {
+    const profileRaw = (() => {
+      try {
+        return JSON.parse(localStorage.getItem('taskapp_user_profile_v1') || '{}') as {
+          displayName?: string
+          initials?: string
+        }
+      } catch {
+        return {}
+      }
+    })()
+    const pName = profileRaw.displayName || ''
+    const pInits = profileRaw.initials || ''
+    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">Profile</h2>
+      <div class="card" style="padding:1.25rem">
+        <div style="font-weight:600;margin-bottom:.75rem">Display Settings</div>
+        <div class="form-group" style="margin-bottom:.75rem">
+          <label class="form-label">Display Name</label>
+          <input class="input" id="profile-name" value="${escH(pName)}" placeholder="Your Name">
+        </div>
+        <div class="form-group" style="margin-bottom:.75rem">
+          <label class="form-label">Initials <span style="font-size:.75rem;color:var(--text-tertiary)">(up to 2 chars, shown in sidebar)</span></label>
+          <input class="input" id="profile-initials" value="${escH(pInits)}" maxlength="2" placeholder="AB" style="width:80px;text-transform:uppercase">
+        </div>
+        <button class="btn btn-primary btn-sm" id="profile-save">${Icons.Save(14)} Save Profile</button>
+      </div>`
+  } else if (_settingsSection === 'notifications') {
+    const notifRaw = (() => {
+      try {
+        return JSON.parse(localStorage.getItem('taskapp_notif_prefs_v1') || '{}') as {
+          dueDateReminders?: boolean
+          overdueAlerts?: boolean
+          mentions?: boolean
+        }
+      } catch {
+        return {}
+      }
+    })()
+    const dueDates = notifRaw.dueDateReminders !== false
+    const overdue = notifRaw.overdueAlerts !== false
+    const mentions = notifRaw.mentions !== false
+    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">Notifications</h2>
+      <div class="card" style="padding:1.25rem">
+        <div style="font-weight:600;margin-bottom:.875rem">Notification Preferences</div>
+        <label style="display:flex;gap:.625rem;align-items:flex-start;padding:.5rem 0;border-bottom:1px solid var(--border-subtle);cursor:pointer">
+          <input type="checkbox" id="notif-due-dates" ${dueDates ? 'checked' : ''} style="margin-top:.2rem">
+          <div><div style="font-size:.875rem;font-weight:500">Due date reminders</div><div style="font-size:.75rem;color:var(--text-secondary)">Notify when tasks are due within 3 days</div></div>
+        </label>
+        <label style="display:flex;gap:.625rem;align-items:flex-start;padding:.5rem 0;border-bottom:1px solid var(--border-subtle);cursor:pointer">
+          <input type="checkbox" id="notif-overdue" ${overdue ? 'checked' : ''} style="margin-top:.2rem">
+          <div><div style="font-size:.875rem;font-weight:500">Overdue alerts</div><div style="font-size:.75rem;color:var(--text-secondary)">Notify when tasks become past their due date</div></div>
+        </label>
+        <label style="display:flex;gap:.625rem;align-items:flex-start;padding:.5rem 0;cursor:pointer">
+          <input type="checkbox" id="notif-mentions" ${mentions ? 'checked' : ''} style="margin-top:.2rem">
+          <div><div style="font-size:.875rem;font-weight:500">Mentions</div><div style="font-size:.75rem;color:var(--text-secondary)">Notify when you are mentioned in notes or comments</div></div>
+        </label>
+        <button class="btn btn-primary btn-sm" id="notif-prefs-save" style="margin-top:.875rem">${Icons.Save(14)} Save Preferences</button>
+      </div>`
+  } else if (_settingsSection === 'general') {
     body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">General</h2><div class="card" style="padding:1.25rem"><div style="font-weight:600;margin-bottom:.75rem">Appearance</div><div style="display:flex;gap:.75rem"><button class="btn ${state.theme === 'light' ? 'btn-primary' : 'btn-secondary'}" data-theme="light">${Icons.Sun(16)} Light</button><button class="btn ${state.theme === 'dark' ? 'btn-primary' : 'btn-secondary'}" data-theme="dark">${Icons.Moon(16)} Dark</button></div></div>`
   } else if (_settingsSection === 'ai') {
     const p = _aiPrefs
@@ -437,7 +502,12 @@ export function renderSettings(state: AppState): string {
 
     // WebAuthn passkeys section (only when available)
     let passkeySection = ''
-    if (isWebAuthnAvailable()) {
+    if (!isWebAuthnAvailable()) {
+      passkeySection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-weight:600;margin-bottom:.5rem">Passkeys (WebAuthn)</div>
+        <p style="font-size:.875rem;color:var(--text-secondary)">Passkeys (Touch ID, Face ID, Windows Hello) are not available in this browser or environment. Use Chrome, Edge, or Safari on a compatible device.</p>
+      </div>`
+    } else if (isWebAuthnAvailable()) {
       const passkeys = _secPasskeys || []
       const passkeyList = passkeys.length
         ? passkeys
@@ -633,16 +703,27 @@ export function renderSettings(state: AppState): string {
   } else if (_settingsSection === 'tags') {
     const { tags } = state
     const tArr = tags as AnyRecord[]
-    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">Tags</h2><div class="card" style="padding:1.25rem;margin-bottom:1rem"><div style="font-weight:600;margin-bottom:.75rem">Create Tag</div><div style="display:flex;flex-direction:column;gap:.75rem"><div class="form-group"><label class="form-label">Name</label><input class="input" id="tag-name" placeholder="Tag name…"></div><div class="form-group"><label class="form-label">Color</label><div style="display:flex;gap:.5rem;flex-wrap:wrap">${TAG_COLORS.map((c) => `<button class="tag-color-btn" data-color="${c.label}" style="width:28px;height:28px;border-radius:50%;background:${c.bg};border:2px solid ${c.border};cursor:pointer" title="${c.label}"></button>`).join('')}</div></div><button class="btn btn-primary" id="create-tag-btn">${Icons.Plus(14)} Create</button></div></div><div class="card" style="padding:1.25rem">${
-      tArr.length
-        ? tArr
-            .map((t) => {
-              const c = TAG_COLORS.find((c) => c.label === t.color) || TAG_COLORS[7]!
-              return `<div style="display:flex;align-items:center;gap:.625rem;padding:.375rem 0;border-bottom:1px solid var(--border-subtle)"><span style="background:${c.bg};color:${c.text};border:1px solid ${c.border};padding:.2rem .625rem;border-radius:999px;font-size:.75rem">${escH(String(t.name || ''))}</span><button class="btn btn-ghost btn-icon btn-sm" style="margin-left:auto;color:#dc2626" data-del-tag="${t.id}">${Icons.Delete(14)}</button></div>`
-            })
-            .join('')
-        : '<p style="font-size:.875rem;color:var(--text-tertiary)">No tags yet</p>'
-    }</div>`
+    const tagRows = tArr.length
+      ? tArr
+          .map((t) => {
+            const c = TAG_COLORS.find((c) => c.label === t.color) || TAG_COLORS[7]!
+            if (_editingTagId === String(t.id)) {
+              return `<div style="padding:.625rem 0;border-bottom:1px solid var(--border-subtle)" id="tag-edit-form">
+                <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem">
+                  <input class="input" id="tag-edit-name" value="${escH(String(t.name || ''))}" style="flex:1;height:32px">
+                </div>
+                <div style="display:flex;gap:.375rem;flex-wrap:wrap;margin-bottom:.5rem">${TAG_COLORS.map((col) => `<button class="tag-color-btn-edit" data-color="${col.label}" style="width:24px;height:24px;border-radius:50%;background:${col.bg};border:2px solid ${_editTagColor === col.label ? col.text : col.border};cursor:pointer" title="${col.label}"></button>`).join('')}</div>
+                <div style="display:flex;gap:.375rem">
+                  <button class="btn btn-primary btn-sm" id="tag-edit-save" data-tag-id="${escH(String(t.id))}">${Icons.Save(12)} Save</button>
+                  <button class="btn btn-secondary btn-sm" id="tag-edit-cancel">Cancel</button>
+                </div>
+              </div>`
+            }
+            return `<div style="display:flex;align-items:center;gap:.625rem;padding:.375rem 0;border-bottom:1px solid var(--border-subtle)"><span style="background:${c.bg};color:${c.text};border:1px solid ${c.border};padding:.2rem .625rem;border-radius:999px;font-size:.75rem">${escH(String(t.name || ''))}</span><button class="btn btn-ghost btn-icon btn-sm" style="margin-left:auto" data-edit-tag="${t.id}" title="Edit">${Icons.Edit(14)}</button><button class="btn btn-ghost btn-icon btn-sm" style="color:#dc2626" data-del-tag="${t.id}" title="Delete">${Icons.Delete(14)}</button></div>`
+          })
+          .join('')
+      : '<p style="font-size:.875rem;color:var(--text-tertiary)">No tags yet</p>'
+    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">Tags</h2><div class="card" style="padding:1.25rem;margin-bottom:1rem"><div style="font-weight:600;margin-bottom:.75rem">Create Tag</div><div style="display:flex;flex-direction:column;gap:.75rem"><div class="form-group"><label class="form-label">Name</label><input class="input" id="tag-name" placeholder="Tag name…"></div><div class="form-group"><label class="form-label">Color</label><div style="display:flex;gap:.5rem;flex-wrap:wrap">${TAG_COLORS.map((c) => `<button class="tag-color-btn" data-color="${c.label}" style="width:28px;height:28px;border-radius:50%;background:${c.bg};border:2px solid ${c.border};cursor:pointer" title="${c.label}"></button>`).join('')}</div></div><button class="btn btn-primary" id="create-tag-btn">${Icons.Plus(14)} Create</button></div></div><div class="card" style="padding:1.25rem">${tagRows}</div>`
   } else if (_settingsSection === 'recyclebin') {
     const tArr = state.trash as AnyRecord[]
     const emptyBtn =
@@ -881,6 +962,82 @@ export function bindSettings(state: AppState): void {
         await softDelete('tags', (btn.dataset as DOMStringMap & { delTag: string }).delTag)
         reloadData()
         _appRenderWorkspace('settings')
+      })
+    })
+  })
+
+  // Profile bindings
+  document.getElementById('profile-save')?.addEventListener('click', () => {
+    const name =
+      (document.getElementById('profile-name') as HTMLInputElement | null)?.value?.trim() || ''
+    const inits = (
+      (document.getElementById('profile-initials') as HTMLInputElement | null)?.value?.trim() || ''
+    )
+      .toUpperCase()
+      .slice(0, 2)
+    localStorage.setItem(
+      'taskapp_user_profile_v1',
+      JSON.stringify({ displayName: name, initials: inits }),
+    )
+    showToast('Profile saved', 'success')
+    _fullRender(getState())
+  })
+
+  // Notification preferences bindings
+  document.getElementById('notif-prefs-save')?.addEventListener('click', () => {
+    const dueDateReminders =
+      (document.getElementById('notif-due-dates') as HTMLInputElement | null)?.checked ?? true
+    const overdueAlerts =
+      (document.getElementById('notif-overdue') as HTMLInputElement | null)?.checked ?? true
+    const mentions =
+      (document.getElementById('notif-mentions') as HTMLInputElement | null)?.checked ?? true
+    localStorage.setItem(
+      'taskapp_notif_prefs_v1',
+      JSON.stringify({ dueDateReminders, overdueAlerts, mentions }),
+    )
+    showToast('Notification preferences saved', 'success')
+  })
+
+  // Tag edit bindings
+  document.querySelectorAll<HTMLElement>('[data-edit-tag]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = (btn.dataset as DOMStringMap & { editTag: string }).editTag
+      _editingTagId = id
+      const tag = (dbGetAll('tags') as AnyRecord[]).find((t) => String(t.id) === id)
+      _editTagColor = String(tag?.color || 'Slate')
+      _appRenderWorkspace('settings')
+    })
+  })
+  document.getElementById('tag-edit-cancel')?.addEventListener('click', () => {
+    _editingTagId = null
+    _appRenderWorkspace('settings')
+  })
+  document.getElementById('tag-edit-save')?.addEventListener('click', async () => {
+    const id = _editingTagId
+    if (!id) return
+    const name =
+      (document.getElementById('tag-edit-name') as HTMLInputElement | null)?.value?.trim() || ''
+    if (!name) {
+      showToast('Enter a tag name', 'error')
+      return
+    }
+    await dbUpdate('tags', id, { name, color: _editTagColor })
+    reloadData()
+    _editingTagId = null
+    showToast('Tag updated', 'success')
+    _appRenderWorkspace('settings')
+  })
+  document.querySelectorAll<HTMLElement>('.tag-color-btn-edit').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      _editTagColor = (btn.dataset as DOMStringMap & { color: string }).color
+      document.querySelectorAll<HTMLElement>('.tag-color-btn-edit').forEach((b) => {
+        const col = TAG_COLORS.find(
+          (c) => c.label === (b.dataset as DOMStringMap & { color: string }).color,
+        )
+        b.style.borderColor =
+          _editTagColor === (b.dataset as DOMStringMap & { color: string }).color
+            ? col?.text || '#000'
+            : col?.border || '#ccc'
       })
     })
   })
