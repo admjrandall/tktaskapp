@@ -29,14 +29,14 @@ export class StandaloneNotesService {
       if (filters.projectId) conditions.push(eq(standaloneNotes.projectId, filters.projectId))
       if (filters.taskId) conditions.push(eq(standaloneNotes.taskId, filters.taskId))
       if (filters.personId) conditions.push(eq(standaloneNotes.personId, filters.personId))
-      const [rows, [{ value: total }]] = await Promise.all([
-        (tx as typeof db)
+      const [rows, countRows] = await Promise.all([
+        tx
           .select()
           .from(standaloneNotes)
           .where(and(...conditions))
           .limit(limit)
           .offset(offset),
-        (tx as typeof db)
+        tx
           .select({ value: count() })
           .from(standaloneNotes)
           .where(and(...conditions)),
@@ -46,8 +46,8 @@ export class StandaloneNotesService {
         pagination: {
           page,
           pageSize,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / pageSize),
+          total: Number(countRows[0]?.value ?? 0),
+          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })
@@ -55,7 +55,7 @@ export class StandaloneNotesService {
 
   async getById(tenantId: string, id: string): Promise<StandaloneNote | null> {
     return withTenant(tenantId, async (tx) => {
-      const rows = await (tx as typeof db)
+      const rows = await tx
         .select()
         .from(standaloneNotes)
         .where(
@@ -72,7 +72,7 @@ export class StandaloneNotesService {
 
   async create(tenantId: string, userId: string, data: CreateNoteInput): Promise<StandaloneNote> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .insert(standaloneNotes)
         .values({ ...data, tenantId, createdBy: data.createdBy ?? userId })
         .returning()
@@ -95,7 +95,7 @@ export class StandaloneNotesService {
     changes: UpdateNoteInput,
   ): Promise<StandaloneNote | null> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(standaloneNotes)
         .set({ ...changes, updatedAt: new Date() })
         .where(
@@ -120,7 +120,7 @@ export class StandaloneNotesService {
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(standaloneNotes)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(

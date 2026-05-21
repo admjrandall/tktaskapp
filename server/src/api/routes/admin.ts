@@ -6,10 +6,11 @@ import { otel } from '../../observability/otel.js'
 import { LegalHoldService } from '../../kms/legal-hold.js'
 import { AzureKeyVaultKeyService, LegalHoldActiveError } from '../../kms/key-service.js'
 import { writeAuditEvent } from '../../services/base.js'
+import type { HonoEnv } from '../../hono-types.js'
 
 const legalHoldService = new LegalHoldService()
 
-export const adminRouter = new Hono()
+export const adminRouter = new Hono<HonoEnv>()
 
 adminRouter.get('/users', opaMiddleware('manage_users'), async (c) => {
   const tenantId = c.get('tenantId') as string
@@ -17,9 +18,9 @@ adminRouter.get('/users', opaMiddleware('manage_users'), async (c) => {
     const { page, pageSize, status } = c.req.query()
     return c.json(
       await usersService.list(tenantId, {
-        status,
-        page: page ? Number(page) : undefined,
-        pageSize: pageSize ? Number(pageSize) : undefined,
+        ...(status !== undefined ? { status } : {}),
+        ...(page !== undefined ? { page: Number(page) } : {}),
+        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
       }),
       200,
     )
@@ -39,7 +40,7 @@ adminRouter.get('/users', opaMiddleware('manage_users'), async (c) => {
 adminRouter.get('/users/:id', opaMiddleware('manage_users'), async (c) => {
   const tenantId = c.get('tenantId') as string
   try {
-    const user = await usersService.getById(tenantId, c.req.param('id'))
+    const user = await usersService.getById(tenantId, c.req.param('id')!)
     return user ? c.json(user, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -57,7 +58,7 @@ adminRouter.get('/users/:id', opaMiddleware('manage_users'), async (c) => {
 adminRouter.post('/users/:id/suspend', opaMiddleware('suspend_user'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const requestedBy = c.get('userId') as string
-  const targetId = c.req.param('id')
+  const targetId = c.req.param('id')!
   try {
     const ok = await usersService.suspend(tenantId, requestedBy, targetId)
     return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
@@ -77,7 +78,7 @@ adminRouter.post('/users/:id/suspend', opaMiddleware('suspend_user'), async (c) 
 adminRouter.post('/users/:id/erase', opaMiddleware('erase_user'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const requestedBy = c.get('userId') as string
-  const targetId = c.req.param('id')
+  const targetId = c.req.param('id')!
 
   const EraseSchema = z.object({
     destroyAt: z.string().datetime(),

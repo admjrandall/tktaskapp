@@ -27,14 +27,14 @@ export class DocumentsService {
       if (filters.search) conditions.push(ilike(documents.title, `%${filters.search}%`))
       if (filters.linkedStore) conditions.push(eq(documents.linkedStore, filters.linkedStore))
       if (filters.linkedId) conditions.push(eq(documents.linkedId, filters.linkedId))
-      const [rows, [{ value: total }]] = await Promise.all([
-        (tx as typeof db)
+      const [rows, countRows] = await Promise.all([
+        tx
           .select()
           .from(documents)
           .where(and(...conditions))
           .limit(limit)
           .offset(offset),
-        (tx as typeof db)
+        tx
           .select({ value: count() })
           .from(documents)
           .where(and(...conditions)),
@@ -44,8 +44,8 @@ export class DocumentsService {
         pagination: {
           page,
           pageSize,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / pageSize),
+          total: Number(countRows[0]?.value ?? 0),
+          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })
@@ -53,7 +53,7 @@ export class DocumentsService {
 
   async getById(tenantId: string, id: string): Promise<Document | null> {
     return withTenant(tenantId, async (tx) => {
-      const rows = await (tx as typeof db)
+      const rows = await tx
         .select()
         .from(documents)
         .where(
@@ -67,7 +67,7 @@ export class DocumentsService {
   async create(tenantId: string, userId: string, data: CreateDocumentInput): Promise<Document> {
     const excerpt = data.body?.slice(0, 200) ?? null
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .insert(documents)
         .values({ ...data, tenantId, excerpt, createdBy: userId })
         .returning()
@@ -91,7 +91,7 @@ export class DocumentsService {
   ): Promise<Document | null> {
     const excerpt = changes.body !== undefined ? (changes.body?.slice(0, 200) ?? null) : undefined
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(documents)
         .set({ ...changes, ...(excerpt !== undefined ? { excerpt } : {}), updatedAt: new Date() })
         .where(
@@ -112,7 +112,7 @@ export class DocumentsService {
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(documents)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(

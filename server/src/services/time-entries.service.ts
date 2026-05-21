@@ -20,14 +20,14 @@ export class TimeEntriesService {
       const conditions = [isNull(timeEntries.deletedAt), eq(timeEntries.tenantId, tenantId)]
       if (filters.taskId) conditions.push(eq(timeEntries.taskId, filters.taskId))
       if (filters.userId) conditions.push(eq(timeEntries.userId, filters.userId))
-      const [rows, [{ value: total }]] = await Promise.all([
-        (tx as typeof db)
+      const [rows, countRows] = await Promise.all([
+        tx
           .select()
           .from(timeEntries)
           .where(and(...conditions))
           .limit(limit)
           .offset(offset),
-        (tx as typeof db)
+        tx
           .select({ value: count() })
           .from(timeEntries)
           .where(and(...conditions)),
@@ -37,8 +37,8 @@ export class TimeEntriesService {
         pagination: {
           page,
           pageSize,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / pageSize),
+          total: Number(countRows[0]?.value ?? 0),
+          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })
@@ -46,7 +46,7 @@ export class TimeEntriesService {
 
   async getById(tenantId: string, id: string): Promise<TimeEntry | null> {
     return withTenant(tenantId, async (tx) => {
-      const rows = await (tx as typeof db)
+      const rows = await tx
         .select()
         .from(timeEntries)
         .where(
@@ -63,7 +63,7 @@ export class TimeEntriesService {
 
   async create(tenantId: string, userId: string, data: CreateTimeEntryInput): Promise<TimeEntry> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .insert(timeEntries)
         .values({ ...data, tenantId })
         .returning()
@@ -86,7 +86,7 @@ export class TimeEntriesService {
     changes: UpdateTimeEntryInput,
   ): Promise<TimeEntry | null> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(timeEntries)
         .set({ ...changes, updatedAt: new Date() })
         .where(
@@ -111,7 +111,7 @@ export class TimeEntriesService {
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(timeEntries)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(

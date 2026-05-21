@@ -21,7 +21,8 @@
     "@opentelemetry/api": "^1",
     "@open-policy-agent/opa-wasm": "^1",
     "jose": "^5",
-    "zod": "^3"
+    "zod": "^3",
+    "ioredis": "^5"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31",

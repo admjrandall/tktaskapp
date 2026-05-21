@@ -1,11 +1,10 @@
 import { db } from '../db/index.js'
 import { auditEvents } from '../db/schema/audit-events.js'
 import { sql } from 'drizzle-orm'
-import type { ExtractTablesWithRelations } from 'drizzle-orm'
 import type * as schema from '../db/schema/index.js'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 
-export type Tx = NodePgDatabase<ExtractTablesWithRelations<typeof schema>>
+export type Tx = NodePgDatabase<typeof schema>
 
 export async function withTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return db.transaction(async (tx) => {

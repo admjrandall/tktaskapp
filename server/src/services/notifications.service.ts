@@ -20,14 +20,14 @@ export class NotificationsService {
       const conditions = [isNull(notifications.deletedAt), eq(notifications.tenantId, tenantId)]
       if (filters.userId) conditions.push(eq(notifications.userId, filters.userId))
       if (filters.read !== undefined) conditions.push(eq(notifications.read, filters.read))
-      const [rows, [{ value: total }]] = await Promise.all([
-        (tx as typeof db)
+      const [rows, countRows] = await Promise.all([
+        tx
           .select()
           .from(notifications)
           .where(and(...conditions))
           .limit(limit)
           .offset(offset),
-        (tx as typeof db)
+        tx
           .select({ value: count() })
           .from(notifications)
           .where(and(...conditions)),
@@ -37,8 +37,8 @@ export class NotificationsService {
         pagination: {
           page,
           pageSize,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / pageSize),
+          total: Number(countRows[0]?.value ?? 0),
+          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })
@@ -46,7 +46,7 @@ export class NotificationsService {
 
   async getById(tenantId: string, id: string): Promise<Notification | null> {
     return withTenant(tenantId, async (tx) => {
-      const rows = await (tx as typeof db)
+      const rows = await tx
         .select()
         .from(notifications)
         .where(
@@ -67,7 +67,7 @@ export class NotificationsService {
     data: CreateNotificationInput,
   ): Promise<Notification> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .insert(notifications)
         .values({ ...data, tenantId })
         .returning()
@@ -90,7 +90,7 @@ export class NotificationsService {
     changes: UpdateNotificationInput,
   ): Promise<Notification | null> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(notifications)
         .set({ ...changes, updatedAt: new Date() })
         .where(
@@ -115,7 +115,7 @@ export class NotificationsService {
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(notifications)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(

@@ -1,8 +1,12 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { standaloneNotesService } from '../../services/standalone-notes.service.js'
+import {
+  standaloneNotesService,
+  type UpdateNoteInput,
+} from '../../services/standalone-notes.service.js'
 import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
+import type { HonoEnv } from '../../hono-types.js'
 
 const CreateSchema = z.object({
   id: z.string().uuid(),
@@ -14,7 +18,7 @@ const CreateSchema = z.object({
 })
 const UpdateSchema = CreateSchema.partial().omit({ id: true })
 
-export const standaloneNotesRouter = new Hono()
+export const standaloneNotesRouter = new Hono<HonoEnv>()
 
 standaloneNotesRouter.get('/', opaMiddleware('read'), async (c) => {
   const tenantId = c.get('tenantId') as string
@@ -22,12 +26,12 @@ standaloneNotesRouter.get('/', opaMiddleware('read'), async (c) => {
     const { page, pageSize, clientId, projectId, taskId, personId } = c.req.query()
     return c.json(
       await standaloneNotesService.list(tenantId, {
-        clientId,
-        projectId,
-        taskId,
-        personId,
-        page: page ? Number(page) : undefined,
-        pageSize: pageSize ? Number(pageSize) : undefined,
+        ...(clientId !== undefined ? { clientId } : {}),
+        ...(projectId !== undefined ? { projectId } : {}),
+        ...(taskId !== undefined ? { taskId } : {}),
+        ...(personId !== undefined ? { personId } : {}),
+        ...(page !== undefined ? { page: Number(page) } : {}),
+        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
       }),
       200,
     )
@@ -71,7 +75,7 @@ standaloneNotesRouter.post('/', opaMiddleware('create'), async (c) => {
 standaloneNotesRouter.get('/:id', opaMiddleware('read'), async (c) => {
   const tenantId = c.get('tenantId') as string
   try {
-    const row = await standaloneNotesService.getById(tenantId, c.req.param('id'))
+    const row = await standaloneNotesService.getById(tenantId, c.req.param('id')!)
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -96,8 +100,8 @@ standaloneNotesRouter.patch('/:id', opaMiddleware('update'), async (c) => {
     const row = await standaloneNotesService.update(
       tenantId,
       userId,
-      c.req.param('id'),
-      parsed.data,
+      c.req.param('id')!,
+      parsed.data as UpdateNoteInput,
     )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
@@ -117,7 +121,7 @@ standaloneNotesRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const userId = c.get('userId') as string
   try {
-    const ok = await standaloneNotesService.delete(tenantId, userId, c.req.param('id'))
+    const ok = await standaloneNotesService.delete(tenantId, userId, c.req.param('id')!)
     return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({

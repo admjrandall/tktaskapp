@@ -1,8 +1,12 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { timeEntriesService } from '../../services/time-entries.service.js'
+import {
+  timeEntriesService,
+  type UpdateTimeEntryInput,
+} from '../../services/time-entries.service.js'
 import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
+import type { HonoEnv } from '../../hono-types.js'
 
 const CreateSchema = z.object({
   id: z.string().uuid(),
@@ -15,7 +19,7 @@ const CreateSchema = z.object({
 })
 const UpdateSchema = CreateSchema.partial().omit({ id: true })
 
-export const timeEntriesRouter = new Hono()
+export const timeEntriesRouter = new Hono<HonoEnv>()
 
 timeEntriesRouter.get('/', opaMiddleware('read'), async (c) => {
   const tenantId = c.get('tenantId') as string
@@ -23,10 +27,10 @@ timeEntriesRouter.get('/', opaMiddleware('read'), async (c) => {
     const { page, pageSize, taskId, userId } = c.req.query()
     return c.json(
       await timeEntriesService.list(tenantId, {
-        taskId,
-        userId,
-        page: page ? Number(page) : undefined,
-        pageSize: pageSize ? Number(pageSize) : undefined,
+        ...(taskId !== undefined ? { taskId } : {}),
+        ...(userId !== undefined ? { userId } : {}),
+        ...(page !== undefined ? { page: Number(page) } : {}),
+        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
       }),
       200,
     )
@@ -72,7 +76,7 @@ timeEntriesRouter.post('/', opaMiddleware('create'), async (c) => {
 timeEntriesRouter.get('/:id', opaMiddleware('read'), async (c) => {
   const tenantId = c.get('tenantId') as string
   try {
-    const row = await timeEntriesService.getById(tenantId, c.req.param('id'))
+    const row = await timeEntriesService.getById(tenantId, c.req.param('id')!)
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -99,7 +103,12 @@ timeEntriesRouter.patch('/:id', opaMiddleware('update'), async (c) => {
       ...(parsed.data.startedAt ? { startedAt: new Date(parsed.data.startedAt) } : {}),
       ...(parsed.data.endedAt ? { endedAt: new Date(parsed.data.endedAt) } : {}),
     }
-    const row = await timeEntriesService.update(tenantId, userId, c.req.param('id'), changes)
+    const row = await timeEntriesService.update(
+      tenantId,
+      userId,
+      c.req.param('id')!,
+      changes as UpdateTimeEntryInput,
+    )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -118,7 +127,7 @@ timeEntriesRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const userId = c.get('userId') as string
   try {
-    const ok = await timeEntriesService.delete(tenantId, userId, c.req.param('id'))
+    const ok = await timeEntriesService.delete(tenantId, userId, c.req.param('id')!)
     return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({

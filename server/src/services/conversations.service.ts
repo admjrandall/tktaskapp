@@ -23,14 +23,14 @@ export class ConversationsService {
     return withTenant(tenantId, async (tx) => {
       const conditions = [isNull(conversations.deletedAt), eq(conversations.tenantId, tenantId)]
       if (filters.userId) conditions.push(eq(conversations.userId, filters.userId))
-      const [rows, [{ value: total }]] = await Promise.all([
-        (tx as typeof db)
+      const [rows, countRows] = await Promise.all([
+        tx
           .select()
           .from(conversations)
           .where(and(...conditions))
           .limit(limit)
           .offset(offset),
-        (tx as typeof db)
+        tx
           .select({ value: count() })
           .from(conversations)
           .where(and(...conditions)),
@@ -40,8 +40,8 @@ export class ConversationsService {
         pagination: {
           page,
           pageSize,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / pageSize),
+          total: Number(countRows[0]?.value ?? 0),
+          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })
@@ -49,7 +49,7 @@ export class ConversationsService {
 
   async getById(tenantId: string, id: string): Promise<Conversation | null> {
     return withTenant(tenantId, async (tx) => {
-      const rows = await (tx as typeof db)
+      const rows = await tx
         .select()
         .from(conversations)
         .where(
@@ -70,7 +70,7 @@ export class ConversationsService {
     data: CreateConversationInput,
   ): Promise<Conversation> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .insert(conversations)
         .values({ ...data, tenantId })
         .returning()
@@ -93,7 +93,7 @@ export class ConversationsService {
     changes: UpdateConversationInput,
   ): Promise<Conversation | null> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(conversations)
         .set({ ...changes, updatedAt: new Date() })
         .where(
@@ -123,7 +123,7 @@ export class ConversationsService {
     message: ConversationMessage,
   ): Promise<Conversation | null> {
     return withTenant(tenantId, async (tx) => {
-      const rows = await (tx as typeof db)
+      const rows = await tx
         .select()
         .from(conversations)
         .where(
@@ -137,7 +137,7 @@ export class ConversationsService {
       const conv = rows[0]
       if (!conv) return null
       const updatedMessages = [...(conv.messages ?? []), message]
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(conversations)
         .set({ messages: updatedMessages, updatedAt: new Date() })
         .where(eq(conversations.id, id))
@@ -155,7 +155,7 @@ export class ConversationsService {
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(conversations)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(

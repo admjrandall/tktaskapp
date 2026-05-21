@@ -17,14 +17,14 @@ export class FilesService {
       const conditions = [isNull(files.deletedAt), eq(files.tenantId, tenantId)]
       if (filters.relatedStore) conditions.push(eq(files.relatedStore, filters.relatedStore))
       if (filters.relatedId) conditions.push(eq(files.relatedId, filters.relatedId))
-      const [rows, [{ value: total }]] = await Promise.all([
-        (tx as typeof db)
+      const [rows, countRows] = await Promise.all([
+        tx
           .select()
           .from(files)
           .where(and(...conditions))
           .limit(limit)
           .offset(offset),
-        (tx as typeof db)
+        tx
           .select({ value: count() })
           .from(files)
           .where(and(...conditions)),
@@ -34,8 +34,8 @@ export class FilesService {
         pagination: {
           page,
           pageSize,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / pageSize),
+          total: Number(countRows[0]?.value ?? 0),
+          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })
@@ -43,7 +43,7 @@ export class FilesService {
 
   async getById(tenantId: string, id: string): Promise<File | null> {
     return withTenant(tenantId, async (tx) => {
-      const rows = await (tx as typeof db)
+      const rows = await tx
         .select()
         .from(files)
         .where(and(eq(files.id, id), eq(files.tenantId, tenantId), isNull(files.deletedAt)))
@@ -54,7 +54,7 @@ export class FilesService {
 
   async create(tenantId: string, userId: string, data: CreateFileInput): Promise<File> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .insert(files)
         .values({ ...data, tenantId })
         .returning()
@@ -77,7 +77,7 @@ export class FilesService {
     changes: UpdateFileInput,
   ): Promise<File | null> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(files)
         .set({ ...changes, updatedAt: new Date() })
         .where(and(eq(files.id, id), eq(files.tenantId, tenantId), isNull(files.deletedAt)))
@@ -96,7 +96,7 @@ export class FilesService {
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(files)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(and(eq(files.id, id), eq(files.tenantId, tenantId), isNull(files.deletedAt)))

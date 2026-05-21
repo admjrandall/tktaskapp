@@ -27,14 +27,14 @@ export class ProjectsService {
       const conditions = [isNull(projects.deletedAt), eq(projects.tenantId, tenantId)]
       if (filters.search) conditions.push(ilike(projects.name, `%${filters.search}%`))
       if (filters.clientId) conditions.push(eq(projects.clientId, filters.clientId))
-      const [rows, [{ value: total }]] = await Promise.all([
-        (tx as typeof db)
+      const [rows, countRows] = await Promise.all([
+        tx
           .select()
           .from(projects)
           .where(and(...conditions))
           .limit(limit)
           .offset(offset),
-        (tx as typeof db)
+        tx
           .select({ value: count() })
           .from(projects)
           .where(and(...conditions)),
@@ -44,8 +44,8 @@ export class ProjectsService {
         pagination: {
           page,
           pageSize,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / pageSize),
+          total: Number(countRows[0]?.value ?? 0),
+          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })
@@ -53,7 +53,7 @@ export class ProjectsService {
 
   async getById(tenantId: string, id: string): Promise<Project | null> {
     return withTenant(tenantId, async (tx) => {
-      const rows = await (tx as typeof db)
+      const rows = await tx
         .select()
         .from(projects)
         .where(
@@ -66,7 +66,7 @@ export class ProjectsService {
 
   async create(tenantId: string, userId: string, data: CreateProjectInput): Promise<Project> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .insert(projects)
         .values({ ...data, tenantId })
         .returning()
@@ -89,7 +89,7 @@ export class ProjectsService {
     changes: UpdateProjectInput,
   ): Promise<Project | null> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(projects)
         .set({ ...changes, updatedAt: new Date() })
         .where(
@@ -110,7 +110,7 @@ export class ProjectsService {
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(projects)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(

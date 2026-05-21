@@ -19,7 +19,7 @@ export class UsersService {
       // suspended is represented by deletedAt being set (soft delete used as suspend)
     }
 
-    const [rows, [{ value: total }]] = await Promise.all([
+    const [rows, countRows] = await Promise.all([
       db
         .select()
         .from(tenantUsers)
@@ -36,8 +36,8 @@ export class UsersService {
       pagination: {
         page,
         pageSize,
-        total: Number(total),
-        totalPages: Math.ceil(Number(total) / pageSize),
+        total: Number(countRows[0]?.value ?? 0),
+        totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
       },
     }
   }

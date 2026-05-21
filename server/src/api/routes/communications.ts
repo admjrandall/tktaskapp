@@ -1,8 +1,12 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { communicationsService } from '../../services/communications.service.js'
+import {
+  communicationsService,
+  type UpdateCommunicationInput,
+} from '../../services/communications.service.js'
 import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
+import type { HonoEnv } from '../../hono-types.js'
 
 const CreateSchema = z.object({
   id: z.string().uuid(),
@@ -19,7 +23,7 @@ const CreateSchema = z.object({
 })
 const UpdateSchema = CreateSchema.partial().omit({ id: true })
 
-export const communicationsRouter = new Hono()
+export const communicationsRouter = new Hono<HonoEnv>()
 
 communicationsRouter.get('/', opaMiddleware('read'), async (c) => {
   const tenantId = c.get('tenantId') as string
@@ -27,11 +31,11 @@ communicationsRouter.get('/', opaMiddleware('read'), async (c) => {
     const { page, pageSize, relatedStore, relatedId, clientId } = c.req.query()
     return c.json(
       await communicationsService.list(tenantId, {
-        relatedStore,
-        relatedId,
-        clientId,
-        page: page ? Number(page) : undefined,
-        pageSize: pageSize ? Number(pageSize) : undefined,
+        ...(relatedStore !== undefined ? { relatedStore } : {}),
+        ...(relatedId !== undefined ? { relatedId } : {}),
+        ...(clientId !== undefined ? { clientId } : {}),
+        ...(page !== undefined ? { page: Number(page) } : {}),
+        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
       }),
       200,
     )
@@ -78,7 +82,7 @@ communicationsRouter.post('/', opaMiddleware('create'), async (c) => {
 communicationsRouter.get('/:id', opaMiddleware('read'), async (c) => {
   const tenantId = c.get('tenantId') as string
   try {
-    const row = await communicationsService.getById(tenantId, c.req.param('id'))
+    const row = await communicationsService.getById(tenantId, c.req.param('id')!)
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -104,7 +108,12 @@ communicationsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
       ...parsed.data,
       ...(parsed.data.occurredAt ? { occurredAt: new Date(parsed.data.occurredAt) } : {}),
     }
-    const row = await communicationsService.update(tenantId, userId, c.req.param('id'), changes)
+    const row = await communicationsService.update(
+      tenantId,
+      userId,
+      c.req.param('id')!,
+      changes as UpdateCommunicationInput,
+    )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -123,7 +132,7 @@ communicationsRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const userId = c.get('userId') as string
   try {
-    const ok = await communicationsService.delete(tenantId, userId, c.req.param('id'))
+    const ok = await communicationsService.delete(tenantId, userId, c.req.param('id')!)
     return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({

@@ -144,7 +144,9 @@ async function _postTokenEndpoint(tenantId: string, body: URLSearchParams): Prom
     accessToken: data['access_token'] as string,
     tokenType: (data['token_type'] as 'Bearer') ?? 'Bearer',
     expiresIn: (data['expires_in'] as number) ?? 900,
-    refreshToken: data['refresh_token'] as string | undefined,
+    ...(data['refresh_token'] !== undefined
+      ? { refreshToken: data['refresh_token'] as string }
+      : {}),
     idToken: (data['id_token'] as string) ?? '',
     scope: (data['scope'] as string) ?? '',
   }

@@ -1,4 +1,4 @@
-import type { Context, Next } from 'hono'
+import type { MiddlewareHandler } from 'hono'
 import { otel } from '../observability/otel.js'
 
 export interface PolicyInput {
@@ -85,8 +85,6 @@ export async function evaluatePolicy(input: PolicyInput): Promise<boolean> {
       timestamp: new Date().toISOString(),
       level: 'error',
       service: 'tktaskapp-server',
-      traceId: 'none',
-      spanId: 'none',
       tenantId: input.tenantId,
       requestId: 'opa-eval',
       message: 'OPA evaluation failed — denying by default',
@@ -96,8 +94,8 @@ export async function evaluatePolicy(input: PolicyInput): Promise<boolean> {
   }
 }
 
-export function opaMiddleware(action: string) {
-  return async (c: Context, next: Next): Promise<Response | void> => {
+export function opaMiddleware(action: string): MiddlewareHandler {
+  return async (c, next) => {
     const role = c.get('role') as string | undefined
     const tenantId = c.get('tenantId') as string | undefined
 

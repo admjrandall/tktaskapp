@@ -28,7 +28,7 @@ export class AuditService {
     if (filters.from) conditions.push(gte(auditEvents.createdAt, new Date(filters.from)))
     if (filters.to) conditions.push(lte(auditEvents.createdAt, new Date(filters.to)))
 
-    const [rows, [{ value: total }]] = await Promise.all([
+    const [rows, countRows] = await Promise.all([
       db
         .select()
         .from(auditEvents)
@@ -45,8 +45,8 @@ export class AuditService {
       pagination: {
         page,
         pageSize,
-        total: Number(total),
-        totalPages: Math.ceil(Number(total) / pageSize),
+        total: Number(countRows[0]?.value ?? 0),
+        totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
       },
     }
   }

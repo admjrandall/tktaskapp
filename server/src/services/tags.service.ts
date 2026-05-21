@@ -16,14 +16,14 @@ export class TagsService {
     return withTenant(tenantId, async (tx) => {
       const conditions = [isNull(tags.deletedAt), eq(tags.tenantId, tenantId)]
       if (filters.search) conditions.push(ilike(tags.name, `%${filters.search}%`))
-      const [rows, [{ value: total }]] = await Promise.all([
-        (tx as typeof db)
+      const [rows, countRows] = await Promise.all([
+        tx
           .select()
           .from(tags)
           .where(and(...conditions))
           .limit(limit)
           .offset(offset),
-        (tx as typeof db)
+        tx
           .select({ value: count() })
           .from(tags)
           .where(and(...conditions)),
@@ -33,8 +33,8 @@ export class TagsService {
         pagination: {
           page,
           pageSize,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / pageSize),
+          total: Number(countRows[0]?.value ?? 0),
+          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })
@@ -42,7 +42,7 @@ export class TagsService {
 
   async getById(tenantId: string, id: string): Promise<Tag | null> {
     return withTenant(tenantId, async (tx) => {
-      const rows = await (tx as typeof db)
+      const rows = await tx
         .select()
         .from(tags)
         .where(and(eq(tags.id, id), eq(tags.tenantId, tenantId), isNull(tags.deletedAt)))
@@ -53,7 +53,7 @@ export class TagsService {
 
   async create(tenantId: string, userId: string, data: CreateTagInput): Promise<Tag> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .insert(tags)
         .values({ ...data, tenantId })
         .returning()
@@ -76,7 +76,7 @@ export class TagsService {
     changes: UpdateTagInput,
   ): Promise<Tag | null> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(tags)
         .set({ ...changes, updatedAt: new Date() })
         .where(and(eq(tags.id, id), eq(tags.tenantId, tenantId), isNull(tags.deletedAt)))
@@ -95,7 +95,7 @@ export class TagsService {
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(tags)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(and(eq(tags.id, id), eq(tags.tenantId, tenantId), isNull(tags.deletedAt)))

@@ -1,6 +1,7 @@
 packages:
   - 'packages/*'
   - 'apps/*'
+  - 'server'
 allowBuilds:
   esbuild: false
   onnxruntime-node: false

@@ -13,6 +13,7 @@ otelImpl.init({
 
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
+import type { HonoEnv } from './hono-types.js'
 import { corsHeaders, corsPreflight } from './middleware/cors.js'
 import { authMiddleware } from './auth/middleware.js'
 import { otelMiddleware } from './observability/middleware.js'
@@ -37,7 +38,7 @@ import { startDestructionScheduler, stopDestructionScheduler } from './kms/destr
 import { otel } from './observability/otel.js'
 import { incrementActiveConnections, decrementActiveConnections } from './observability/metrics.js'
 
-const app = new Hono()
+const app = new Hono<HonoEnv>()
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 

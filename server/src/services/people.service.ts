@@ -27,14 +27,14 @@ export class PeopleService {
       if (filters.search) conditions.push(ilike(people.name, `%${filters.search}%`))
       if (filters.clientId) conditions.push(eq(people.clientId, filters.clientId))
       if (filters.departmentId) conditions.push(eq(people.departmentId, filters.departmentId))
-      const [rows, [{ value: total }]] = await Promise.all([
-        (tx as typeof db)
+      const [rows, countRows] = await Promise.all([
+        tx
           .select()
           .from(people)
           .where(and(...conditions))
           .limit(limit)
           .offset(offset),
-        (tx as typeof db)
+        tx
           .select({ value: count() })
           .from(people)
           .where(and(...conditions)),
@@ -44,8 +44,8 @@ export class PeopleService {
         pagination: {
           page,
           pageSize,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / pageSize),
+          total: Number(countRows[0]?.value ?? 0),
+          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })
@@ -53,7 +53,7 @@ export class PeopleService {
 
   async getById(tenantId: string, id: string): Promise<Person | null> {
     return withTenant(tenantId, async (tx) => {
-      const rows = await (tx as typeof db)
+      const rows = await tx
         .select()
         .from(people)
         .where(and(eq(people.id, id), eq(people.tenantId, tenantId), isNull(people.deletedAt)))
@@ -64,7 +64,7 @@ export class PeopleService {
 
   async create(tenantId: string, userId: string, data: CreatePersonInput): Promise<Person> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .insert(people)
         .values({ ...data, tenantId })
         .returning()
@@ -87,7 +87,7 @@ export class PeopleService {
     changes: UpdatePersonInput,
   ): Promise<Person | null> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(people)
         .set({ ...changes, updatedAt: new Date() })
         .where(and(eq(people.id, id), eq(people.tenantId, tenantId), isNull(people.deletedAt)))
@@ -106,7 +106,7 @@ export class PeopleService {
 
   async delete(tenantId: string, userId: string, id: string): Promise<boolean> {
     return withTenant(tenantId, async (tx) => {
-      const [row] = await (tx as typeof db)
+      const [row] = await tx
         .update(people)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(and(eq(people.id, id), eq(people.tenantId, tenantId), isNull(people.deletedAt)))
