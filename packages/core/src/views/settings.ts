@@ -251,6 +251,7 @@ export function renderSettings(state: AppState): string {
     { id: 'security', label: 'Security' },
     { id: 'storage', label: 'Storage' },
     { id: 'data', label: 'Data & Backup' },
+    { id: 'privacy', label: 'Data & Privacy' },
     { id: 'tags', label: 'Tags' },
     { id: 'recyclebin', label: 'Recycle Bin' },
     { id: 'about', label: 'About' },
@@ -586,6 +587,49 @@ export function renderSettings(state: AppState): string {
     }
   } else if (_settingsSection === 'data') {
     body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">Data & Backup</h2><div class="card" style="padding:1.25rem;margin-bottom:1rem"><div style="font-weight:600;margin-bottom:.5rem">Export Encrypted Backup</div><div class="form-group" style="margin-bottom:.75rem"><label class="form-label">Backup Password</label><input class="input" type="password" id="backup-pw"></div><button class="btn btn-primary" id="export-encrypted">${Icons.Download(14)} Export .taskappbak</button></div><div class="card" style="padding:1.25rem;margin-bottom:1rem"><div style="font-weight:600;margin-bottom:.5rem">Export JSON</div><button class="btn btn-secondary" id="export-json">${Icons.Download(14)} Export JSON</button></div><div class="card" style="padding:1.25rem"><div style="font-weight:600;margin-bottom:.5rem">Import Backup</div><div class="form-group" style="margin-bottom:.75rem"><label class="form-label">Backup Password (if .taskappbak)</label><input class="input" type="password" id="import-pw"></div><label class="btn btn-secondary" style="cursor:pointer">${Icons.Upload(14)} Choose File<input type="file" id="import-file" accept=".taskappbak,.json" style="display:none"></label></div>`
+  } else if (_settingsSection === 'privacy') {
+    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">Data &amp; Privacy</h2>
+      <div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-weight:600;margin-bottom:.75rem">What is stored on this device</div>
+        <div style="font-size:.875rem;color:var(--text-secondary);line-height:1.8">
+          <ul style="margin:0;padding-left:1.25rem">
+            <li><strong>CRM records</strong> — AES-256-GCM encrypted vault in IndexedDB (<code>nexus_vault_v2</code>)</li>
+            <li><strong>Session key</strong> — non-extractable <code>CryptoKey</code> in IndexedDB (<code>nexus_keys_v1</code>); cleared automatically on tab close</li>
+            <li><strong>Documents &amp; conversations</strong> — individually AES-256-GCM encrypted in IndexedDB (<code>nexus_data_v1</code>)</li>
+            <li><strong>Vault file handle</strong> — optional <code>.vault</code> disk file pointer in IndexedDB (<code>nexus_fs_v1</code>); requires your permission each session</li>
+            <li><strong>Preferences</strong> — theme, AI preferences, dashboard layout in <code>localStorage</code> (non-sensitive, unencrypted)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-weight:600;margin-bottom:.75rem">What is NOT sent anywhere</div>
+        <div style="font-size:.875rem;color:var(--text-secondary);line-height:1.8">
+          <p style="margin:0 0 .5rem">This is a fully <strong>offline, local-only</strong> application. No data leaves your device.</p>
+          <ul style="margin:0;padding-left:1.25rem">
+            <li>No telemetry, analytics, or crash reports are collected</li>
+            <li>No cloud sync — all data stays in your browser on this device</li>
+            <li>AI uses only on-device models (Gemini Nano in Chrome, Phi-4-mini in Edge) — queries never leave your device</li>
+            <li>Your master password is never stored or transmitted; only a non-extractable derived key is kept in memory</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-weight:600;margin-bottom:.75rem">Your rights</div>
+        <div style="font-size:.875rem;color:var(--text-secondary);line-height:1.8">
+          <ul style="margin:0;padding-left:1.25rem">
+            <li><strong>Export all data</strong> — Settings → Data &amp; Backup → Export JSON</li>
+            <li><strong>Delete all data</strong> — Settings → Security → Danger Zone → Wipe Vault</li>
+            <li><strong>Disconnect vault file</strong> — Settings → Storage → Unlink File</li>
+            <li><strong>Portability</strong> — exported JSON can be imported into any future version of this app</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card" style="padding:1.25rem">
+        <div style="font-weight:600;margin-bottom:.75rem">Data controller</div>
+        <div style="font-size:.875rem;color:var(--text-secondary);line-height:1.8">
+          You are the sole data controller. This application processes data exclusively on your own device under your control. There is no third-party data processor involved in the offline build.
+        </div>
+      </div>`
   } else if (_settingsSection === 'tags') {
     const { tags } = state
     const tArr = tags as AnyRecord[]

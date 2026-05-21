@@ -233,6 +233,31 @@ export async function lockApp(reason = 'manual'): Promise<void> {
 // ── App root element ──────────────────────────────────────────────────────────
 const appEl = document.getElementById('app')!
 
+// ── Global error boundary (OWASP A10 — unhandled-rejection / window.error) ───
+window.addEventListener('unhandledrejection', (event) => {
+  const err = event.reason instanceof Error ? event.reason : new Error(String(event.reason))
+  console.error('[unhandledrejection]', err.name, err.message)
+  setState({
+    toast: {
+      id: Date.now(),
+      message: 'An unexpected error occurred. Please reload.',
+      type: 'error',
+    },
+  })
+  event.preventDefault()
+})
+
+window.addEventListener('error', (event) => {
+  console.error('[window.error]', event.message, event.filename, event.lineno)
+  setState({
+    toast: {
+      id: Date.now(),
+      message: 'An unexpected error occurred. Please reload.',
+      type: 'error',
+    },
+  })
+})
+
 // ── appRenderWorkspace ────────────────────────────────────────────────────────
 export function appRenderWorkspace(view: string): void {
   const state = getState()
@@ -377,32 +402,37 @@ export function fullRender(state: AppState): void {
     ? `<div style="position:relative;height:0;z-index:200"><div style="position:absolute;right:1.25rem;top:0">${renderNotifPanel(state.notifications as unknown as Array<{ id: string }>, true)}</div></div>`
     : ''
 
-  appEl.innerHTML = [
-    renderSidebar(state),
-    `<div class="main-content">`,
-    renderTopbar(state),
-    notifHTML,
-    `<div style="flex:1;overflow:hidden;display:flex;flex-direction:column" id="workspace-container">`,
-    wsHtml,
-    `</div></div>`,
-    renderBottomTabs(state),
-    renderAIPanel(aiPanelOpen),
-    commandOpen ? renderCommandPalette(commandOpen) : '',
-    confirmDialog
-      ? renderConfirmDialog(
-          confirmDialog as unknown as {
-            message: string
-            onConfirm: () => void
-            onCancel?: () => void
-          },
-        )
-      : '',
-    recordModal ? renderRecordModal(recordModal) : '',
-    _aiWizard?.open ? renderAIWizard() : renderNanoDownloadModal(),
-    docModal ? renderDocModal(state) : '',
-    fileViewer ? renderFileViewer(fileViewer as string | null) : '',
-    toast ? renderToast(toast) : '',
-  ].join('')
+  try {
+    appEl.innerHTML = [
+      renderSidebar(state),
+      `<div class="main-content">`,
+      renderTopbar(state),
+      notifHTML,
+      `<div style="flex:1;overflow:hidden;display:flex;flex-direction:column" id="workspace-container">`,
+      wsHtml,
+      `</div></div>`,
+      renderBottomTabs(state),
+      renderAIPanel(aiPanelOpen),
+      commandOpen ? renderCommandPalette(commandOpen) : '',
+      confirmDialog
+        ? renderConfirmDialog(
+            confirmDialog as unknown as {
+              message: string
+              onConfirm: () => void
+              onCancel?: () => void
+            },
+          )
+        : '',
+      recordModal ? renderRecordModal(recordModal) : '',
+      _aiWizard?.open ? renderAIWizard() : renderNanoDownloadModal(),
+      docModal ? renderDocModal(state) : '',
+      fileViewer ? renderFileViewer(fileViewer as string | null) : '',
+      toast ? renderToast(toast) : '',
+    ].join('')
+  } catch (err) {
+    console.error('[render error]', err)
+    appEl.innerHTML = '<div style="padding:2rem;color:red">Render error — please reload.</div>'
+  }
 
   bindSidebar()
   bindTopbar(state)

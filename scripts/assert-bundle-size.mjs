@@ -1,5 +1,5 @@
 // Last measured bundle sizes — update this comment after each build:offline run.
-// offline-browser-ai:  raw 421,687 B (~412 kB)  gzip 113,468 B (~111 kB)  (as of 2026-05-20)
+// offline-browser-ai:  raw 425,741 B (~416 kB)  gzip 114,478 B (~112 kB)  (as of 2026-05-20)
 // offline-no-ai:       not built                                            (as of 2026-05-20)
 // offline-internal-ai: not built                                            (as of 2026-05-20)
 //

@@ -1,4 +1,5 @@
 # Task App CRM — Strategic Direction Document
+
 **Purpose:** Handoff document for a new execution chat. Contains the full strategic conversation about where to take the app next — questions asked, answers given, concerns raised, decisions made, and recommendations. Includes both high-level strategy and technical detail.  
 **Date of conversation:** 2026-05-15  
 **Current file:** `taskapp.html` (~7,853 lines, single-file offline-first encrypted CRM)
@@ -10,6 +11,7 @@
 A fully offline-first, AES-256-GCM encrypted CRM delivered as a **single self-contained HTML file**. No build step, no npm, no framework, no server. Open in Chrome or Edge and it runs from `file://`. Optional AI via three tiers: Chrome Built-in AI (Gemini Nano), local Ollama, or cloud APIs (Anthropic/OpenAI/Google).
 
 **Core strengths identified:**
+
 - Runs from `file://` — no install, no server, no infrastructure
 - AES-256-GCM encryption with PBKDF2 at 600,000 iterations
 - Non-extractable CryptoKey in IndexedDB — key bytes never exist as a JavaScript string
@@ -30,6 +32,7 @@ A fully offline-first, AES-256-GCM encrypted CRM delivered as a **single self-co
 **Current version:** 17.2.0 (May 4, 2026)
 
 **Key capabilities relevant to this app:**
+
 - Reactive queries — subscribe to a query and UI updates automatically when data changes
 - Built-in schema migrations — increment version number, provide migration strategy, RxDB handles the rest
 - Field-level encryption plugin (`encryption-web-crypto`) using native WebCrypto API
@@ -38,6 +41,7 @@ A fully offline-first, AES-256-GCM encrypted CRM delivered as a **single self-co
 - Pluggable storage backends: IndexedDB, OPFS, React Native, Electron, Node.js
 
 **RxDB 17 new sync targets (April 2026):**
+
 - Google Drive replication plugin — syncs RxDB documents to a Google Drive folder; each document becomes one JSON file
 - OneDrive replication plugin — identical mechanism via Microsoft Graph API
 - WebRTC peer-to-peer signaling using the Drive folder as the signaling channel
@@ -58,6 +62,7 @@ Both plugins are designed for **one user across their own devices** — not mult
 **What it is:** A new app type in Power Platform (GA February 2026) that lets developers build custom web apps using React, Vue, or Blazor in any IDE and deploy them directly into Power Platform as governed assets.
 
 **Key capabilities:**
+
 - Native Dataverse connectivity via the Power Apps client library — no row ceiling, direct API access
 - Entra ID authentication handled by the platform runtime — no credential proxy needed
 - Data Loss Prevention (DLP) policies, ALM, and governance inherited automatically
@@ -65,6 +70,7 @@ Both plugins are designed for **one user across their own devices** — not mult
 - React/Vue/Blazor — full code-first development in VS Code
 
 **Current limitations:**
+
 - Not available in the Power Apps mobile app or Power Apps for Windows
 - No offline capability documented for Code Apps (offline is a Canvas App feature)
 - End users require Power Apps Premium license
@@ -80,6 +86,7 @@ Both plugins are designed for **one user across their own devices** — not mult
 **What it is:** OData v4 REST service — the data backend of Power Platform and Dynamics 365.
 
 **Key facts:**
+
 - Authentication: OAuth 2.0 via Microsoft Entra ID — no simple API keys
 - Rate limit: 6,000 requests per 5 minutes
 - Max rows per request: 5,000 (pagination via `@odata.nextLink`)
@@ -115,11 +122,11 @@ Both plugins are designed for **one user across their own devices** — not mult
 
 Three distinct professional contexts were identified during the conversation:
 
-| Context | Description |
-|---------|-------------|
-| ICS/OT environments | Works in industrial control systems / operational technology environments — frequently air-gapped or severely network-restricted. Field technicians need offline-capable tools that require no install and no server. |
-| Power Platform developer | Builds on Power Platform / Dynamics 365 / Dataverse professionally. Understands that ecosystem deeply. |
-| Open source ambition | Wants to build something others can fork with their database of choice. Identified as the most ambitious and longest-term path. |
+| Context                  | Description                                                                                                                                                                                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ICS/OT environments      | Works in industrial control systems / operational technology environments — frequently air-gapped or severely network-restricted. Field technicians need offline-capable tools that require no install and no server. |
+| Power Platform developer | Builds on Power Platform / Dynamics 365 / Dataverse professionally. Understands that ecosystem deeply.                                                                                                                |
+| Open source ambition     | Wants to build something others can fork with their database of choice. Identified as the most ambitious and longest-term path.                                                                                       |
 
 ---
 
@@ -128,6 +135,7 @@ Three distinct professional contexts were identified during the conversation:
 Three distinct deployment paths were identified and discussed:
 
 ### Option A — Keep current app as-is (offline only)
+
 **Architecture:** Single HTML file, `file://`, no build step, no sync, no server  
 **Users:** Solo users, ICS/OT field technicians, anyone needing fully private encrypted offline CRM  
 **Status:** Works today. No changes needed.  
@@ -137,6 +145,7 @@ Three distinct deployment paths were identified and discussed:
 ---
 
 ### Option B — RxDB fork with pluggable sync backend
+
 **Architecture:** Monorepo, Vite build pipeline, RxDB as data layer, sync adapter interface, outputs single bundled HTML file  
 **Users:** Solo users wanting cross-device sync, small teams with shared backend  
 **Sync targets:** Google Drive or OneDrive (single user across own devices), Supabase, CouchDB, custom REST endpoint (for teams)  
@@ -147,11 +156,12 @@ Three distinct deployment paths were identified and discussed:
 ---
 
 ### Option C — Power Apps Code App fork (Dataverse backend)
+
 **Architecture:** React Code App deployed into Power Platform, Power Apps client library for Dataverse connectivity, Entra ID auth  
 **Users:** Teams already in Microsoft 365 / Dynamics 365 / Power Platform ecosystem  
 **Strengths:** Dataverse as backend (team data sharing), Entra ID auth for free, DLP governance, no credential proxy needed, no row limits  
 **Limitations:** Power Apps Premium license required per user, browser-only (no mobile app support for Code Apps currently), no offline capability for Code Apps, Microsoft ecosystem dependency  
-**Note:** RxDB could still be used as the local data layer *inside* a Code App for offline-first behaviour — the two are not mutually exclusive
+**Note:** RxDB could still be used as the local data layer _inside_ a Code App for offline-first behaviour — the two are not mutually exclusive
 
 ---
 
@@ -160,6 +170,7 @@ Three distinct deployment paths were identified and discussed:
 Two paths were identified:
 
 ### PWA (Progressive Web App)
+
 Add `manifest.json` and service worker to existing app. Users add to home screen on iOS (Share → Add to Home Screen) and Android (automatic install banner). Opens in standalone mode — no browser chrome, looks native.
 
 **Pros:** Single codebase, updates go live immediately without app store review, typically 40–60% cost of native equivalent, no app store distribution required for known internal users  
@@ -167,6 +178,7 @@ Add `manifest.json` and service worker to existing app. Users add to home screen
 **Best for:** Open source general-purpose CRM, known internal team users deployed via link
 
 ### Capacitor
+
 Wraps the web app in a native shell. Compiles to proper `.ipa` (iOS) and `.apk` (Android) for app store distribution. Requires Mac + Xcode for iOS, Android Studio for Android.
 
 **Pros:** Full native hardware access (Bluetooth, NFC, camera, sensors), proper app store distribution, updates reach field technicians automatically, deep OS integration  
@@ -194,11 +206,11 @@ The core app calls only these four functions. It does not know or care what is b
 
 ### Three adapter implementations
 
-| Adapter | Backend | Who uses it |
-|---------|---------|------------|
-| `NullAdapter` | None — data stays in IDB vault | Offline-only users, ICS/OT air-gapped environments |
-| `RxDBAdapter` | RxDB → user's chosen backend (Supabase, Google Drive, CouchDB, custom REST) | Small teams, open source forks pointing at own backend |
-| `DataverseAdapter` | Power Apps client library → Dataverse | Teams in Microsoft ecosystem, Power Platform shops |
+| Adapter            | Backend                                                                     | Who uses it                                            |
+| ------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `NullAdapter`      | None — data stays in IDB vault                                              | Offline-only users, ICS/OT air-gapped environments     |
+| `RxDBAdapter`      | RxDB → user's chosen backend (Supabase, Google Drive, CouchDB, custom REST) | Small teams, open source forks pointing at own backend |
+| `DataverseAdapter` | Power Apps client library → Dataverse                                       | Teams in Microsoft ecosystem, Power Platform shops     |
 
 ### Proposed monorepo structure
 
@@ -221,6 +233,7 @@ The core app calls only these four functions. It does not know or care what is b
 ```
 
 ### What this means for maintenance
+
 - One set of UI components, one crypto layer, one AI system, one data model
 - Adapter implementations are typically 100–200 lines of code each
 - Bug fixes and features added to `core` propagate to all three targets automatically on next build
@@ -230,31 +243,31 @@ The core app calls only these four functions. It does not know or care what is b
 
 ## 7. Concerns and Open Questions
 
-| Concern | Status | Notes |
-|---------|--------|-------|
-| Single-file constraint vs build step | **Resolved** — owner is OK with a build pipeline that outputs a single HTML file | Vite can bundle everything into one self-contained HTML file. Deployment experience stays the same. |
-| Three separate forks vs one codebase | **Resolved** — one codebase with adapter pattern | Avoids triple maintenance burden |
-| RxDB Google Drive sync for teams | **Concern confirmed** — not suitable for multi-user teams | For team use, a real backend (Supabase, CouchDB, etc.) is required behind the RxDB adapter |
-| Dataverse credential exposure from browser | **Resolved via Code Apps** — Power Platform runtime handles auth | Direct browser-to-Dataverse calls are unsafe; Code Apps eliminate the need for a proxy |
-| OPFS not available from `file://` | **Accepted limitation** — documented in DECISIONS.md | OPFS requires secure context; IndexedDB is the correct storage backend for `file://` |
-| iOS PWA unreliability (Apple) | **Open** — Apple's position is unclear, EU investigating | Design PWA to work without standalone mode, treat standalone as enhancement |
-| RxDB encryption tier | **Noted** — free tier uses crypto-js, not native WebCrypto | Premium plugin uses native WebCrypto; current app's encryption is already stronger than RxDB free tier |
-| Dataverse storage cost | **Noted** — $40/GB/month | Worth communicating to any enterprise customer considering Dataverse as the sync backend |
-| Code Apps offline capability | **Gap confirmed** — Code Apps have no built-in offline support | If offline + Dataverse is required, RxDB inside a Code App is the solution |
+| Concern                                    | Status                                                                           | Notes                                                                                                  |
+| ------------------------------------------ | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Single-file constraint vs build step       | **Resolved** — owner is OK with a build pipeline that outputs a single HTML file | Vite can bundle everything into one self-contained HTML file. Deployment experience stays the same.    |
+| Three separate forks vs one codebase       | **Resolved** — one codebase with adapter pattern                                 | Avoids triple maintenance burden                                                                       |
+| RxDB Google Drive sync for teams           | **Concern confirmed** — not suitable for multi-user teams                        | For team use, a real backend (Supabase, CouchDB, etc.) is required behind the RxDB adapter             |
+| Dataverse credential exposure from browser | **Resolved via Code Apps** — Power Platform runtime handles auth                 | Direct browser-to-Dataverse calls are unsafe; Code Apps eliminate the need for a proxy                 |
+| OPFS not available from `file://`          | **Accepted limitation** — documented in DECISIONS.md                             | OPFS requires secure context; IndexedDB is the correct storage backend for `file://`                   |
+| iOS PWA unreliability (Apple)              | **Open** — Apple's position is unclear, EU investigating                         | Design PWA to work without standalone mode, treat standalone as enhancement                            |
+| RxDB encryption tier                       | **Noted** — free tier uses crypto-js, not native WebCrypto                       | Premium plugin uses native WebCrypto; current app's encryption is already stronger than RxDB free tier |
+| Dataverse storage cost                     | **Noted** — $40/GB/month                                                         | Worth communicating to any enterprise customer considering Dataverse as the sync backend               |
+| Code Apps offline capability               | **Gap confirmed** — Code Apps have no built-in offline support                   | If offline + Dataverse is required, RxDB inside a Code App is the solution                             |
 
 ---
 
 ## 8. Decisions Made
 
-| # | Decision | Rationale |
-|---|----------|-----------|
-| 1 | Build pipeline producing single HTML file is acceptable | Unlocks RxDB, TypeScript, proper adapter interface while preserving single-file deployment |
-| 2 | One codebase with adapter interface, not three forks | Maintenance burden of three forks is not justified; adapter pattern solves the same problem cleanly |
-| 3 | PWA for general/open source path | Single codebase, no app store friction, immediate updates, sufficient for CRM use case |
-| 4 | Capacitor for ICS/OT fork specifically | Hardware access (Bluetooth, NFC, camera), proper offline storage, app store distribution for field technician update delivery |
-| 5 | Open source under MIT or Apache 2.0 | Enables community forks with own database backends |
-| 6 | `NullAdapter` as the default | Preserves current offline-only behaviour as the baseline; sync is opt-in |
-| 7 | User guide deferred until production | Confirmed by owner — not needed yet |
+| #   | Decision                                                | Rationale                                                                                                                     |
+| --- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Build pipeline producing single HTML file is acceptable | Unlocks RxDB, TypeScript, proper adapter interface while preserving single-file deployment                                    |
+| 2   | One codebase with adapter interface, not three forks    | Maintenance burden of three forks is not justified; adapter pattern solves the same problem cleanly                           |
+| 3   | PWA for general/open source path                        | Single codebase, no app store friction, immediate updates, sufficient for CRM use case                                        |
+| 4   | Capacitor for ICS/OT fork specifically                  | Hardware access (Bluetooth, NFC, camera), proper offline storage, app store distribution for field technician update delivery |
+| 5   | Open source under MIT or Apache 2.0                     | Enables community forks with own database backends                                                                            |
+| 6   | `NullAdapter` as the default                            | Preserves current offline-only behaviour as the baseline; sync is opt-in                                                      |
+| 7   | User guide deferred until production                    | Confirmed by owner — not needed yet                                                                                           |
 
 ---
 
@@ -284,17 +297,17 @@ These are the recommendations from the conversation in the order they were discu
 
 ## 10. Key References from Conversation
 
-| Technology | Source confirmed | Key finding |
-|-----------|-----------------|-------------|
-| RxDB 17.2.0 | npmjs.com, rxdb.info | Google Drive/OneDrive sync is beta, single-user only |
-| RxDB Google Drive plugin | rxdb.info docs | Uses Drive folder as sync target and WebRTC signaling channel; polls for changes |
-| Power Apps Code Apps GA | Microsoft docs, 2026 release wave | GA February 2026; no offline support; Premium license required |
-| Dataverse Web API | Microsoft docs | OData v4, 6,000 req/5 min, 5,000 row limit, OAuth via Entra ID |
-| PWA vs Capacitor 2026 | exe-squared.co.uk, magicbell.com | PWA iOS limitations real but manageable for internal users; Capacitor for hardware access needs |
-| QNOPY | qnopy.com | Production proof of offline-first field data sync model |
-| Cyolo | cyolo.io | Relevant for enterprise/ICS team scenarios; trustless architecture aligns with app's encryption philosophy |
-| vibe.powerapps.com | Microsoft | AI Code App generation — preview only, not production ready as of May 2026 |
-| Dataverse storage cost | Microsoft pricing | $40/GB/month — material cost for large CRM datasets |
+| Technology               | Source confirmed                  | Key finding                                                                                                |
+| ------------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| RxDB 17.2.0              | npmjs.com, rxdb.info              | Google Drive/OneDrive sync is beta, single-user only                                                       |
+| RxDB Google Drive plugin | rxdb.info docs                    | Uses Drive folder as sync target and WebRTC signaling channel; polls for changes                           |
+| Power Apps Code Apps GA  | Microsoft docs, 2026 release wave | GA February 2026; no offline support; Premium license required                                             |
+| Dataverse Web API        | Microsoft docs                    | OData v4, 6,000 req/5 min, 5,000 row limit, OAuth via Entra ID                                             |
+| PWA vs Capacitor 2026    | exe-squared.co.uk, magicbell.com  | PWA iOS limitations real but manageable for internal users; Capacitor for hardware access needs            |
+| QNOPY                    | qnopy.com                         | Production proof of offline-first field data sync model                                                    |
+| Cyolo                    | cyolo.io                          | Relevant for enterprise/ICS team scenarios; trustless architecture aligns with app's encryption philosophy |
+| vibe.powerapps.com       | Microsoft                         | AI Code App generation — preview only, not production ready as of May 2026                                 |
+| Dataverse storage cost   | Microsoft pricing                 | $40/GB/month — material cost for large CRM datasets                                                        |
 
 ---
 
@@ -321,11 +334,11 @@ This section describes exactly how to migrate `taskapp.html` into the monorepo s
 
 The migration has three sequential phases:
 
-| Phase | What happens | Risk |
-|-------|-------------|------|
-| 1. Extract core | Split `taskapp.html` into ES modules without changing any logic | Medium — global scope coupling must be resolved |
-| 2. Add build step | Configure Vite + `vite-plugin-singlefile` to output a single HTML file from modules | Low — well-established tool |
-| 3. Write adapter interface | Define the four-function contract and implement `NullAdapter` (offline-only, current behaviour) | Low — minimal new code, no behaviour change |
+| Phase                      | What happens                                                                                    | Risk                                            |
+| -------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1. Extract core            | Split `taskapp.html` into ES modules without changing any logic                                 | Medium — global scope coupling must be resolved |
+| 2. Add build step          | Configure Vite + `vite-plugin-singlefile` to output a single HTML file from modules             | Low — well-established tool                     |
+| 3. Write adapter interface | Define the four-function contract and implement `NullAdapter` (offline-only, current behaviour) | Low — minimal new code, no behaviour change     |
 
 **Critical principle throughout:** The app must remain fully functional after every phase. Do not start Phase 2 until Phase 1 produces a working app. Do not start Phase 3 until Phase 2 produces a working single HTML file.
 
@@ -337,15 +350,15 @@ The migration has three sequential phases:
 
 The current `taskapp.html` uses 15 `<script>` blocks in global scope. Every function and variable is global. The coupling map from the file shows:
 
-| Symbol | Used by | Count |
-|--------|---------|-------|
-| `escH()` | All view render functions | 121 call sites |
-| `getState()` / `setState()` | Views, AI, auth, bootstrap | 83 call sites |
-| `Icons.*` | All view render functions | 115 call sites |
-| `_aiPrefs` | AI system throughout | 97 references |
-| `dbCreate` / `dbUpdate` / `dbDelete` | All view bind functions | 43 call sites |
-| `showToast()` | Throughout the app | 66 call sites |
-| `_dbKey` / `_dbData` | Crypto, DB, views | Core shared state |
+| Symbol                               | Used by                    | Count             |
+| ------------------------------------ | -------------------------- | ----------------- |
+| `escH()`                             | All view render functions  | 121 call sites    |
+| `getState()` / `setState()`          | Views, AI, auth, bootstrap | 83 call sites     |
+| `Icons.*`                            | All view render functions  | 115 call sites    |
+| `_aiPrefs`                           | AI system throughout       | 97 references     |
+| `dbCreate` / `dbUpdate` / `dbDelete` | All view bind functions    | 43 call sites     |
+| `showToast()`                        | Throughout the app         | 66 call sites     |
+| `_dbKey` / `_dbData`                 | Crypto, DB, views          | Core shared state |
 
 Modules cannot be extracted one at a time without ordering the dependency graph. Extract in dependency order — deepest dependencies first, consuming modules last.
 
@@ -454,45 +467,45 @@ Every function in the current app is global. Converting means adding `export` to
 ```js
 // BEFORE (global scope in taskapp.html)
 function escH(s) {
-  return String(s ?? '').replace(/&/g, '&amp;') /* ... */;
+  return String(s ?? '').replace(/&/g, '&amp;') /* ... */
 }
 
 // AFTER (packages/core/src/utils.js)
 export function escH(s) {
-  return String(s ?? '').replace(/&/g, '&amp;') /* ... */;
+  return String(s ?? '').replace(/&/g, '&amp;') /* ... */
 }
 ```
 
 ```js
 // BEFORE (render function in global scope)
 function renderFoo(state) {
-  return `<div>${escH(state.name)}</div>`;
+  return `<div>${escH(state.name)}</div>`
 }
 
 // AFTER (packages/core/src/views/foo.js)
-import { escH } from '../utils.js';
+import { escH } from '../utils.js'
 export function renderFoo(state) {
-  return `<div>${escH(state.name)}</div>`;
+  return `<div>${escH(state.name)}</div>`
 }
 ```
 
-#### 12.2.4 The one real refactor — resolving the _dbKey circular dependency
+#### 12.2.4 The one real refactor — resolving the \_dbKey circular dependency
 
-`idb-data.js` currently reaches into the global scope for `_dbKey` to call `aesEncrypt(_dbKey, record)`. In a module system this creates a circular dependency (idb-data imports crypto, db imports idb-data, db owns _dbKey). Fix: pass `cryptoKey` as a parameter.
+`idb-data.js` currently reaches into the global scope for `_dbKey` to call `aesEncrypt(_dbKey, record)`. In a module system this creates a circular dependency (idb-data imports crypto, db imports idb-data, db owns \_dbKey). Fix: pass `cryptoKey` as a parameter.
 
 ```js
 // BEFORE
 async function _idbPutRecord(storeName, record) {
-  const enc = await aesEncrypt(_dbKey, record); // _dbKey from global scope
+  const enc = await aesEncrypt(_dbKey, record) // _dbKey from global scope
 }
 
 // AFTER (packages/core/src/idb-data.js)
 export async function _idbPutRecord(storeName, record, cryptoKey) {
-  const enc = await aesEncrypt(cryptoKey, record);
+  const enc = await aesEncrypt(cryptoKey, record)
 }
 
 // In db.js — all callers pass _dbKey explicitly
-await _idbPutRecord(storeName, item, _dbKey);
+await _idbPutRecord(storeName, item, _dbKey)
 ```
 
 This is the only structural refactor required. All other extractions are mechanical search-and-replace of global references to imports.
@@ -502,7 +515,7 @@ This is the only structural refactor required. All other extractions are mechani
 The `<style>` block (lines 29–2608 in current file) moves to `packages/core/src/styles/main.css`. Imported in `main.js`:
 
 ```js
-import './styles/main.css';
+import './styles/main.css'
 ```
 
 `vite-plugin-singlefile` inlines it back into the output HTML. Visually identical result.
@@ -513,9 +526,9 @@ import './styles/main.css';
 
 ```js
 // packages/core/src/main.js — THIS ORDER IS REQUIRED
-import './trusted-types.js';   // patches Element.prototype.innerHTML first
-import './styles/main.css';
-import { initTheme } from './state.js';
+import './trusted-types.js' // patches Element.prototype.innerHTML first
+import './styles/main.css'
+import { initTheme } from './state.js'
 // ... all other imports after
 ```
 
@@ -565,8 +578,8 @@ taskapp/
 
 ```js
 // apps/offline/vite.config.js
-import { defineConfig }   from 'vite';
-import { viteSingleFile } from 'vite-plugin-singlefile';
+import { defineConfig } from 'vite'
+import { viteSingleFile } from 'vite-plugin-singlefile'
 
 export default defineConfig({
   root: '.',
@@ -583,11 +596,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@core':    '../../packages/core/src',
+      '@core': '../../packages/core/src',
       '@adapter': '../../packages/adapter-null/src',
     },
   },
-});
+})
 ```
 
 #### 12.3.4 Entry HTML
@@ -596,19 +609,25 @@ export default defineConfig({
 <!-- apps/offline/index.html -->
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <!-- generate-csp.mjs replaces {{SCRIPT_HASHES}} after build -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src {{SCRIPT_HASHES}} 'strict-dynamic'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; worker-src blob:; object-src 'none'; base-uri 'none'; trusted-types nexus-crm nexus-crm-raw; require-trusted-types-for 'script';">
-  <meta http-equiv="Referrer-Policy" content="no-referrer">
-  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=()">
-  <title>Task App CRM</title>
-</head>
-<body>
-  <div id="app"></div>
-  <script type="module" src="../../packages/core/src/main.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- generate-csp.mjs replaces {{SCRIPT_HASHES}} after build -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src {{SCRIPT_HASHES}} 'strict-dynamic'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; worker-src blob:; object-src 'none'; base-uri 'none'; trusted-types nexus-crm nexus-crm-raw; require-trusted-types-for 'script';"
+    />
+    <meta http-equiv="Referrer-Policy" content="no-referrer" />
+    <meta
+      http-equiv="Permissions-Policy"
+      content="camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=()"
+    />
+    <title>Task App CRM</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="../../packages/core/src/main.js"></script>
+  </body>
 </html>
 ```
 
@@ -620,10 +639,10 @@ export default defineConfig({
   "private": true,
   "workspaces": ["packages/*", "apps/*"],
   "scripts": {
-    "build:offline":   "vite build --config apps/offline/vite.config.js  && node generate-csp.mjs dist/offline/index.html",
-    "build:sync":      "vite build --config apps/sync/vite.config.js     && node generate-csp.mjs dist/sync/index.html",
+    "build:offline": "vite build --config apps/offline/vite.config.js  && node generate-csp.mjs dist/offline/index.html",
+    "build:sync": "vite build --config apps/sync/vite.config.js     && node generate-csp.mjs dist/sync/index.html",
     "build:dataverse": "vite build --config apps/dataverse/vite.config.js",
-    "build:all":       "npm run build:offline && npm run build:sync && npm run build:dataverse"
+    "build:all": "npm run build:offline && npm run build:sync && npm run build:dataverse"
   }
 }
 ```
@@ -638,12 +657,12 @@ After `npm run build:offline`, `dist/offline/index.html` is a single self-contai
 
 Three locations in `taskapp.html` are where an adapter intercepts the data flow:
 
-| Hook | Current code | Lines | Adapter function |
-|------|-------------|-------|-----------------|
-| Load on unlock | `_dbData = await loadVault(_dbKey)` | 3046 | `pull()` |
-| Save on every write | `saveVault` wrapped by `fsWriteVault` hook | 3357–3362 | `push()` |
-| Real-time remote changes | Does not exist yet | — | `stream()` |
-| App reset | `_vaultMetaSet` cleared in reset handler | ~4534 | `clear()` |
+| Hook                     | Current code                               | Lines     | Adapter function |
+| ------------------------ | ------------------------------------------ | --------- | ---------------- |
+| Load on unlock           | `_dbData = await loadVault(_dbKey)`        | 3046      | `pull()`         |
+| Save on every write      | `saveVault` wrapped by `fsWriteVault` hook | 3357–3362 | `push()`         |
+| Real-time remote changes | Does not exist yet                         | —         | `stream()`       |
+| App reset                | `_vaultMetaSet` cleared in reset handler   | ~4534     | `clear()`        |
 
 The `fsWriteVault` hook at line 3357 already demonstrates the exact wrapping pattern. The adapter reuses it.
 
@@ -655,16 +674,22 @@ export class SyncAdapter {
   // Pull remote changes after loading local vault on unlock.
   // checkpoint: opaque — null on first run.
   // Returns { records: { [store]: Record[] }, checkpoint: any }
-  async pull(checkpoint) { return { records: {}, checkpoint: null }; }
+  async pull(checkpoint) {
+    return { records: {}, checkpoint: null }
+  }
 
   // Push local changes to remote after every dbFlush (debounced 300ms).
   // changes: { [store]: Record[] }
   // Returns { conflicts: Record[] }
-  async push(changes) { return { conflicts: [] }; }
+  async push(changes) {
+    return { conflicts: [] }
+  }
 
   // Start listening for remote changes. Returns unsubscribe function.
   // Calls onRemoteChange({ [store]: Record[] }) on remote mutation.
-  stream(onRemoteChange) { return () => {}; }
+  stream(onRemoteChange) {
+    return () => {}
+  }
 
   // Wipe remote state on full app reset.
   async clear() {}
@@ -675,7 +700,7 @@ export class SyncAdapter {
 
 ```js
 // packages/adapter-null/src/index.js
-import { SyncAdapter } from '@core/adapter-interface.js';
+import { SyncAdapter } from '@core/adapter-interface.js'
 
 // All four methods inherited from SyncAdapter are already no-ops.
 // No overrides needed. Behaviour identical to current taskapp.html.
@@ -687,32 +712,34 @@ export class NullAdapter extends SyncAdapter {}
 ```js
 // db.js additions (no existing logic changes)
 
-let _adapter = null;
-export function setAdapter(a) { _adapter = a; }
+let _adapter = null
+export function setAdapter(a) {
+  _adapter = a
+}
 
 // dbInit — add after _dbData is loaded
 if (_adapter) {
-  const checkpoint = await _vaultMetaGet('sync_checkpoint').catch(() => null);
-  const { records, checkpoint: next } = await _adapter.pull(checkpoint).catch(e => {
-    console.warn('[sync] pull failed — working offline:', e?.message);
-    return { records: {}, checkpoint };
-  });
+  const checkpoint = await _vaultMetaGet('sync_checkpoint').catch(() => null)
+  const { records, checkpoint: next } = await _adapter.pull(checkpoint).catch((e) => {
+    console.warn('[sync] pull failed — working offline:', e?.message)
+    return { records: {}, checkpoint }
+  })
   Object.entries(records).forEach(([store, recs]) => {
-    if (!_dbData[store]) _dbData[store] = [];
-    recs.forEach(r => {
-      const i = _dbData[store].findIndex(x => x.id === r.id);
-      if (i === -1) _dbData[store].push(r);
-      else if (r.updatedAt > _dbData[store][i].updatedAt) _dbData[store][i] = r;
-    });
-  });
-  if (next) await _vaultMetaSet('sync_checkpoint', next).catch(() => {});
+    if (!_dbData[store]) _dbData[store] = []
+    recs.forEach((r) => {
+      const i = _dbData[store].findIndex((x) => x.id === r.id)
+      if (i === -1) _dbData[store].push(r)
+      else if (r.updatedAt > _dbData[store][i].updatedAt) _dbData[store][i] = r
+    })
+  })
+  if (next) await _vaultMetaSet('sync_checkpoint', next).catch(() => {})
 }
 
 // dbFlush — add after saveVault call
 if (_adapter) {
-  _adapter.push(_buildCrmPayload()).catch(e =>
-    console.warn('[sync] push failed — data safe locally:', e?.message)
-  );
+  _adapter
+    .push(_buildCrmPayload())
+    .catch((e) => console.warn('[sync] push failed — data safe locally:', e?.message))
 }
 ```
 
@@ -720,37 +747,37 @@ if (_adapter) {
 
 ```js
 // In afterUnlock (main.js)
-const _unsubscribeSync = _adapter.stream(changes => {
+const _unsubscribeSync = _adapter.stream((changes) => {
   Object.entries(changes).forEach(([store, recs]) => {
-    recs.forEach(r => {
-      const i = _dbData[store]?.findIndex(x => x.id === r.id) ?? -1;
-      if (i === -1) getStore(store).push(r);
-      else if (r.updatedAt > _dbData[store][i].updatedAt) _dbData[store][i] = r;
-    });
-  });
-  reloadData();
-});
+    recs.forEach((r) => {
+      const i = _dbData[store]?.findIndex((x) => x.id === r.id) ?? -1
+      if (i === -1) getStore(store).push(r)
+      else if (r.updatedAt > _dbData[store][i].updatedAt) _dbData[store][i] = r
+    })
+  })
+  reloadData()
+})
 
 // In reset-app handler (before location.reload())
-await _adapter.clear().catch(() => {});
+await _adapter.clear().catch(() => {})
 ```
 
 #### 12.4.6 App entry points — one per build target, picks its adapter
 
 ```js
 // apps/offline/src/entry.js
-import { NullAdapter } from '@adapter/index.js';
-import { setAdapter }  from '@core/db.js';
-import { init }        from '@core/main.js';
-setAdapter(new NullAdapter());
-init();
+import { NullAdapter } from '@adapter/index.js'
+import { setAdapter } from '@core/db.js'
+import { init } from '@core/main.js'
+setAdapter(new NullAdapter())
+init()
 
 // apps/sync/src/entry.js
-import { RxDBAdapter } from '@adapter/index.js';
-import { setAdapter }  from '@core/db.js';
-import { init }        from '@core/main.js';
-setAdapter(new RxDBAdapter());
-init();
+import { RxDBAdapter } from '@adapter/index.js'
+import { setAdapter } from '@core/db.js'
+import { init } from '@core/main.js'
+setAdapter(new RxDBAdapter())
+init()
 ```
 
 Each `vite.config.js` sets `@adapter` to resolve to its own package. The `core` package never imports a concrete adapter.
@@ -759,16 +786,16 @@ Each `vite.config.js` sets `@adapter` to resolve to its own package. The `core` 
 
 ### 12.5 Estimated Effort
 
-| Phase | Work | Time |
-|-------|------|------|
-| Phase 1 — Extract 16 modules | Convert global scope to ES modules, fix _dbKey circular dep, update all 121+ escH call sites to imports | 3–5 days |
-| Phase 2 — Vite build | vite.config.js per target, root package.json, update generate-csp.mjs path | 1 day |
-| Phase 3 — NullAdapter + interface | adapter-interface.js, NullAdapter, 2 db.js additions, main.js wiring | 1 day |
-| **Total: working offline monorepo app** | | **5–7 days** |
-| RxDB adapter (Supabase reference) | pull/push/stream against RxDB + Supabase | 3–5 days |
-| PWA (manifest + service worker) | manifest.json, sw.js | 0.5 days |
-| Capacitor mobile wrapper | capacitor.config.json, iOS/Android platforms, camera plugin | 1–2 days |
-| Dataverse Code App adapter | Power Apps client library integration | 5–10 days |
+| Phase                                   | Work                                                                                                     | Time         |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------ |
+| Phase 1 — Extract 16 modules            | Convert global scope to ES modules, fix \_dbKey circular dep, update all 121+ escH call sites to imports | 3–5 days     |
+| Phase 2 — Vite build                    | vite.config.js per target, root package.json, update generate-csp.mjs path                               | 1 day        |
+| Phase 3 — NullAdapter + interface       | adapter-interface.js, NullAdapter, 2 db.js additions, main.js wiring                                     | 1 day        |
+| **Total: working offline monorepo app** |                                                                                                          | **5–7 days** |
+| RxDB adapter (Supabase reference)       | pull/push/stream against RxDB + Supabase                                                                 | 3–5 days     |
+| PWA (manifest + service worker)         | manifest.json, sw.js                                                                                     | 0.5 days     |
+| Capacitor mobile wrapper                | capacitor.config.json, iOS/Android platforms, camera plugin                                              | 1–2 days     |
+| Dataverse Code App adapter              | Power Apps client library integration                                                                    | 5–10 days    |
 
 ---
 

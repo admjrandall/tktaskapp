@@ -9,6 +9,7 @@ Thumbs.db
 
 # Tool caches
 .eslintcache
+*.tsbuildinfo
 
 # Scratch / session artifacts
 lint-output.txt
