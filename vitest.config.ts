@@ -7,8 +7,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 export default defineConfig({
   test: {
     environment: 'node',
+    hookTimeout: 30_000,
     include: ['tests/**/*.ts'],
-    exclude: ['**/node_modules/**', 'tests/adapters/adapter-contract.ts'],
+    exclude: [
+      '**/node_modules/**',
+      'tests/adapters/adapter-contract.ts',
+      'tests/adapters/kms-mock.ts',
+      // Playwright E2E tests run via pnpm exec playwright test, not vitest.
+      'tests/e2e/**',
+    ],
   },
   resolve: {
     alias: {

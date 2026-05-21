@@ -19,7 +19,8 @@
     "apps/*/*.ts",
     "server/src/**/*.ts",
     "scripts/**/*.mjs",
-    "config/**/*.ts"
+    "config/**/*.ts",
+    "playwright.config.ts"
   ],
   "exclude": ["node_modules", "dist", "apps/*/vite.config.ts"]
 }
