@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+  <!-- ── App identity ──────────────────────────────────────────────────── -->
+  <key>CFBundleDisplayName</key>
+  <string>Task App CRM</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.taskappcrm.app</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$(MARKETING_VERSION)</string>
+  <key>CFBundleVersion</key>
+  <string>$(CURRENT_PROJECT_VERSION)</string>
+
+  <!-- ── App Transport Security — cleartext HTTP prohibited ────────────── -->
+  <!--
+    NSAllowsArbitraryLoads MUST remain false for all production builds.
+    The offline profile makes no network requests. Any domain exception entries
+    added here must be justified in the App Store privacy questionnaire.
+    ATS enforcement is the iOS complement to Android network_security_config.xml.
+  -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <false/>
+  </dict>
+
+  <!-- ── WKWebView navigation ───────────────────────────────────────────── -->
+  <!--
+    Capacitor requires NSAllowsLocalNetworking for local bundle loading.
+    No remote domains are permitted in the offline profile.
+  -->
+  <key>NSAllowsLocalNetworking</key>
+  <true/>
+
+  <!-- ── Privacy — usage description strings ───────────────────────────── -->
+  <!--
+    Add NSCameraUsageDescription if the camera Capacitor plugin is enabled.
+    Add NSFaceIDUsageDescription when biometric unlock is implemented.
+    Do not add strings for capabilities the app does not use — App Review rejects
+    apps with usage strings for features not present in the binary.
+  -->
+  <!-- <key>NSCameraUsageDescription</key>
+  <string>Used to attach photos to CRM records.</string> -->
+
+  <!-- <key>NSFaceIDUsageDescription</key>
+  <string>Unlock your encrypted vault with Face ID.</string> -->
+
+  <!-- ── Supported orientations (universal) ─────────────────────────────── -->
+  <key>UISupportedInterfaceOrientations</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+  <key>UISupportedInterfaceOrientations~ipad</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+
+  <!-- ── Capacitor required keys ────────────────────────────────────────── -->
+  <key>NSBonjourServices</key>
+  <array/>
+
+</dict>
+</plist>

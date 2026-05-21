@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
   build:
@@ -31,7 +31,7 @@ jobs:
       - name: Build offline
         run: pnpm run build:offline
 
-      - name: Build sync
+      - name: Build pwa-sync
         run: pnpm run build:sync
 
       - name: Build dataverse

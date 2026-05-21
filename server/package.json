@@ -1,0 +1,16 @@
+{
+  "name": "@tktaskapp/server",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Task App CRM enterprise server — scaffold stub (backend implementation pending)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.20.0",
+    "pnpm": ">=11"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --outDir dist",
+    "dev": "echo 'Server not yet implemented — see server/src/ for interface stubs'"
+  }
+}

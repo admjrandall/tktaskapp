@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  iOS 17+ Privacy Manifest (PrivacyInfo.xcprivacy)
+  Required for App Store submission since May 2024 (Xcode 15.3+).
+  See: https://developer.apple.com/documentation/bundleresources/privacy_manifest_files
+
+  Task App CRM — offline profile:
+    - All user data is stored exclusively on-device in the encrypted vault.
+    - No data is transmitted to any server, analytics platform, or third party.
+    - No tracking occurs. No advertising identifiers are accessed.
+    - The app does not use any required-reason APIs beyond those declared below.
+-->
+<plist version="1.0">
+<dict>
+
+  <!-- ── Tracking ──────────────────────────────────────────────────────── -->
+  <!--
+    NSPrivacyTracking: false — the app does not track users as defined by
+    Apple's App Tracking Transparency policy.
+  -->
+  <key>NSPrivacyTracking</key>
+  <false/>
+
+  <!-- ── Tracking domains ───────────────────────────────────────────────── -->
+  <!--
+    NSPrivacyTrackingDomains: empty — no external network connections are made
+    in the offline profile.
+  -->
+  <key>NSPrivacyTrackingDomains</key>
+  <array>
+  </array>
+
+  <!-- ── Collected data types ───────────────────────────────────────────── -->
+  <!--
+    NSPrivacyCollectedDataTypes: empty — Task App CRM does not collect, transmit,
+    or share any data. All CRM data lives in the on-device encrypted vault only.
+  -->
+  <key>NSPrivacyCollectedDataTypes</key>
+  <array/>
+
+  <!-- ── Required-reason API usage ─────────────────────────────────────── -->
+  <!--
+    Declare any required-reason APIs used by the app or its SDKs.
+    If biometric unlock (LocalAuthentication) is added, add the relevant entry.
+    If @capacitor/filesystem accesses file timestamps, add NSPrivacyAccessedAPICategoryFileTimestamp.
+
+    Example (uncomment when biometric unlock is implemented):
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>CA92.1</string>
+      </array>
+    </dict>
+  -->
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array/>
+
+</dict>
+</plist>

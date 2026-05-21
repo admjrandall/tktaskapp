@@ -1,27 +1,25 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
     "useDefineForClassFields": true,
-    "skipLibCheck": true,
     "noEmit": true,
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": [],
     "paths": {
-      "@core/*":             ["./packages/core/src/*"],
-      "@adapter-null/*":     ["./packages/adapter-null/src/*"],
-      "@adapter-rxdb/*":     ["./packages/adapter-rxdb/src/*"],
-      "@adapter-dataverse/*":["./packages/adapter-dataverse/src/*"]
+      "@config/*": ["./config/*"],
+      "@core/*": ["./packages/core/src/*"],
+      "@adapter-null/*": ["./packages/adapter-null/src/*"],
+      "@adapter-rxdb/*": ["./packages/adapter-rxdb/src/*"],
+      "@adapter-dataverse/*": ["./packages/adapter-dataverse/src/*"],
+      "@adapter-mobile-native/*": ["./packages/adapter-mobile-native/src/*"]
     }
   },
   "include": [
     "packages/*/src/**/*.ts",
     "apps/*/src/**/*.ts",
-    "apps/*/*.ts"
+    "apps/*/*.ts",
+    "server/src/**/*.ts",
+    "scripts/**/*.mjs",
+    "config/**/*.ts"
   ],
   "exclude": ["node_modules", "dist", "apps/*/vite.config.ts"]
 }

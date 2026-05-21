@@ -1,203 +1,381 @@
 // ── APP BOOTSTRAP ─────────────────────────────────────────────────────────────
 // Extracted from taskapp.html lines ~7682–7851.
 // MUST import trusted-types.js first — it patches innerHTML via a side-effect IIFE.
-import './trusted-types.js';
-import './styles/main.css';
+import './security/trusted-types.js'
+import './styles/main.css'
 
-import { _rawPolicy } from './trusted-types.js';
+import { _rawPolicy } from './security/trusted-types.js'
 import {
-  initTheme, setState, getState, subscribe, reloadData, navigate,
-  setAIHooks, showConfirm, showToast as _showToast, setTheme,
-} from './state.js';
-import type { AppState } from './state.js';
-import { dbInit, checkDueDates, markNotificationRead, markAllNotificationsRead, softDelete, getAdapter, getStore, clearDbState } from './db.js';
-import { _migrateLocalStorageToIDB, verifyPassword } from './vault.js';
-import { loadSessionKey, cacheSessionKey, clearSessionKey, hasSessionSentinel } from './session.js';
-import { auditLog, setAuditHooks, flushAuditBuffer, loadAuditLog, exportAuditCSV, exportAuditJSON, purgeAuditLog } from './audit.js';
-import { setAuthIDBHooks, setAuthAuditHook } from './auth.js';
-import { setMFAHooks, loadMFAStatus, enableTOTP, disableTOTP, generateNewTOTPSecret } from './mfa.js';
-import { setWebAuthnHooks, loadPasskeys, addPasskey, removePasskey } from './webauthn.js';
-import { fsInit, isFsReady, getFsLastSave, fsPickFile, fsWriteVault, fsUnlink } from './fs.js';
+  initTheme,
+  setState,
+  getState,
+  subscribe,
+  reloadData,
+  navigate,
+  setAIHooks,
+  showConfirm,
+  showToast as _showToast,
+  setTheme,
+} from './state.js'
+import type { AppState } from './state.js'
+import {
+  dbInit,
+  checkDueDates,
+  markNotificationRead,
+  markAllNotificationsRead,
+  softDelete,
+  getAdapter,
+  getStore,
+  clearDbState,
+} from './storage/db.js'
+import { _migrateLocalStorageToIDB, verifyPassword } from './security/vault.js'
+import {
+  loadSessionKey,
+  cacheSessionKey,
+  clearSessionKey,
+  hasSessionSentinel,
+} from './security/session.js'
+import {
+  auditLog,
+  setAuditHooks,
+  flushAuditBuffer,
+  loadAuditLog,
+  exportAuditCSV,
+  exportAuditJSON,
+  purgeAuditLog,
+} from './security/audit.js'
+import { setAuthIDBHooks, setAuthAuditHook } from './security/auth.js'
+import {
+  setMFAHooks,
+  loadMFAStatus,
+  enableTOTP,
+  disableTOTP,
+  generateNewTOTPSecret,
+} from './security/mfa.js'
+import { setWebAuthnHooks, loadPasskeys, addPasskey, removePasskey } from './security/webauthn.js'
+import {
+  fsInit,
+  isFsReady,
+  getFsLastSave,
+  fsPickFile,
+  fsWriteVault,
+  fsUnlink,
+} from './storage/fs.js'
 
 // ── View imports ──────────────────────────────────────────────────────────────
-import { renderSidebar, renderBottomTabs, bindSidebar, setSidebarFsHooks } from './views/sidebar.js';
-import { renderTopbar, bindTopbar, setTopbarHooks } from './views/topbar.js';
+import { renderSidebar, renderBottomTabs, bindSidebar, setSidebarFsHooks } from './views/sidebar.js'
+import { renderTopbar, bindTopbar, setTopbarHooks } from './views/topbar.js'
+import { renderDashboard, bindDashboard, setDashHooks, setDashAIHooks } from './views/dashboard.js'
+import { renderWorkspaceView, bindWorkspaceView, setWorkspaceHooks } from './views/workspace.js'
+import { renderCalendar, bindCalendar, setCalendarHooks } from './views/calendar.js'
+import { renderTimeTracker, bindTimeTracker } from './views/time-tracker.js'
+import { renderReports, bindReports } from './views/reports.js'
+import { renderTrash, bindTrash } from './views/trash.js'
 import {
-  renderDashboard, bindDashboard, setDashHooks, setDashAIHooks,
-} from './views/dashboard.js';
-import { renderWorkspaceView, bindWorkspaceView, setWorkspaceHooks } from './views/workspace.js';
-import { renderCalendar, bindCalendar, setCalendarHooks } from './views/calendar.js';
-import { renderTimeTracker, bindTimeTracker } from './views/time-tracker.js';
-import { renderReports, bindReports } from './views/reports.js';
-import { renderTrash, bindTrash } from './views/trash.js';
-import { renderSettings, bindSettings, setSettingsAIHooks, setSettingsFsHooks, setSettingsSection, setSettingsSecurityHooks } from './views/settings.js';
+  renderSettings,
+  bindSettings,
+  setSettingsAIHooks,
+  setSettingsFsHooks,
+  setSettingsSection,
+  setSettingsSecurityHooks,
+} from './views/settings.js'
 import {
-  renderLibrary, bindLibrary, setLibraryHooks, setLibraryDocHooks,
-  renderFileViewer, bindFileViewer,
-} from './views/library.js';
+  renderLibrary,
+  bindLibrary,
+  setLibraryHooks,
+  setLibraryDocHooks,
+  renderFileViewer,
+  bindFileViewer,
+} from './views/library.js'
 import {
-  setDocsHooks, setDocsAIHooks, setDocsStreamHook, saveDocument, closeDocumentEditor,
-  renderDocModal, bindDocModal,
-  _docOpenId, setDocOpenId, setDocDirty, setDocEditorActive,
-} from './views/documents.js';
-import { getSCHEMAS, renderRecordModal, bindRecordModal, setRecordModalHooks } from './views/record-modal.js';
-import { setPCHooks } from './views/project-canvas.js';
-import { setFilesHooks } from './views/files.js';
+  setDocsHooks,
+  setDocsAIHooks,
+  setDocsStreamHook,
+  saveDocument,
+  closeDocumentEditor,
+  renderDocModal,
+  bindDocModal,
+  _docOpenId,
+  setDocOpenId,
+  setDocDirty,
+  setDocEditorActive,
+} from './views/documents.js'
+import {
+  getSCHEMAS,
+  renderRecordModal,
+  bindRecordModal,
+  setRecordModalHooks,
+} from './views/record-modal.js'
+import { setPCHooks } from './views/project-canvas.js'
+import { setFilesHooks } from './views/files.js'
 
 // ── Component imports ─────────────────────────────────────────────────────────
 import {
-  renderToast, renderConfirmDialog, bindConfirmDialog,
-  renderCommandPalette, bindCommandPalette,
-  renderNotifPanel, setComponentsAIHooks,
-} from './components.js';
+  renderToast,
+  renderConfirmDialog,
+  bindConfirmDialog,
+  renderCommandPalette,
+  bindCommandPalette,
+  renderNotifPanel,
+  setComponentsAIHooks,
+} from './ui/components.js'
 
 // ── AI imports ────────────────────────────────────────────────────────────────
 import {
-  aiRuntime, setRuntimeHooks,
-  startAILoad, disconnectAI as resetAIConnection,
+  aiRuntime,
+  setRuntimeHooks,
+  startAILoad,
+  disconnectAI as resetAIConnection,
   callBackend,
-} from './ai/ai-runtime.js';
+} from './ai/ai-runtime.js'
 import {
-  renderAIPanel, bindAIPanel,
-  renderAIChatWorkspace, bindAIChatWorkspace,
-  setAIUIHooks, setAIUISchemas,
-} from './ai/ai-ui.js';
+  renderAIPanel,
+  bindAIPanel,
+  renderAIChatWorkspace,
+  bindAIChatWorkspace,
+  setAIUIHooks,
+  setAIUISchemas,
+} from './ai/ai-ui.js'
 import {
-  renderAIWizard, bindAIWizard, openAIWizard, closeAIWizard, aiNeedsOnboarding,
-  renderNanoDownloadModal, bindNanoDownloadModal,
-  _aiWizard, _aiSecrets,
-  setAIV2IDBHooks, setAISettingsHooks,
-  aiSecretsLoad, aiSecretsSave, aiSecretsWipe, aiSecretsRefresh,
-  BROWSER_MODELS, CLOUD_PROVIDERS,
-  probeOllama, testCloudKey,
+  renderAIWizard,
+  bindAIWizard,
+  openAIWizard,
+  closeAIWizard,
+  aiNeedsOnboarding,
+  renderNanoDownloadModal,
+  bindNanoDownloadModal,
+  _aiWizard,
+  _aiSecrets,
+  setAIV2IDBHooks,
+  setAISettingsHooks,
+  aiSecretsLoad,
+  aiSecretsSave,
+  aiSecretsWipe,
+  aiSecretsRefresh,
+  BROWSER_MODELS,
+  CLOUD_PROVIDERS,
+  probeOllama,
+  testCloudKey,
   aiCurrentMonthKey,
-} from './ai/ai-settings.js';
-import { aiPrefs, saveAIPrefs } from './ai/ai-prefs.js';
-import { _idbLoadStore, _idbPutRecord, _idbDeleteRecord } from './idb-data.js';
-import { _getDbKey } from './db.js';
-import { isAITierAllowed } from './deployment-policy.js';
+} from './ai/ai-settings.js'
+import { aiPrefs, saveAIPrefs } from './ai/ai-prefs.js'
+import { _idbLoadStore, _idbPutRecord, _idbDeleteRecord } from './storage/idb-data.js'
+import { _getDbKey } from './storage/db.js'
+import { isAITierAllowed } from './deployment-policy.js'
 
 // ── Auth import ───────────────────────────────────────────────────────────────
-import { renderAuth, bindAuth } from './auth.js';
+import { renderAuth, bindAuth } from './security/auth.js'
 
 // ── App lock + idle detection (SEC-01, NIST AC-11) ────────────────────────────
 let _lockTimeoutMs = (() => {
-  const raw = localStorage.getItem('taskapp_lock_timeout');
-  const mins = raw !== null ? parseInt(raw, 10) : 15;
-  return (mins > 0) ? mins * 60 * 1000 : 0;
-})();
-let _idleTimer: ReturnType<typeof setTimeout> | null = null;
-export let _lastActivityAt = Date.now();
+  const raw = localStorage.getItem('taskapp_lock_timeout')
+  const mins = raw !== null ? parseInt(raw, 10) : 15
+  return mins > 0 ? mins * 60 * 1000 : 0
+})()
+let _idleTimer: ReturnType<typeof setTimeout> | null = null
+export let _lastActivityAt = Date.now()
 
 // Callback set during init — allows lockApp to re-show auth with same afterUnlock handler
-let _onAuthSuccess: ((key: CryptoKey) => Promise<void>) | null = null;
+let _onAuthSuccess: ((key: CryptoKey) => Promise<void>) | null = null
 
 export function setLockTimeout(minutes: number): void {
-  localStorage.setItem('taskapp_lock_timeout', String(minutes));
-  _lockTimeoutMs = minutes > 0 ? minutes * 60 * 1000 : 0;
-  _resetIdleTimer();
+  localStorage.setItem('taskapp_lock_timeout', String(minutes))
+  _lockTimeoutMs = minutes > 0 ? minutes * 60 * 1000 : 0
+  _resetIdleTimer()
 }
 
 export function _resetIdleTimer(): void {
-  if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
-  if (!_lockTimeoutMs || !getState().authed) return;
-  _lastActivityAt = Date.now();
+  if (_idleTimer) {
+    clearTimeout(_idleTimer)
+    _idleTimer = null
+  }
+  if (!_lockTimeoutMs || !getState().authed) return
+  _lastActivityAt = Date.now()
   _idleTimer = setTimeout(() => {
-    lockApp('idle_timeout').catch(console.error);
-  }, _lockTimeoutMs);
+    lockApp('idle_timeout').catch(console.error)
+  }, _lockTimeoutMs)
 }
 
 export async function lockApp(reason = 'manual'): Promise<void> {
-  auditLog('app_locked', { reason });
+  auditLog('app_locked', { reason })
   // Clear in-memory decrypted data
-  clearDbState();
-  await clearSessionKey().catch(() => {});
+  clearDbState()
+  await clearSessionKey().catch(() => {})
   // Disconnect AI
-  try { resetAIConnection(); } catch { /* non-fatal */ }
-  try { await aiSecretsWipe(); } catch { /* non-fatal */ }
+  try {
+    void resetAIConnection()
+  } catch {
+    /* non-fatal */
+  }
+  try {
+    await aiSecretsWipe()
+  } catch {
+    /* non-fatal */
+  }
   // Clear idle timer
-  if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
+  if (_idleTimer) {
+    clearTimeout(_idleTimer)
+    _idleTimer = null
+  }
   // Reset auth state
-  setState({ authed: false, cryptoKey: null });
+  setState({ authed: false, cryptoKey: null })
   // Show auth screen (use the app element — it must be in DOM at this point)
-  const el = document.getElementById('app');
-  if (!el) return;
-  el.innerHTML = await renderAuth();
-  const handler = _onAuthSuccess;
-  bindAuth(el, async key => {
-    await cacheSessionKey(key);
-    if (handler) await handler(key);
-  });
+  const el = document.getElementById('app')
+  if (!el) return
+  el.innerHTML = await renderAuth()
+  const handler = _onAuthSuccess
+  bindAuth(el, async (key) => {
+    await cacheSessionKey(key)
+    if (handler) await handler(key)
+  })
 }
 
 // ── App root element ──────────────────────────────────────────────────────────
-const appEl = document.getElementById('app')!;
+const appEl = document.getElementById('app')!
 
 // ── appRenderWorkspace ────────────────────────────────────────────────────────
 export function appRenderWorkspace(view: string): void {
-  const state = getState();
-  if (state.currentView !== view) { navigate(view); return; }
-  const container = document.getElementById('workspace-container');
-  if (!container) { fullRender(state); return; }
-
-  let html = '';
-  switch (view) {
-    case 'dashboard':    html = renderDashboard(state); break;
-    case 'clients': case 'departments': case 'projects':
-    case 'tasks': case 'people': case 'standaloneNotes':
-      html = renderWorkspaceView(view); break;
-    case 'calendar':  html = renderCalendar(state); break;
-    case 'time':      html = renderTimeTracker(state); break;
-    case 'reports':   html = renderReports(state); break;
-    case 'ai':        html = renderAIChatWorkspace(); break;
-    case 'library':   html = renderLibrary(state); break;
-    case 'settings':  html = renderSettings(state); break;
-    case 'trash':     html = renderTrash(state); break;
-    default: return;
+  const state = getState()
+  if (state.currentView !== view) {
+    navigate(view)
+    return
   }
-  container.innerHTML = html;
+  const container = document.getElementById('workspace-container')
+  if (!container) {
+    fullRender(state)
+    return
+  }
+
+  let html = ''
+  switch (view) {
+    case 'dashboard':
+      html = renderDashboard(state)
+      break
+    case 'clients':
+    case 'departments':
+    case 'projects':
+    case 'tasks':
+    case 'people':
+    case 'standaloneNotes':
+      html = renderWorkspaceView(view)
+      break
+    case 'calendar':
+      html = renderCalendar(state)
+      break
+    case 'time':
+      html = renderTimeTracker(state)
+      break
+    case 'reports':
+      html = renderReports(state)
+      break
+    case 'ai':
+      html = renderAIChatWorkspace()
+      break
+    case 'library':
+      html = renderLibrary(state)
+      break
+    case 'settings':
+      html = renderSettings(state)
+      break
+    case 'trash':
+      html = renderTrash(state)
+      break
+    default:
+      return
+  }
+  container.innerHTML = html
 
   switch (view) {
-    case 'dashboard':    bindDashboard(state); break;
-    case 'clients': case 'departments': case 'projects':
-    case 'tasks': case 'people': case 'standaloneNotes':
-      bindWorkspaceView(view); break;
-    case 'calendar':  bindCalendar(); break;
-    case 'time':      bindTimeTracker(); break;
-    case 'reports':   bindReports(state); break;
-    case 'ai':        bindAIChatWorkspace(); break;
-    case 'library':   bindLibrary(); break;
-    case 'settings':  bindSettings(state); break;
-    case 'trash':     bindTrash(); break;
+    case 'dashboard':
+      bindDashboard(state)
+      break
+    case 'clients':
+    case 'departments':
+    case 'projects':
+    case 'tasks':
+    case 'people':
+    case 'standaloneNotes':
+      bindWorkspaceView(view)
+      break
+    case 'calendar':
+      bindCalendar()
+      break
+    case 'time':
+      bindTimeTracker()
+      break
+    case 'reports':
+      bindReports(state)
+      break
+    case 'ai':
+      bindAIChatWorkspace()
+      break
+    case 'library':
+      bindLibrary()
+      break
+    case 'settings':
+      bindSettings(state)
+      break
+    case 'trash':
+      bindTrash()
+      break
   }
 }
 
 // ── fullRender ────────────────────────────────────────────────────────────────
 export function fullRender(state: AppState): void {
   const {
-    currentView, aiPanelOpen, commandOpen, notifPanelOpen,
-    toast, confirmDialog, recordModal, docModal, fileViewer,
-  } = state;
+    currentView,
+    aiPanelOpen,
+    commandOpen,
+    notifPanelOpen,
+    toast,
+    confirmDialog,
+    recordModal,
+    docModal,
+    fileViewer,
+  } = state
 
-  let wsHtml = '';
+  let wsHtml = ''
   switch (currentView) {
-    case 'dashboard':    wsHtml = renderDashboard(state); break;
-    case 'clients': case 'departments': case 'projects':
-    case 'tasks': case 'people': case 'standaloneNotes':
-      wsHtml = renderWorkspaceView(currentView); break;
-    case 'calendar':  wsHtml = renderCalendar(state); break;
-    case 'time':      wsHtml = renderTimeTracker(state); break;
-    case 'reports':   wsHtml = renderReports(state); break;
-    case 'ai':        wsHtml = renderAIChatWorkspace(); break;
-    case 'library':   wsHtml = renderLibrary(state); break;
-    case 'settings':  wsHtml = renderSettings(state); break;
-    case 'trash':     wsHtml = renderTrash(state); break;
-    default: wsHtml = `<div style="padding:2rem">Unknown view</div>`;
+    case 'dashboard':
+      wsHtml = renderDashboard(state)
+      break
+    case 'clients':
+    case 'departments':
+    case 'projects':
+    case 'tasks':
+    case 'people':
+    case 'standaloneNotes':
+      wsHtml = renderWorkspaceView(currentView)
+      break
+    case 'calendar':
+      wsHtml = renderCalendar(state)
+      break
+    case 'time':
+      wsHtml = renderTimeTracker(state)
+      break
+    case 'reports':
+      wsHtml = renderReports(state)
+      break
+    case 'ai':
+      wsHtml = renderAIChatWorkspace()
+      break
+    case 'library':
+      wsHtml = renderLibrary(state)
+      break
+    case 'settings':
+      wsHtml = renderSettings(state)
+      break
+    case 'trash':
+      wsHtml = renderTrash(state)
+      break
+    default:
+      wsHtml = `<div style="padding:2rem">Unknown view</div>`
   }
 
   const notifHTML = notifPanelOpen
     ? `<div style="position:relative;height:0;z-index:200"><div style="position:absolute;right:1.25rem;top:0">${renderNotifPanel(state.notifications as unknown as Array<{ id: string }>, true)}</div></div>`
-    : '';
+    : ''
 
   appEl.innerHTML = [
     renderSidebar(state),
@@ -210,144 +388,190 @@ export function fullRender(state: AppState): void {
     renderBottomTabs(state),
     renderAIPanel(aiPanelOpen),
     commandOpen ? renderCommandPalette(commandOpen) : '',
-    confirmDialog ? renderConfirmDialog(confirmDialog as unknown as { message: string; onConfirm: () => void; onCancel?: () => void }) : '',
+    confirmDialog
+      ? renderConfirmDialog(
+          confirmDialog as unknown as {
+            message: string
+            onConfirm: () => void
+            onCancel?: () => void
+          },
+        )
+      : '',
     recordModal ? renderRecordModal(recordModal) : '',
-    (_aiWizard?.open) ? renderAIWizard() : renderNanoDownloadModal(),
+    _aiWizard?.open ? renderAIWizard() : renderNanoDownloadModal(),
     docModal ? renderDocModal(state) : '',
     fileViewer ? renderFileViewer(fileViewer as string | null) : '',
     toast ? renderToast(toast) : '',
-  ].join('');
+  ].join('')
 
-  bindSidebar();
-  bindTopbar(state);
+  bindSidebar()
+  bindTopbar(state)
 
   switch (currentView) {
-    case 'dashboard':    bindDashboard(state); break;
-    case 'clients': case 'departments': case 'projects':
-    case 'tasks': case 'people': case 'standaloneNotes':
-      bindWorkspaceView(currentView); break;
-    case 'calendar':  bindCalendar(); break;
-    case 'time':      bindTimeTracker(); break;
-    case 'reports':   bindReports(state); break;
-    case 'ai':        bindAIChatWorkspace(); break;
-    case 'library':   bindLibrary(); break;
-    case 'settings':  bindSettings(state); break;
-    case 'trash':     bindTrash(); break;
+    case 'dashboard':
+      bindDashboard(state)
+      break
+    case 'clients':
+    case 'departments':
+    case 'projects':
+    case 'tasks':
+    case 'people':
+    case 'standaloneNotes':
+      bindWorkspaceView(currentView)
+      break
+    case 'calendar':
+      bindCalendar()
+      break
+    case 'time':
+      bindTimeTracker()
+      break
+    case 'reports':
+      bindReports(state)
+      break
+    case 'ai':
+      bindAIChatWorkspace()
+      break
+    case 'library':
+      bindLibrary()
+      break
+    case 'settings':
+      bindSettings(state)
+      break
+    case 'trash':
+      bindTrash()
+      break
   }
 
-  if (docModal)      bindDocModal();
-  if (fileViewer)    bindFileViewer();
-  if (commandOpen)   bindCommandPalette();
-  if (confirmDialog) bindConfirmDialog(confirmDialog as unknown as { message: string; onConfirm: () => void; onCancel?: () => void });
-  if (recordModal)   bindRecordModal(recordModal);
-  if (aiPanelOpen)   bindAIPanel();
+  if (docModal) bindDocModal()
+  if (fileViewer) bindFileViewer()
+  if (commandOpen) bindCommandPalette()
+  if (confirmDialog)
+    bindConfirmDialog(
+      confirmDialog as unknown as { message: string; onConfirm: () => void; onCancel?: () => void },
+    )
+  if (recordModal) bindRecordModal(recordModal)
+  if (aiPanelOpen) bindAIPanel()
   if (_aiWizard?.open) {
-    try { bindAIWizard(); } catch (e) { console.warn('[AI wizard] bind:', (e as Error)?.message); }
+    try {
+      bindAIWizard()
+    } catch (e) {
+      console.warn('[AI wizard] bind:', (e as Error).message)
+    }
   }
-  bindNanoDownloadModal();
+  bindNanoDownloadModal()
   if (notifPanelOpen) {
     document.getElementById('mark-all-read')?.addEventListener('click', async () => {
-      await markAllNotificationsRead(); reloadData();
-    });
-    document.querySelectorAll<HTMLElement>('.notif-item').forEach(el =>
+      await markAllNotificationsRead()
+      reloadData()
+    })
+    document.querySelectorAll<HTMLElement>('.notif-item').forEach((el) => {
       el.addEventListener('click', async () => {
-        const id = (el.dataset as DOMStringMap & { notif?: string }).notif;
-        if (id) { await markNotificationRead(id); reloadData(); }
+        const id = (el.dataset as DOMStringMap & { notif?: string }).notif
+        if (id) {
+          await markNotificationRead(id)
+          reloadData()
+        }
       })
-    );
+    })
     setTimeout(() => {
       document.addEventListener('click', function cn(e) {
-        const t = e.target as HTMLElement | null;
+        const t = e.target as HTMLElement | null
         if (!t?.closest('#notif-panel') && !t?.closest('#notif-btn')) {
-          setState({ notifPanelOpen: false });
-          document.removeEventListener('click', cn);
+          setState({ notifPanelOpen: false })
+          document.removeEventListener('click', cn)
         }
-      });
-    }, 0);
+      })
+    }, 0)
   }
 }
 
 // ── Wire all hooks ────────────────────────────────────────────────────────────
 function _wireHooks(): void {
   // AI state/nav hooks into state.ts
-  setAIHooks(aiNeedsOnboarding, openAIWizard);
+  setAIHooks(aiNeedsOnboarding, openAIWizard)
 
   // AI runtime hooks (appRenderWorkspace + fullRender)
-  setRuntimeHooks({ appRenderWorkspace, fullRender });
+  setRuntimeHooks({ appRenderWorkspace, fullRender })
 
   // AI UI hooks (render/bind surfaces + schemas)
-  setAIUIHooks({ appRenderWorkspace, setSettingsSection, openAIWizard });
-  setAIUISchemas(getSCHEMAS());
+  setAIUIHooks({ appRenderWorkspace, setSettingsSection, openAIWizard })
+  setAIUISchemas(getSCHEMAS())
 
   // AI settings hooks
-  setAISettingsHooks({ fullRender });
+  setAISettingsHooks({ fullRender })
 
   // AI IDB hooks (encrypted secrets store)
   setAIV2IDBHooks({
     idbLoadStore: (store: string) => {
-      const key = _getDbKey();
-      if (!key) return Promise.resolve([]);
-      return _idbLoadStore(store, key) as Promise<Record<string, unknown>[]>;
+      const key = _getDbKey()
+      if (!key) return Promise.resolve([])
+      return _idbLoadStore(store, key) as Promise<Record<string, unknown>[]>
     },
     idbPutRecord: (store: string, rec: Record<string, unknown>) => {
-      const key = _getDbKey();
-      if (!key) return Promise.resolve();
-      return _idbPutRecord(store, rec as { id: string } & Record<string, unknown>, key);
+      const key = _getDbKey()
+      if (!key) return Promise.resolve()
+      return _idbPutRecord(store, rec as { id: string } & Record<string, unknown>, key)
     },
     idbDeleteRecord: (store: string, id: string) => _idbDeleteRecord(store, id),
     dbKeyGetter: () => _getDbKey(),
-  });
+  })
 
   // Topbar hooks
-  setTopbarHooks({ aiNeedsOnboarding, openAIWizard, setTheme, lockApp });
+  setTopbarHooks({ aiNeedsOnboarding, openAIWizard, setTheme, lockApp })
 
   // Sidebar FS status hooks (badge on logo mark)
-  setSidebarFsHooks({ getFsReady: isFsReady, getFsLastSave });
+  setSidebarFsHooks({ getFsReady: isFsReady, getFsLastSave })
 
   // Settings Storage hooks
   setSettingsFsHooks({
     isFsReady,
     getFsLastSave,
-    fsPickFile: fsPickFile as (forceNew?: boolean) => Promise<unknown>,
+    fsPickFile: fsPickFile,
     fsWriteVault,
     fsUnlink,
-  });
+  })
 
   // View hooks
-  setDashHooks(appRenderWorkspace);
-  setDashAIHooks(aiNeedsOnboarding, openAIWizard);
-  setWorkspaceHooks(appRenderWorkspace);
-  setCalendarHooks(appRenderWorkspace);
-  setPCHooks(appRenderWorkspace);
-  setRecordModalHooks(appRenderWorkspace);
-  setFilesHooks({ appRenderWorkspace });
-  setDocsHooks(appRenderWorkspace, fullRender);
-  setDocsAIHooks(() => aiRuntime.ready, aiRuntime.history as Record<string, unknown>[]);
+  setDashHooks(appRenderWorkspace)
+  setDashAIHooks(aiNeedsOnboarding, openAIWizard)
+  setWorkspaceHooks(appRenderWorkspace)
+  setCalendarHooks(appRenderWorkspace)
+  setPCHooks(appRenderWorkspace)
+  setRecordModalHooks(appRenderWorkspace)
+  setFilesHooks({ appRenderWorkspace })
+  setDocsHooks(appRenderWorkspace, fullRender)
+  setDocsAIHooks(() => aiRuntime.ready, aiRuntime.history)
   setDocsStreamHook(async ({ system, prompt, onToken, signal }) => {
-    if (!aiRuntime.ready) throw new Error('No AI backend ready — open Settings → AI');
-    return callBackend(system, [{ role: 'user', content: prompt }], onToken, signal);
-  });
+    if (!aiRuntime.ready) throw new Error('No AI backend ready — open Settings → AI')
+    return callBackend(system, [{ role: 'user', content: prompt }], onToken, signal)
+  })
 
   setLibraryHooks({
     appRenderWorkspace,
-    confirmAction: (msg: string, fn: () => Promise<void>) => showConfirm(msg, () => { fn().catch(console.error); }),
+    confirmAction: (msg: string, fn: () => Promise<void>) => {
+      showConfirm(msg, () => {
+        fn().catch(console.error)
+      })
+    },
     dbSoftDelete: (store: string, id: string) => softDelete(store, id).then(() => undefined),
-  });
+  })
   setLibraryDocHooks({
     setDocOpenId,
     setDocDirty,
     setDocEditorActive,
-  });
+  })
   // Components AI hooks (for command palette AI nav guard)
-  setComponentsAIHooks(aiNeedsOnboarding, openAIWizard);
+  setComponentsAIHooks(aiNeedsOnboarding, openAIWizard)
 
   // Settings Security hooks
   setSettingsSecurityHooks({
-    lockApp: () => { lockApp('manual').catch(console.error); },
+    lockApp: () => {
+      lockApp('manual').catch(console.error)
+    },
     setLockTimeout,
     getLockTimeout: () => {
-      const raw = localStorage.getItem('taskapp_lock_timeout');
-      return raw !== null ? parseInt(raw, 10) : 15;
+      const raw = localStorage.getItem('taskapp_lock_timeout')
+      return raw !== null ? parseInt(raw, 10) : 15
     },
     loadAuditLog,
     exportAuditCSV,
@@ -361,14 +585,14 @@ function _wireHooks(): void {
     addPasskey: (pw: string) => addPasskey(pw),
     removePasskey,
     getLastActivityAt: () => _lastActivityAt,
-  });
+  })
 
   // Settings AI hooks
   setSettingsAIHooks({
-    aiPrefs: aiPrefs as Record<string, unknown>,
+    aiPrefs: aiPrefs,
     getAIReady: () => aiRuntime.ready,
     getAILoadStarted: () => aiRuntime.loadStarted,
-    getAISecrets: () => _aiSecrets as Record<string, unknown>,
+    getAISecrets: () => _aiSecrets,
     browserModels: BROWSER_MODELS,
     cloudProviders: CLOUD_PROVIDERS,
     openAIWizard,
@@ -380,243 +604,292 @@ function _wireHooks(): void {
     aiSecretsLoad,
     aiSecretsSave: aiSecretsSave as unknown as (s: Record<string, unknown>) => Promise<void>,
     aiSecretsWipe,
-    aiHistory: aiRuntime.history as Record<string, unknown>[],
+    aiHistory: aiRuntime.history,
     pendingAction: aiRuntime.pendingAction,
     aiCurrentMonthKey,
     aiWizard: (_aiWizard ?? {}) as Record<string, unknown>,
     appRenderWorkspace,
     fullRender,
-  });
+  })
 }
 
 // ── init ──────────────────────────────────────────────────────────────────────
 export async function init(): Promise<void> {
-  initTheme();
+  initTheme()
 
   // File integrity self-check (non-blocking, skipped on file:// origins)
-  (async function checkFileIntegrity() {
+  void (async function checkFileIntegrity() {
     try {
       if (location.protocol === 'file:') {
-        console.info('[integrity] Self-check skipped: running from file:// (fetch blocked by browser CORS policy).');
-        return;
+        console.info(
+          '[integrity] Self-check skipped: running from file:// (fetch blocked by browser CORS policy).',
+        )
+        return
       }
-      const url = document.location.href.replace(/[?#].*$/, '');
-      const shaUrl = url.replace(/\.html$/i, '') + '.sha256';
+      const url = document.location.href.replace(/[?#].*$/, '')
+      const shaUrl = url.replace(/\.html$/i, '') + '.sha256'
       const [shaRes, fileRes] = await Promise.all([
         fetch(shaUrl, { cache: 'no-store' }),
-        fetch(url,    { cache: 'no-store' }),
-      ]);
+        fetch(url, { cache: 'no-store' }),
+      ])
       if (!shaRes.ok) {
-        console.warn('[integrity] .sha256 file not found — run generate-csp.mjs to enable tamper detection.');
-        return;
+        console.warn(
+          '[integrity] .sha256 file not found — run generate-csp.mjs to enable tamper detection.',
+        )
+        return
       }
-      const expectedHex = (await shaRes.text()).trim();
-      const fileBytes   = await fileRes.arrayBuffer();
-      const hashBuffer  = await crypto.subtle.digest('SHA-256', fileBytes);
-      const actualHex   = Array.from(new Uint8Array(hashBuffer))
-        .map(b => b.toString(16).padStart(2, '0')).join('');
+      const expectedHex = (await shaRes.text()).trim()
+      const fileBytes = await fileRes.arrayBuffer()
+      const hashBuffer = await crypto.subtle.digest('SHA-256', fileBytes)
+      const actualHex = Array.from(new Uint8Array(hashBuffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
       if (actualHex !== expectedHex) {
-        console.error('[integrity] ⚠️ FILE HASH MISMATCH — taskapp.html may have been tampered with!');
-        const banner = document.createElement('div');
-        banner.setAttribute('role', 'alert');
-        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#dc2626;color:#fff;font:700 14px/1 system-ui,sans-serif;padding:10px 16px;text-align:center;letter-spacing:.02em';
-        banner.textContent = '⚠️ INTEGRITY WARNING: This file may have been modified since it was last verified. Run generate-csp.mjs to update, or verify the source.';
-        document.body.prepend(banner);
+        console.error(
+          '[integrity] ⚠️ FILE HASH MISMATCH — taskapp.html may have been tampered with!',
+        )
+        const banner = document.createElement('div')
+        banner.setAttribute('role', 'alert')
+        banner.style.cssText =
+          'position:fixed;top:0;left:0;right:0;z-index:99999;background:#dc2626;color:#fff;font:700 14px/1 system-ui,sans-serif;padding:10px 16px;text-align:center;letter-spacing:.02em'
+        banner.textContent =
+          '⚠️ INTEGRITY WARNING: This file may have been modified since it was last verified. Run generate-csp.mjs to update, or verify the source.'
+        document.body.prepend(banner)
       } else {
-        console.info('[integrity] ✓ File integrity verified.');
+        console.info('[integrity] ✓ File integrity verified.')
       }
     } catch (e) {
-      console.warn('[integrity] Self-check skipped:', (e as Error).message);
+      console.warn('[integrity] Self-check skipped:', (e as Error).message)
     }
-  })();
+  })()
 
   // Request persistent storage once per session (silently skipped on file:// — browser never grants it there)
-  if (navigator.storage?.persist && location.protocol !== 'file:') {
-    navigator.storage.persist().then(granted => {
-      if (granted) console.info('[storage] Persistent storage granted.');
-      else console.info('[storage] Persistent storage not granted — data protected by encryption regardless.');
-    }).catch(() => {});
+  if (location.protocol !== 'file:') {
+    void navigator.storage.persist().then((granted) => {
+      if (granted) console.info('[storage] Persistent storage granted.')
+      else
+        console.info(
+          '[storage] Persistent storage not granted — data protected by encryption regardless.',
+        )
+    })
   }
 
-  await _migrateLocalStorageToIDB();
-  await fsInit();
+  await _migrateLocalStorageToIDB()
+  await fsInit()
 
   // Wire all cross-module hooks before first render
-  _wireHooks();
+  _wireHooks()
 
   // Log session start (pre-auth — buffered until key available)
-  auditLog('session_start', { protocol: location.protocol });
+  auditLog('session_start', { protocol: location.protocol })
 
   // Wire auth IDB hooks so TOTP can be checked during login
   setAuthIDBHooks({
     idbLoadStore: (store, key) => _idbLoadStore(store, key) as Promise<Record<string, unknown>[]>,
-  });
+  })
   // Wire audit events from auth module
-  setAuthAuditHook((event, details) => auditLog(event as Parameters<typeof auditLog>[0], details));
+  setAuthAuditHook((event, details) => {
+    auditLog(event as Parameters<typeof auditLog>[0], details)
+  })
 
   // Idle activity event listeners (passive, capture phase)
-  const _activityEvents = ['pointermove', 'pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll'] as const;
-  const _onActivity = () => { if (getState().authed) _resetIdleTimer(); };
+  const _activityEvents = [
+    'pointermove',
+    'pointerdown',
+    'keydown',
+    'touchstart',
+    'wheel',
+    'scroll',
+  ] as const
+  const _onActivity = () => {
+    if (getState().authed) _resetIdleTimer()
+  }
   for (const ev of _activityEvents) {
-    window.addEventListener(ev, _onActivity, { passive: true, capture: true });
+    window.addEventListener(ev, _onActivity, { passive: true, capture: true })
   }
 
   const afterUnlock = async (key: CryptoKey): Promise<void> => {
-    await dbInit(key);
+    await dbInit(key)
 
     // Wire audit hooks (need key to encrypt/decrypt)
     setAuditHooks({
       getKey: () => key,
-      putRecord: (store, rec) => _idbPutRecord(store, rec as { id: string } & Record<string, unknown>, key),
+      putRecord: (store, rec) =>
+        _idbPutRecord(store, rec as { id: string } & Record<string, unknown>, key),
       loadStore: (store) => _idbLoadStore(store, key) as Promise<Record<string, unknown>[]>,
-    });
-    flushAuditBuffer();  // flush any pre-auth events (session_start)
-    auditLog('auth_success');
+    })
+    flushAuditBuffer() // flush any pre-auth events (session_start)
+    auditLog('auth_success')
 
     // Wire MFA/passkey/webauthn IDB hooks
     const _mfaHooks = {
       getKey: () => key,
       putRecord: (store: string, rec: Record<string, unknown>) =>
         _idbPutRecord(store, rec as { id: string } & Record<string, unknown>, key),
-      loadStore: (store: string) =>
-        _idbLoadStore(store, key) as Promise<Record<string, unknown>[]>,
-    };
-    setMFAHooks(_mfaHooks);
-    setWebAuthnHooks(_mfaHooks);
-
-    setState({ authed: true, cryptoKey: key });
-    reloadData();
-    try { await checkDueDates(); reloadData(); } catch { /* non-fatal */ }
-    try { if (typeof aiSecretsRefresh === 'function') await aiSecretsRefresh(); } catch (e) {
-      console.warn('[AI] secrets refresh failed:', (e as Error)?.message);
+      loadStore: (store: string) => _idbLoadStore(store, key) as Promise<Record<string, unknown>[]>,
     }
-    fullRender(getState());
+    setMFAHooks(_mfaHooks)
+    setWebAuthnHooks(_mfaHooks)
+
+    setState({ authed: true, cryptoKey: key })
+    reloadData()
+    try {
+      await checkDueDates()
+      reloadData()
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      if (typeof aiSecretsRefresh === 'function') await aiSecretsRefresh()
+    } catch (e) {
+      console.warn('[AI] secrets refresh failed:', (e as Error).message)
+    }
+    fullRender(getState())
 
     // Start idle timer after unlock
-    _resetIdleTimer();
+    _resetIdleTimer()
 
     // Wire adapter stream — NullAdapter returns a no-op unsubscribe immediately.
-    getAdapter()?.stream(changes => {
+    getAdapter()?.stream((changes) => {
       for (const [store, recs] of Object.entries(changes)) {
-        const target = getStore(store) as Array<Record<string, unknown>>;
+        const target = getStore(store) as Array<Record<string, unknown>>
         for (const rec of recs as Array<Record<string, unknown>>) {
-          const idx = target.findIndex(x => x['id'] === rec['id']);
-          if (idx === -1) target.push(rec);
-          else if ((rec['updatedAt'] as string) > (target[idx]!['updatedAt'] as string)) target[idx] = rec;
+          const idx = target.findIndex((x) => x['id'] === rec['id'])
+          if (idx === -1) target.push(rec)
+          else if ((rec['updatedAt'] as string) > (target[idx]!['updatedAt'] as string))
+            target[idx] = rec
         }
       }
-      reloadData();
-    });
+      reloadData()
+    })
 
-    let _prevState = getState();
-    subscribe(state => {
-      const skipKeys = new Set(['timerElapsed', 'toast']);
-      const changedKeys = Object.keys(state).filter(k =>
-        (state as unknown as Record<string, unknown>)[k] !== (_prevState as unknown as Record<string, unknown>)[k]
-      );
-      const onlyEphemeral = changedKeys.length > 0 && changedKeys.every(k => skipKeys.has(k));
+    let _prevState = getState()
+    subscribe((state) => {
+      const skipKeys = new Set(['timerElapsed', 'toast'])
+      const changedKeys = Object.keys(state).filter(
+        (k) =>
+          (state as unknown as Record<string, unknown>)[k] !==
+          (_prevState as unknown as Record<string, unknown>)[k],
+      )
+      const onlyEphemeral = changedKeys.length > 0 && changedKeys.every((k) => skipKeys.has(k))
 
       if (onlyEphemeral) {
-        const toastEl = document.querySelector('.toast-container');
-        const newToast = state.toast ? renderToast(state.toast) : '';
+        const toastEl = document.querySelector('.toast-container')
+        const newToast = state.toast ? renderToast(state.toast) : ''
         if (toastEl) {
           if (newToast && _rawPolicy) {
-            toastEl.insertAdjacentHTML('afterend', _rawPolicy.createHTML(newToast) as unknown as string);
+            toastEl.insertAdjacentHTML('afterend', _rawPolicy.createHTML(newToast))
           }
-          toastEl.remove();
+          toastEl.remove()
         } else if (newToast && _rawPolicy) {
-          appEl.insertAdjacentHTML('beforeend', _rawPolicy.createHTML(newToast) as unknown as string);
+          appEl.insertAdjacentHTML('beforeend', _rawPolicy.createHTML(newToast))
         }
-        _prevState = state;
-        return;
+        _prevState = state
+        return
       }
 
-      if (state.recordModal && _prevState?.recordModal === state.recordModal) {
-        const modalEl = document.getElementById('record-modal-backdrop');
+      if (state.recordModal && _prevState.recordModal === state.recordModal) {
+        const modalEl = document.getElementById('record-modal-backdrop')
         if (modalEl) {
-          const container = document.getElementById('workspace-container');
-          if (container && state.currentView) appRenderWorkspace(state.currentView);
-          _prevState = state;
-          return;
+          const container = document.getElementById('workspace-container')
+          if (container && state.currentView) appRenderWorkspace(state.currentView)
+          _prevState = state
+          return
         }
       }
 
-      _prevState = state;
-      fullRender(state);
-    });
+      _prevState = state
+      fullRender(state)
+    })
 
-    document.addEventListener('keydown', e => {
-      const m = e.metaKey || e.ctrlKey;
-      if (m && e.key === 'k') { e.preventDefault(); setState({ commandOpen: true }); }
+    document.addEventListener('keydown', (e) => {
+      const m = e.metaKey || e.ctrlKey
+      if (m && e.key === 'k') {
+        e.preventDefault()
+        setState({ commandOpen: true })
+      }
       if (e.key === 'Escape') {
-        const s = getState();
+        const s = getState()
         if (_aiWizard?.open) {
-          if ((_aiWizard as unknown as Record<string, unknown>).pullProgress) return;
-          closeAIWizard(); return;
+          if ((_aiWizard as unknown as Record<string, unknown>).pullProgress) return
+          closeAIWizard()
+          return
         }
-        if (s.commandOpen) setState({ commandOpen: false });
+        if (s.commandOpen) setState({ commandOpen: false })
         else if (s.docModal) {
-          const openId = _docOpenId;
-          if (openId) { saveDocument().then(() => closeDocumentEditor()); }
-          else { closeDocumentEditor(); }
-        }
-        else if (s.fileViewer) setState({ fileViewer: null });
-        else if (s.aiPanelOpen) setState({ aiPanelOpen: false });
-        else if (s.recordModal) setState({ recordModal: null });
-        else if (s.notifPanelOpen) setState({ notifPanelOpen: false });
+          const openId = _docOpenId
+          if (openId) {
+            void saveDocument().then(() => {
+              closeDocumentEditor()
+            })
+          } else {
+            closeDocumentEditor()
+          }
+        } else if (s.fileViewer) setState({ fileViewer: null })
+        else if (s.aiPanelOpen) setState({ aiPanelOpen: false })
+        else if (s.recordModal) setState({ recordModal: null })
+        else if (s.notifPanelOpen) setState({ notifPanelOpen: false })
       }
-    });
+    })
 
     setInterval(async () => {
-      try { await checkDueDates(); reloadData(); } catch { /* non-fatal */ }
-    }, 60000);
+      try {
+        await checkDueDates()
+        reloadData()
+      } catch {
+        /* non-fatal */
+      }
+    }, 60000)
 
     // Auto-reconnect AI if onboarding was completed with an allowed tier.
     // If the saved tier is no longer allowed in this build profile (e.g. 'ollama'
     // saved from a previous session but now running an OT-only build), silently
     // clear the tier so the user isn't shown a confusing error on startup.
     if (aiPrefs.hasCompletedOnboarding && aiPrefs.tier && !isAITierAllowed(aiPrefs.tier)) {
-      aiPrefs.tier = null as unknown as typeof aiPrefs.tier;
-      saveAIPrefs(aiPrefs);
+      aiPrefs.tier = null
+      saveAIPrefs(aiPrefs)
     }
     if (aiPrefs.hasCompletedOnboarding && aiPrefs.tier && isAITierAllowed(aiPrefs.tier)) {
       if (aiPrefs.tier === 'cloud') {
         setTimeout(async () => {
-          try { await aiSecretsRefresh(); await startAILoad(); } catch (e) {
-            console.warn('[AI] cloud auto-reconnect failed:', (e as Error)?.message);
+          try {
+            await aiSecretsRefresh()
+            await startAILoad()
+          } catch (e) {
+            console.warn('[AI] cloud auto-reconnect failed:', (e as Error).message)
           }
-        }, 500);
+        }, 500)
       } else {
         setTimeout(() => {
           startAILoad().catch((e: unknown) => {
-            console.warn('[AI] auto-reconnect failed:', (e as Error)?.message);
-          });
-        }, 500);
+            console.warn('[AI] auto-reconnect failed:', (e as Error).message)
+          })
+        }, 500)
       }
     }
-  };
+  }
 
   // Store afterUnlock so lockApp() can re-show auth with the same handler
-  _onAuthSuccess = afterUnlock;
+  _onAuthSuccess = afterUnlock
 
   // Discard the IDB-persisted key if the tab was closed between sessions.
   // sessionStorage is cleared on tab close but preserved across F5 reloads,
   // so a missing sentinel means this is a fresh session, not a page refresh.
   if (!hasSessionSentinel()) {
-    await clearSessionKey().catch(() => {});
+    await clearSessionKey().catch(() => {})
   }
 
   // Try session-cached key first (survives F5, clears on tab close)
-  const cached = await loadSessionKey();
-  if (cached && await verifyPassword(cached).catch(() => false)) {
-    await afterUnlock(cached);
-    return;
+  const cached = await loadSessionKey()
+  if (cached && (await verifyPassword(cached).catch(() => false))) {
+    await afterUnlock(cached)
+    return
   }
 
   // No cached key — show auth screen
-  appEl.innerHTML = await renderAuth();
-  bindAuth(appEl, async key => {
-    await cacheSessionKey(key);
-    await afterUnlock(key);
-  });
+  appEl.innerHTML = await renderAuth()
+  bindAuth(appEl, async (key) => {
+    await cacheSessionKey(key)
+    await afterUnlock(key)
+  })
 }

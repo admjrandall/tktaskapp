@@ -52,13 +52,17 @@ d:\techkeycrmapp\
 │   ├── adapter-rxdb/src/index.ts ← RxDBAdapter stub
 │   └── adapter-dataverse/src/index.ts ← DataverseAdapter stub
 ├── apps/
-│   ├── offline/                  ← Vite entry for single-file offline build
-│   │   ├── index.html
-│   │   ├── src/entry.ts          ← sets OT-only deployment policy, sets NullAdapter, calls init()
-│   │   └── vite.config.ts
-│   ├── sync/                     ← PWA build (same adapter for now)
+│   ├── offline-web/              ← Vite entry for all offline build profiles (was apps/offline)
+│   │   ├── index.html            ← entry-browser-ai.ts (default build)
+│   │   ├── src/
+│   │   │   ├── entry-browser-ai.ts  ← browser AI only (Gemini Nano / Phi-4-mini); default build:offline
+│   │   │   ├── entry-no-ai.ts       ← zero AI code; Phase 1 adds dedicated Vite config
+│   │   │   └── entry-internal-ai.ts ← browser AI + private Ollama endpoints; OT_AI_CONNECT_SRC at build
+│   │   ├── vite.config.ts        ← builds browser-ai profile → dist/offline/index.html
+│   │   └── README.md             ← documents three sub-profiles
+│   ├── pwa-sync/                 ← PWA build placeholder (was apps/sync; NullAdapter for now)
 │   ├── dataverse/                ← Power Apps Code App build
-│   └── mobile/                   ← Capacitor config
+│   └── mobile/                   ← Capacitor config stub
 ├── dist/
 │   └── offline/index.html        ← built single-file output (open this in browser)
 ├── generate-csp.mjs              ← regenerates CSP hashes in dist file
@@ -79,13 +83,28 @@ pnpm run typecheck       # TypeScript type check (no emit)
 
 After `build:offline`, open `dist/offline/index.html` in Chrome or Edge. No server needed.
 
-The `OT_AI_CONNECT_SRC` env var adds extra origins to the offline build's CSP `connect-src` directive (does not affect which AI tiers are available — the offline profile is Nano-only regardless):
+The three offline sub-profiles are built from `apps/offline-web/`:
+
+| Profile                  | Entry                  | Build command            | AI                                                               |
+| ------------------------ | ---------------------- | ------------------------ | ---------------------------------------------------------------- |
+| **browser-ai** (default) | `entry-browser-ai.ts`  | `pnpm run build:offline` | Chrome Gemini Nano or Edge Phi-4-mini only — no Ollama, no cloud |
+| **no-ai**                | `entry-no-ai.ts`       | Phase 1                  | Zero AI code in bundle                                           |
+| **internal-ai**          | `entry-internal-ai.ts` | Phase 1                  | Browser AI + private Ollama endpoints                            |
+
+For the **browser-ai** profile, `OT_AI_CONNECT_SRC` only affects the CSP `connect-src` directive — it does **not** enable Ollama or any other tier (the deployment policy is hard-coded to `allowedTiers: ['browser']`):
 
 ```bash
-OT_AI_CONNECT_SRC="http://localhost:11434 http://127.0.0.1:11434 https://ai-server.internal" pnpm run build:offline
+OT_AI_CONNECT_SRC="https://ai-server.internal" pnpm run build:offline
+```
+
+For the **internal-ai** profile (Phase 1), `OT_AI_CONNECT_SRC` both sets the CSP origins and enables connections to those Ollama-compatible endpoints:
+
+```bash
+OT_AI_CONNECT_SRC="http://ai-server.internal:11434" pnpm run build:offline:internal-ai
 ```
 
 **After every build**, `generate-csp.mjs` runs automatically and writes:
+
 - Updated SHA-256 hashes into the built file's CSP `<meta>` tag
 - `dist/offline/index.sha256` for file integrity detection
 
@@ -134,8 +153,12 @@ Modules must be imported in this order (deeper dependencies first):
 Every view follows the same contract:
 
 ```ts
-export function renderFoo(state: AppState): string { return `<html string>`; }
-export function bindFoo(state?: AppState): void { /* attach event listeners */ }
+export function renderFoo(state: AppState): string {
+  return `<html string>`
+}
+export function bindFoo(state?: AppState): void {
+  /* attach event listeners */
+}
 ```
 
 `fullRender(state)` in `main.ts` replaces `appEl.innerHTML` entirely and re-attaches all listeners.
@@ -149,13 +172,13 @@ Views that need to call `appRenderWorkspace` or other main.ts functions receive 
 
 ```ts
 // In the view module:
-let _appRenderWorkspace: (view: string) => void = () => {};
+let _appRenderWorkspace: (view: string) => void = () => {}
 export function setFooHooks(appRenderWorkspace: (v: string) => void): void {
-  _appRenderWorkspace = appRenderWorkspace;
+  _appRenderWorkspace = appRenderWorkspace
 }
 
 // In main.ts — called once before first render:
-setFooHooks(appRenderWorkspace);
+setFooHooks(appRenderWorkspace)
 ```
 
 ### Adapter interface
@@ -169,26 +192,26 @@ stream(onRemoteChange) → unsubscribe fn
 clear()               → void
 ```
 
-`NullAdapter` (the default) inherits all four as no-ops. The app never imports a concrete adapter directly — `setAdapter()` in `db.ts` injects it, called from `apps/*/src/entry.ts`.
+`NullAdapter` (the default) inherits all four as no-ops. The app never imports a concrete adapter directly — `setAdapter()` in `db.ts` injects it, called from the app entry file (e.g. `apps/offline-web/src/entry-browser-ai.ts`) before `init()`.
 
 ---
 
 ## Storage architecture
 
-| What | Backend | Key / DB name | Notes |
-|------|---------|---------------|-------|
-| Salt, verify token, encrypted vault blob, KDF version | IndexedDB `nexus_vault_v2` / store `meta` | `nexus_salt_v1`, `nexus_verify_v1`, `nexus_vault_v1`, `nexus_kdf_v` | Primary encrypted data store |
-| Session `CryptoKey` | IndexedDB `nexus_keys_v1` / store `sessionKey` | key `'active'` | Non-extractable; survives F5, clears on tab close |
-| Documents, Conversations | IndexedDB `nexus_data_v1` / stores `documents`, `conversations` | record `id` | Each record individually AES-GCM encrypted |
-| FS handle (vault file pointer) | IndexedDB `nexus_fs_v1` / store `handles` | `'fileHandle'` | Chrome/Edge File System Access API handle |
-| Theme | `localStorage` key `taskapp_theme` | — | Non-sensitive preference |
-| Dashboard layout | `localStorage` key `taskapp_dash_v1` | — | Non-sensitive preference |
-| AI preferences | `localStorage` key `taskapp_ai_prefs_v2` | — | Plaintext JSON; includes `nanoDisclaimerAcknowledged` (one-time download warning flag) |
-| Cloud API keys | IDB `nexus_data_v1` / record `__ai_secrets__` | — | AES-GCM encrypted |
-| Audit log | IDB `nexus_data_v1` / record `__audit_log__` | — | AES-GCM encrypted; exportable CSV/JSON Lines |
-| TOTP config | IDB `nexus_data_v1` / record `__mfa_totp__` | — | AES-GCM encrypted; secret + enabled flag |
-| Passkey credentials | IDB `nexus_data_v1` / record `__mfa_passkeys__` | — | AES-GCM encrypted; PRF-wrapped master password per credential |
-| Auth lockout state | `localStorage` keys `nexus_auth_fail_count`, `nexus_auth_locked_until` | — | Persists across tab close (NIST AC-7) |
+| What                                                  | Backend                                                                | Key / DB name                                                       | Notes                                                                                  |
+| ----------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Salt, verify token, encrypted vault blob, KDF version | IndexedDB `nexus_vault_v2` / store `meta`                              | `nexus_salt_v1`, `nexus_verify_v1`, `nexus_vault_v1`, `nexus_kdf_v` | Primary encrypted data store                                                           |
+| Session `CryptoKey`                                   | IndexedDB `nexus_keys_v1` / store `sessionKey`                         | key `'active'`                                                      | Non-extractable; survives F5, clears on tab close                                      |
+| Documents, Conversations                              | IndexedDB `nexus_data_v1` / stores `documents`, `conversations`        | record `id`                                                         | Each record individually AES-GCM encrypted                                             |
+| FS handle (vault file pointer)                        | IndexedDB `nexus_fs_v1` / store `handles`                              | `'fileHandle'`                                                      | Chrome/Edge File System Access API handle                                              |
+| Theme                                                 | `localStorage` key `taskapp_theme`                                     | —                                                                   | Non-sensitive preference                                                               |
+| Dashboard layout                                      | `localStorage` key `taskapp_dash_v1`                                   | —                                                                   | Non-sensitive preference                                                               |
+| AI preferences                                        | `localStorage` key `taskapp_ai_prefs_v2`                               | —                                                                   | Plaintext JSON; includes `nanoDisclaimerAcknowledged` (one-time download warning flag) |
+| Cloud API keys                                        | IDB `nexus_data_v1` / record `__ai_secrets__`                          | —                                                                   | AES-GCM encrypted                                                                      |
+| Audit log                                             | IDB `nexus_data_v1` / record `__audit_log__`                           | —                                                                   | AES-GCM encrypted; exportable CSV/JSON Lines                                           |
+| TOTP config                                           | IDB `nexus_data_v1` / record `__mfa_totp__`                            | —                                                                   | AES-GCM encrypted; secret + enabled flag                                               |
+| Passkey credentials                                   | IDB `nexus_data_v1` / record `__mfa_passkeys__`                        | —                                                                   | AES-GCM encrypted; PRF-wrapped master password per credential                          |
+| Auth lockout state                                    | `localStorage` keys `nexus_auth_fail_count`, `nexus_auth_locked_until` | —                                                                   | Persists across tab close (NIST AC-7)                                                  |
 
 ---
 
@@ -218,13 +241,14 @@ Two policies created once at module scope in `trusted-types.ts`:
 ## State management (`state.ts`)
 
 ```ts
-getState()              // returns current AppState
-setState(patch)         // shallow merge, notifies all listeners
-subscribe(fn)           // returns unsubscribe fn — always store it
-reloadData()            // pulls fresh records from _dbData into state
+getState() // returns current AppState
+setState(patch) // shallow merge, notifies all listeners
+subscribe(fn) // returns unsubscribe fn — always store it
+reloadData() // pulls fresh records from _dbData into state
 ```
 
 **State shape** (full `AppState` interface in `state.ts`):
+
 ```
 authed, cryptoKey, currentView, sidebarCollapsed, theme,
 clients, departments, projects, tasks, people, standaloneNotes,
@@ -242,12 +266,12 @@ runningTimer, timerElapsed
 All UI code uses these — never touches IDB or the vault directly:
 
 ```ts
-dbGetAll(store)                    // returns copy of in-memory store array
-dbGetById(store, id)               // returns record or null
-dbCreate(store, rec)               // async — schedules debounced flush
-dbUpdate(store, id, changes)       // async — schedules debounced flush
-dbDelete(store, id)                // async — schedules debounced flush
-softDelete(store, id)              // moves to trash store
+dbGetAll(store) // returns copy of in-memory store array
+dbGetById(store, id) // returns record or null
+dbCreate(store, rec) // async — schedules debounced flush
+dbUpdate(store, id, changes) // async — schedules debounced flush
+dbDelete(store, id) // async — schedules debounced flush
+softDelete(store, id) // moves to trash store
 restoreFromTrash(trashId)
 permanentDelete(trashId)
 ```
@@ -268,19 +292,28 @@ To add a new large-content store: add to `IDB_STORES` in `constants.ts`, create 
 
 The core supports three tiers, but build profiles may restrict them:
 
-| Tier | Backend |
-|------|---------|
+| Tier      | Backend                                                                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `browser` | Chrome Built-in AI (Gemini Nano) / Edge Built-in AI (Phi-4-mini) — same `window.LanguageModel` API; or transformers.js (WebGPU) in non-OT builds |
-| `ollama` | Local Ollama daemon, default `qwen2.5:3b` |
-| `cloud` | Anthropic / OpenAI / Google — direct fetch, no SDK |
+| `ollama`  | Local Ollama daemon, default `qwen2.5:3b`                                                                                                        |
+| `cloud`   | Anthropic / OpenAI / Google — direct fetch, no SDK                                                                                               |
 
-`apps/offline` sets the `ot-only` deployment policy in `apps/offline/src/entry.ts`. In that profile, only the **browser** tier is allowed — Chrome uses Gemini Nano, Edge uses Phi-4-mini; both expose the same `window.LanguageModel` API, run entirely on-device, and require no network connection after the initial browser-managed model download. Cloud AI, WebGPU/transformers.js, Hugging Face model downloads, and in-app Ollama model pulls are all disabled. When the AI wizard is opened in this profile it redirects to a built-in AI setup modal that shows a one-time download disclaimer (only when the model still needs downloading), then a progress bar, then navigates to chat when ready. The disclaimer is not shown again after first acknowledgement, even after disable/re-enable.
+**`apps/offline-web` — three sub-profiles:**
 
-`apps/offline/vite.config.ts` aliases the WebGPU/transformers.js browser provider and all three cloud providers to disabled stubs. `browser-nano.ts` (browser Prompt API — Chrome + Edge) is **not** aliased — it remains active in the offline bundle.
+| Profile                                  | Entry                  | Allowed AI                                                                                                                                             |
+| ---------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **browser-ai** (default `build:offline`) | `entry-browser-ai.ts`  | Browser built-in only: Chrome Gemini Nano or Edge Phi-4-mini via `window.LanguageModel`. Fully on-device, no network after initial model download.     |
+| **no-ai**                                | `entry-no-ai.ts`       | None — `allowedTiers: []`. Zero AI code.                                                                                                               |
+| **internal-ai**                          | `entry-internal-ai.ts` | Browser AI + private/LAN Ollama endpoints (`allowedTiers: ['browser', 'ollama']`). OT_AI_CONNECT_SRC specifies permitted Ollama origins at build time. |
+
+The **browser-ai** profile (`entry-browser-ai.ts`) sets `OT_ONLY_DEPLOYMENT_POLICY` (`allowedTiers: ['browser']`). Cloud AI, WebGPU/transformers.js, Hugging Face model downloads, and in-app Ollama model pulls are all disabled. When the AI wizard is opened it redirects to a built-in AI setup modal that shows a one-time download disclaimer (only when the model still needs downloading), then a progress bar, then navigates to chat when ready. The disclaimer is not shown again after first acknowledgement.
+
+`apps/offline-web/vite.config.ts` aliases the WebGPU/transformers.js browser provider and all three cloud providers to disabled stubs. `browser-nano.ts` (browser Prompt API — Chrome Gemini Nano / Edge Phi-4-mini) is **not** aliased — it remains active in the bundle for all three profiles.
 
 Cloud API keys stored encrypted in IDB under `__ai_secrets__`. Prefs in `localStorage` key `taskapp_ai_prefs_v2`.
 
 **Module layout** (`packages/core/src/ai/`):
+
 - `ai-prefs.ts` — `AIPrefs` type, singleton `aiPrefs`, `loadAIPrefs` / `saveAIPrefs`
 - `providers/browser-nano.ts` — Chrome/Edge Prompt API (`window.LanguageModel`); single `create()` call handles download (with `downloadprogress` monitor) + session creation; stateless, sessions owned by ai-runtime
 - `providers/browser-transformers.ts` — WebGPU via bundled `@huggingface/transformers`
@@ -290,7 +323,7 @@ Cloud API keys stored encrypted in IDB under `__ai_secrets__`. Prefs in `localSt
 - `ai-tools.ts` — tool catalog, system prompt, `handleModelOutput`, `routeToolCall`, `applyPendingAction`
 - `ai-settings.ts` — wizard, encrypted secrets, cost tracking, model catalogs (`BROWSER_MODELS`, `OLLAMA_CATALOG`, `CLOUD_PROVIDERS`); built-in AI modal (`openNanoDownloadModal`, `closeNanoDownloadModal`, `renderNanoDownloadModal`, `bindNanoDownloadModal`, `isNanoModalOpen`) used in offline/OT builds — shows disclaimer only on first download, real progress bar via `aiRuntime.downloadProgress`, auto-triggers when AI view loads and model isn't running
 - `ai-ui.ts` — chat panel / workspace render+bind, model picker, `sendAIMessage`
-- `deployment-policy.ts` — profile-level AI/network policy; offline uses OT-only browser-only policy (`allowedTiers: ['browser']`, covering both Chrome Nano and Edge Phi-4-mini)
+- `deployment-policy.ts` — profile-level AI/network policy; browser-ai profile uses OT-only policy (`allowedTiers: ['browser']`, covering both Chrome Gemini Nano and Edge Phi-4-mini); no-ai profile uses `allowedTiers: []`; internal-ai profile uses `allowedTiers: ['browser', 'ollama']`
 
 **ESM live binding rule:** All mutable AI state lives on the `aiRuntime` object (not `export let`). Any module can read or write `aiRuntime.*` properties without owning the module.
 
@@ -335,10 +368,11 @@ In `db.ts`, `dbFlush()` calls `fsWriteVault()` lazily (dynamic import) to avoid 
 Open `dist/offline/index.html` directly in Chrome or Edge. No server needed — `file://` protocol works.
 
 For Built-in AI (the only AI tier in the offline build — Gemini Nano in Chrome, Phi-4-mini in Edge):
+
 - **Chrome 127+**: enable `chrome://flags/#prompt-api-for-gemini-nano`, relaunch. Chrome auto-downloads the ~4 GB model in the background.
 - **Edge 127+**: enable the equivalent flag at `edge://flags`, relaunch. Edge downloads Phi-4-mini on first use.
 - After the flag is enabled and the model is present, the app auto-presents the built-in AI modal when you navigate to the AI view. The one-time download disclaimer appears only if the browser still needs to fetch the model; subsequent enable/disable cycles skip it and go straight to the progress bar or connecting state.
-For Ollama (sync/enterprise builds only, not the offline profile): prefer `OLLAMA_ORIGINS=null ollama serve` (or the specific served origin if not using `file://`).
+  For Ollama (sync/enterprise builds only, not the offline profile): prefer `OLLAMA_ORIGINS=null ollama serve` (or the specific served origin if not using `file://`).
 
 Do not edit `taskapp.html` — it is the legacy reference file, not the active source. All edits go in `packages/core/src/`.
 

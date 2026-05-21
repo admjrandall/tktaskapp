@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Network Security Config
+  Referenced from AndroidManifest.xml:
+    android:networkSecurityConfig="@xml/network_security_config"
+
+  Task App CRM — offline profile:
+    - cleartextTrafficPermitted="false" globally (no HTTP, only HTTPS)
+    - System CAs only; no user-installed CAs trusted (prevents MITM by user-added roots)
+    - No domain-specific exceptions; the offline app makes no network requests
+
+  This file is the Android complement to ios/App/Info.plist (NSAllowsArbitraryLoads: false).
+  Both must be verified by a MITM proxy test as part of the MASVS-NETWORK-1 acceptance check.
+
+  For enterprise builds that require an API connection, add a <domain-config> block for the
+  specific API origin only — never a wildcard. Submit NSC changes for MASVS review before
+  adding any enterprise domain exceptions.
+-->
+<network-security-config>
+
+  <base-config cleartextTrafficPermitted="false">
+    <trust-anchors>
+      <!-- Trust only system-installed CAs — do not trust user-added roots.
+           This prevents MITM attacks using user-installed proxy certificates
+           (MASVS-NETWORK-2 requirement). -->
+      <certificates src="system" />
+    </trust-anchors>
+  </base-config>
+
+  <!--
+    Debug builds may optionally trust user CAs for proxy testing.
+    This block is intentionally omitted from the production config.
+    Add a separate debug-overrides network_security_config if needed:
+
+    <debug-overrides>
+      <trust-anchors>
+        <certificates src="user" />
+      </trust-anchors>
+    </debug-overrides>
+  -->
+
+</network-security-config>

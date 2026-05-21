@@ -2,7 +2,7 @@
 
 **Codebase:** TypeScript monorepo at `d:\techkeycrmapp\`
 **Build output:** `dist/offline/index.html` (~312 kB, single self-contained file)
-**Last reviewed:** 2026-05-17
+**Last reviewed:** 2026-05-19
 **Source:** Generated from direct inspection of the monorepo source files.
 
 This document is the authoritative reference for every module, function, constant, state property, data store, and architectural pattern in the application.
@@ -46,47 +46,61 @@ packages/core/src/         All application logic (TypeScript)
 packages/adapter-null/     NullAdapter — offline-only no-op sync
 packages/adapter-rxdb/     RxDBAdapter stub
 packages/adapter-dataverse/ DataverseAdapter stub
-apps/offline/              Vite build → single HTML file (primary)
-apps/sync/                 Vite build → single HTML file + PWA manifest
+apps/offline-web/          Vite builds → offline single HTML files (three sub-profiles)
+apps/pwa-sync/             PWA build placeholder (NullAdapter; was apps/sync)
 apps/dataverse/            Power Apps Code App build
-apps/mobile/               Capacitor mobile wrapper config
-dist/offline/index.html    Built output — open this in Chrome/Edge
+apps/mobile/               Capacitor mobile wrapper config stub
+dist/offline/index.html    Built output (browser-ai profile) — open in Chrome/Edge
 generate-csp.mjs           Regenerates CSP hashes post-build
 ```
 
 ### 1.2 Build Scripts
 
-| Script | Command | Output |
-|--------|---------|--------|
-| `build:offline` | `vite build --config apps/offline/vite.config.ts && node generate-csp.mjs dist/offline/index.html` | `dist/offline/index.html` + `dist/offline/index.sha256` |
-| `build:sync` | `vite build --config apps/sync/vite.config.ts && node generate-csp.mjs dist/sync/index.html` | `dist/sync/index.html` |
-| `build:all` | runs both above | all targets |
-| `typecheck` | `tsc --noEmit` | type errors only |
+| Script          | Command                                                                                                | Output                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `build:offline` | `vite build --config apps/offline-web/vite.config.ts && node generate-csp.mjs dist/offline/index.html` | `dist/offline/index.html` (browser-ai profile) + `dist/offline/index.sha256` |
+| `build:sync`    | `vite build --config apps/pwa-sync/vite.config.ts && node generate-csp.mjs dist/sync/index.html`       | `dist/sync/index.html`                                                       |
+| `build:all`     | runs offline + sync + dataverse                                                                        | all targets                                                                  |
+| `typecheck`     | `tsc --noEmit`                                                                                         | type errors only                                                             |
 
 ### 1.3 Path Aliases (vite.config.ts)
 
-| Alias | Resolves to |
-|-------|-------------|
-| `@core` | `packages/core/src` |
-| `@adapter-null` | `packages/adapter-null/src` |
-| `@huggingface/transformers` | Offline build only: `packages/core/src/ai/providers/browser-transformers-disabled.ts` — stubs the entire HuggingFace Transformers package |
-| `./providers/browser-transformers.js` relative import | Offline build only: `packages/core/src/ai/providers/browser-ai-disabled.ts` — stubs `loadWebLLM`/`callWebLLM` (WebGPU ONNX pipeline); `browser-nano.ts` (Chrome Prompt API) is **not** aliased and remains live in the offline bundle |
-| Cloud provider relative imports (`./providers/anthropic.js`, `openai.js`, `google.js`) | Offline build only: `packages/core/src/ai/providers/cloud-disabled.ts` — stubs all three cloud providers |
+| Alias                                                                                  | Resolves to                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@core`                                                                                | `packages/core/src`                                                                                                                                                                                                                   |
+| `@adapter-null`                                                                        | `packages/adapter-null/src`                                                                                                                                                                                                           |
+| `@huggingface/transformers`                                                            | Offline build only: `packages/core/src/ai/providers/browser-transformers-disabled.ts` — stubs the entire HuggingFace Transformers package                                                                                             |
+| `./providers/browser-transformers.js` relative import                                  | Offline build only: `packages/core/src/ai/providers/browser-ai-disabled.ts` — stubs `loadWebLLM`/`callWebLLM` (WebGPU ONNX pipeline); `browser-nano.ts` (Chrome Prompt API) is **not** aliased and remains live in the offline bundle |
+| Cloud provider relative imports (`./providers/anthropic.js`, `openai.js`, `google.js`) | Offline build only: `packages/core/src/ai/providers/cloud-disabled.ts` — stubs all three cloud providers                                                                                                                              |
 
-### 1.4 Entry Point
+### 1.4 Entry Points (`apps/offline-web/src/`)
 
-`apps/offline/src/entry.ts` — sets the OT-only deployment policy, sets the `NullAdapter`, and calls `init()`:
+Three sub-profile entry files — all thin wrappers that set policy, set the `NullAdapter`, and call `init()`:
+
+| File                   | Profile               | `allowedTiers`          | Notes                                                                                                    |
+| ---------------------- | --------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| `entry-browser-ai.ts`  | `ot-only`             | `['browser']`           | **Default `build:offline`.** Chrome Gemini Nano or Edge Phi-4-mini only. No Ollama. No cloud.            |
+| `entry-no-ai.ts`       | `offline-no-ai`       | `[]`                    | Zero AI code. Phase 1 adds a dedicated Vite config that aliases all AI providers to disabled stubs.      |
+| `entry-internal-ai.ts` | `offline-internal-ai` | `['browser', 'ollama']` | Browser AI + private/LAN Ollama. `OT_AI_CONNECT_SRC` controls both the CSP and permitted Ollama origins. |
+
 ```ts
-import { NullAdapter } from '@adapter-null/index.js';
-import { setAdapter } from '@core/db.js';
-import { OT_ONLY_DEPLOYMENT_POLICY, setDeploymentPolicy } from '@core/deployment-policy.js';
-import { init } from '@core/main.js';
-setDeploymentPolicy({ ...OT_ONLY_DEPLOYMENT_POLICY, ai: { ...OT_ONLY_DEPLOYMENT_POLICY.ai, allowedConnectSrc: __OT_AI_CONNECT_SRC__.split(/\s+/).filter(Boolean) } });
-setAdapter(new NullAdapter());
-init();
+// entry-browser-ai.ts (default build)
+import { NullAdapter } from '@adapter-null/index.js'
+import { setAdapter } from '@core/db.js'
+import { OT_ONLY_DEPLOYMENT_POLICY, setDeploymentPolicy } from '@core/deployment-policy.js'
+import { init } from '@core/main.js'
+setDeploymentPolicy({
+  ...OT_ONLY_DEPLOYMENT_POLICY,
+  ai: {
+    ...OT_ONLY_DEPLOYMENT_POLICY.ai,
+    allowedConnectSrc: __OT_AI_CONNECT_SRC__.split(/\s+/).filter(Boolean),
+  },
+})
+setAdapter(new NullAdapter())
+init()
 ```
 
-Offline LAN AI endpoints are build-allowlisted with `OT_AI_CONNECT_SRC`.
+For the **browser-ai** profile, `OT_AI_CONNECT_SRC` affects only the CSP `connect-src` — it does **not** enable Ollama (blocked by `allowedTiers: ['browser']`). The browser tier covers both Chrome Gemini Nano and Edge Phi-4-mini via `window.LanguageModel`.
 
 ---
 
@@ -94,28 +108,28 @@ Offline LAN AI endpoints are build-allowlisted with `OT_AI_CONNECT_SRC`.
 
 ### 2.1 CSP (in built `dist/offline/index.html`)
 
-| Directive | Value | Purpose |
-|-----------|-------|---------|
-| `default-src` | `'none'` | Deny all by default |
-| `script-src` | SHA-256 hash of the single inlined script block | Hash prevents XSS. No `'wasm-unsafe-eval'` in the offline build — transformers.js WebLLM is disabled and the ONNX runtime is not bundled. Regenerated by `generate-csp.mjs` after every build. |
-| `style-src` | `'unsafe-inline'` | Required for 177+ inline `style=` attributes in render functions; style hashes not used (when style-src contains hashes, browsers ignore unsafe-inline per spec) |
-| `img-src` | `'self' data: blob:` | Permits base64 data URIs (file attachments) and blob URLs |
-| `connect-src` | Offline: `'self' http://localhost:11434 http://127.0.0.1:11434` by default | Offline profile uses browser built-in AI (Gemini Nano / Phi-4-mini), which makes no network requests during inference — these entries are maintained for forward compatibility. `OT_AI_CONNECT_SRC` adds extra origins to this directive at build time (CSP only — does not enable Ollama tier). Sync/enterprise profiles may allow cloud and Hugging Face endpoints. |
-| `worker-src` | `blob:` | transformers.js WebLLM Web Worker |
-| `object-src` | `'none'` | Block all plugins |
-| `base-uri` | `'none'` | Prevent base tag injection |
-| `trusted-types` | `nexus-crm nexus-crm-raw` | Only these two policy names may be registered |
-| `require-trusted-types-for` | `'script'` | Any raw string to a DOM sink throws |
+| Directive                   | Value                                                                      | Purpose                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `default-src`               | `'none'`                                                                   | Deny all by default                                                                                                                                                                                                                                                                                                                                                   |
+| `script-src`                | SHA-256 hash of the single inlined script block                            | Hash prevents XSS. No `'wasm-unsafe-eval'` in the offline build — transformers.js WebLLM is disabled and the ONNX runtime is not bundled. Regenerated by `generate-csp.mjs` after every build.                                                                                                                                                                        |
+| `style-src`                 | `'unsafe-inline'`                                                          | Required for 177+ inline `style=` attributes in render functions; style hashes not used (when style-src contains hashes, browsers ignore unsafe-inline per spec)                                                                                                                                                                                                      |
+| `img-src`                   | `'self' data: blob:`                                                       | Permits base64 data URIs (file attachments) and blob URLs                                                                                                                                                                                                                                                                                                             |
+| `connect-src`               | Offline: `'self' http://localhost:11434 http://127.0.0.1:11434` by default | Offline profile uses browser built-in AI (Gemini Nano / Phi-4-mini), which makes no network requests during inference — these entries are maintained for forward compatibility. `OT_AI_CONNECT_SRC` adds extra origins to this directive at build time (CSP only — does not enable Ollama tier). Sync/enterprise profiles may allow cloud and Hugging Face endpoints. |
+| `worker-src`                | `blob:`                                                                    | transformers.js WebLLM Web Worker                                                                                                                                                                                                                                                                                                                                     |
+| `object-src`                | `'none'`                                                                   | Block all plugins                                                                                                                                                                                                                                                                                                                                                     |
+| `base-uri`                  | `'none'`                                                                   | Prevent base tag injection                                                                                                                                                                                                                                                                                                                                            |
+| `trusted-types`             | `nexus-crm nexus-crm-raw dompurify`                                        | Only these three policy names may be registered. `dompurify` is the name DOMPurify 3.x registers internally when Trusted Types is enforced — it must be explicitly allowed or DOMPurify's internal DOM parsing fails.                                                                                                                                                 |
+| `require-trusted-types-for` | `'script'`                                                                 | Any raw string to a DOM sink throws                                                                                                                                                                                                                                                                                                                                   |
 
 `generate-csp.mjs` runs automatically after every build, recomputes the SHA-256 hash of the bundled script block, writes it into the CSP meta tag, and writes `dist/offline/index.sha256`.
 
 ### 2.2 Trusted Types (`packages/core/src/trusted-types.ts`)
 
-| Symbol | Type | Purpose |
-|--------|------|---------|
-| `_ttPolicy` | `TrustedTypePolicy \| null` | `nexus-crm` — HTML-escapes user data for innerHTML |
-| `_rawPolicy` | `TrustedTypePolicy \| null` | `nexus-crm-raw` — passes safe template HTML unchanged |
-| `patchInnerHTML` IIFE | side effect | Overrides `Element.prototype.innerHTML` so all string assignments route through `_rawPolicy` |
+| Symbol                | Type                        | Purpose                                                                                      |
+| --------------------- | --------------------------- | -------------------------------------------------------------------------------------------- |
+| `_ttPolicy`           | `TrustedTypePolicy \| null` | `nexus-crm` — HTML-escapes user data for innerHTML                                           |
+| `_rawPolicy`          | `TrustedTypePolicy \| null` | `nexus-crm-raw` — passes safe template HTML unchanged                                        |
+| `patchInnerHTML` IIFE | side effect                 | Overrides `Element.prototype.innerHTML` so all string assignments route through `_rawPolicy` |
 
 **Rule:** This module must be the **first import** in `main.ts`. Never call `trustedTypes.createPolicy('nexus-crm-raw', ...)` again.
 
@@ -133,19 +147,19 @@ Source: `packages/core/src/styles/main.css` (2,269 lines). Inlined by Vite into 
 
 All tokens on `:root`. Dark mode overrides on `[data-theme=dark]`.
 
-| Token | Light | Purpose |
-|-------|-------|---------|
-| `--bg-base` | `--slate-50` | Page background |
-| `--bg-surface` | `#fff` | Cards, panels |
-| `--bg-elevated` | `#fff` | Modals |
-| `--bg-sidebar` | `--slate-900` | Sidebar |
-| `--text-primary` | `--slate-900` | Body text |
-| `--text-secondary` | `--slate-500` | Secondary text |
-| `--text-tertiary` | `--slate-400` | Disabled/hint |
-| `--accent` | `--indigo-600` | Primary action |
-| `--accent-hover` | `--indigo-700` | Hover |
-| `--border-subtle` | `--slate-200` | Hairline borders |
-| `--border-default` | `--slate-300` | Standard borders |
+| Token              | Light          | Purpose          |
+| ------------------ | -------------- | ---------------- |
+| `--bg-base`        | `--slate-50`   | Page background  |
+| `--bg-surface`     | `#fff`         | Cards, panels    |
+| `--bg-elevated`    | `#fff`         | Modals           |
+| `--bg-sidebar`     | `--slate-900`  | Sidebar          |
+| `--text-primary`   | `--slate-900`  | Body text        |
+| `--text-secondary` | `--slate-500`  | Secondary text   |
+| `--text-tertiary`  | `--slate-400`  | Disabled/hint    |
+| `--accent`         | `--indigo-600` | Primary action   |
+| `--accent-hover`   | `--indigo-700` | Hover            |
+| `--border-subtle`  | `--slate-200`  | Hairline borders |
+| `--border-default` | `--slate-300`  | Standard borders |
 
 **Priority colours:** `--priority-low` `#10b981` · `--priority-medium` `#f59e0b` · `--priority-high` `#ef4444` · `--priority-critical` `#dc2626`
 
@@ -165,38 +179,38 @@ All tokens on `:root`. Dark mode overrides on `[data-theme=dark]`.
 
 ### 4.1 Crypto & Storage
 
-| Constant | Value | Purpose |
-|----------|-------|---------|
-| `PBKDF2_ITERATIONS` | `600000` | Current KDF iteration count (OWASP 2026) |
-| `PBKDF2_ITERATIONS_LEGACY` | `310000` | Old count — migration detection only |
-| `KDF_VERSION_KEY` | `'nexus_kdf_v'` | IDB meta key for iteration version |
-| `SALT_BYTES` | `32` | Salt length in bytes |
-| `IV_BYTES` | `12` | AES-GCM IV length |
-| `VAULT_KEY` | `'nexus_vault_v1'` | IDB meta key for encrypted CRM blob |
-| `SALT_KEY` | `'nexus_salt_v1'` | IDB meta key for salt |
-| `VERIFY_KEY` | `'nexus_verify_v1'` | IDB meta key for password verify token |
-| `VERIFY_PAYLOAD` | `'NEXUS_CRM_OK'` | Plaintext inside verify token |
-| `KEYS_DB_NAME` | `'nexus_keys_v1'` | IDB database for session CryptoKey |
-| `SESSION_CRYPTOKEY_STORE` | `'sessionKey'` | Object store name |
-| `VAULT_DB_NAME` | `'nexus_vault_v2'` | IDB database for vault meta |
-| `VAULT_META_STORE` | `'meta'` | Object store name |
-| `DATA_DB_NAME` | `'nexus_data_v1'` | IDB database for documents/conversations |
-| `STORES` | 12-element array | CRM stores flushed as one vault blob |
-| `IDB_STORES` | `['documents','conversations']` | Per-record IDB encryption stores |
-| `FS_HANDLE_DB` | `'nexus_fs_v1'` | IDB database for FS handle |
-| `FS_HANDLE_KEY` | `'fileHandle'` | Key for stored file handle |
-| `FS_FILENAME` | `'nexus-data.vault'` | Suggested disk filename |
+| Constant                   | Value                           | Purpose                                  |
+| -------------------------- | ------------------------------- | ---------------------------------------- |
+| `PBKDF2_ITERATIONS`        | `600000`                        | Current KDF iteration count (OWASP 2026) |
+| `PBKDF2_ITERATIONS_LEGACY` | `310000`                        | Old count — migration detection only     |
+| `KDF_VERSION_KEY`          | `'nexus_kdf_v'`                 | IDB meta key for iteration version       |
+| `SALT_BYTES`               | `32`                            | Salt length in bytes                     |
+| `IV_BYTES`                 | `12`                            | AES-GCM IV length                        |
+| `VAULT_KEY`                | `'nexus_vault_v1'`              | IDB meta key for encrypted CRM blob      |
+| `SALT_KEY`                 | `'nexus_salt_v1'`               | IDB meta key for salt                    |
+| `VERIFY_KEY`               | `'nexus_verify_v1'`             | IDB meta key for password verify token   |
+| `VERIFY_PAYLOAD`           | `'NEXUS_CRM_OK'`                | Plaintext inside verify token            |
+| `KEYS_DB_NAME`             | `'nexus_keys_v1'`               | IDB database for session CryptoKey       |
+| `SESSION_CRYPTOKEY_STORE`  | `'sessionKey'`                  | Object store name                        |
+| `VAULT_DB_NAME`            | `'nexus_vault_v2'`              | IDB database for vault meta              |
+| `VAULT_META_STORE`         | `'meta'`                        | Object store name                        |
+| `DATA_DB_NAME`             | `'nexus_data_v1'`               | IDB database for documents/conversations |
+| `STORES`                   | 12-element array                | CRM stores flushed as one vault blob     |
+| `IDB_STORES`               | `['documents','conversations']` | Per-record IDB encryption stores         |
+| `FS_HANDLE_DB`             | `'nexus_fs_v1'`                 | IDB database for FS handle               |
+| `FS_HANDLE_KEY`            | `'fileHandle'`                  | Key for stored file handle               |
+| `FS_FILENAME`              | `'nexus-data.vault'`            | Suggested disk filename                  |
 
 ### 4.2 Domain Data
 
-| Constant | Value |
-|----------|-------|
-| `PRIORITIES` | `['Low','Medium','High','Critical']` |
+| Constant         | Value                                                     |
+| ---------------- | --------------------------------------------------------- |
+| `PRIORITIES`     | `['Low','Medium','High','Critical']`                      |
 | `PROJECT_STAGES` | `['Lead','Active','Review','On Hold','Done','Cancelled']` |
-| `TASK_STATUSES` | `['Todo','In Progress','Blocked','Done']` |
-| `COMM_TYPES` | `['Email','Call','Meeting','Note','Other']` |
-| `AVATAR_COLORS` | 9 `[bg, fg]` pairs — deterministic from string hash |
-| `TAG_COLORS` | 8 `{bg, text, border, label}` objects |
+| `TASK_STATUSES`  | `['Todo','In Progress','Blocked','Done']`                 |
+| `COMM_TYPES`     | `['Email','Call','Meeting','Note','Other']`               |
+| `AVATAR_COLORS`  | 9 `[bg, fg]` pairs — deterministic from string hash       |
+| `TAG_COLORS`     | 8 `{bg, text, border, label}` objects                     |
 
 ---
 
@@ -208,23 +222,23 @@ Handles Base64 helpers, key derivation, and AES-GCM encrypt/decrypt. Higher-leve
 
 ### 5.1 Base64 Helpers
 
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `u8ToBase64(u8)` | `(Uint8Array) → string` | Uses `Uint8Array.toBase64()` (Sep 2025) with 64KB-chunked `btoa` fallback. Replaces `btoa(String.fromCharCode(...))`. |
-| `base64ToU8(b64)` | `(string) → Uint8Array` | Uses `Uint8Array.fromBase64()` with `atob` fallback. |
+| Function          | Signature               | Notes                                                                                                                 |
+| ----------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `u8ToBase64(u8)`  | `(Uint8Array) → string` | Uses `Uint8Array.toBase64()` (Sep 2025) with 64KB-chunked `btoa` fallback. Replaces `btoa(String.fromCharCode(...))`. |
+| `base64ToU8(b64)` | `(string) → Uint8Array` | Uses `Uint8Array.fromBase64()` with `atob` fallback.                                                                  |
 
 ### 5.2 Key Derivation
 
-| Function | Signature | Notes |
-|----------|-----------|-------|
+| Function                                 | Signature                                        | Notes                                                  |
+| ---------------------------------------- | ------------------------------------------------ | ------------------------------------------------------ |
 | `deriveKey(password, salt, iterations?)` | `async (string, Uint8Array, number) → CryptoKey` | PBKDF2-HMAC-SHA-256, AES-GCM-256, `extractable: false` |
 
 ### 5.3 AES-GCM
 
-| Function | Signature | Notes |
-|----------|-----------|-------|
+| Function                | Signature                             | Notes                                                           |
+| ----------------------- | ------------------------------------- | --------------------------------------------------------------- |
 | `aesEncrypt(key, data)` | `async (CryptoKey, unknown) → string` | JSON-serialises → encrypts → prepends 12-byte IV → `u8ToBase64` |
-| `aesDecrypt(key, b64)` | `async (CryptoKey, string) → unknown` | `base64ToU8` → splits IV → decrypts → JSON-parses |
+| `aesDecrypt(key, b64)`  | `async (CryptoKey, string) → unknown` | `base64ToU8` → splits IV → decrypts → JSON-parses               |
 
 ---
 
@@ -234,24 +248,24 @@ Handles Base64 helpers, key derivation, and AES-GCM encrypt/decrypt. Higher-leve
 
 Owns all operations against `nexus_vault_v2` IDB, including higher-level crypto composition functions.
 
-| Function | Signature | Purpose |
-|----------|-----------|---------|
-| `_vaultDbOpen()` | `() → Promise<IDBDatabase>` | Opens `nexus_vault_v2` |
-| `_vaultMetaGet(k)` | `async (string) → unknown` | Reads from meta store; returns null on miss/error |
-| `_vaultMetaSet(k, v)` | `async (string, unknown) → void` | Writes to meta store; throws readable error on failure |
-| `_migrateLocalStorageToIDB()` | `async () → void` | One-time: moves legacy localStorage vault data to IDB, removes old keys. Idempotent. |
-| `getSalt()` | `async () → Uint8Array` | Returns existing salt or generates and stores a new one |
-| `isFirstRun()` | `async () → boolean` | True if `SALT_KEY` not in IDB |
-| `loadVault(key)` | `async (CryptoKey) → Record<string, unknown[]>` | Reads and decrypts vault blob. Throws on decryption failure. |
-| `saveVault(key, data)` | `async (CryptoKey, Record) → void` | Encrypts and writes vault blob |
-| `writeVerifyToken(key)` | `async (CryptoKey) → void` | Encrypts `VERIFY_PAYLOAD` and writes to IDB |
-| `verifyPassword(key)` | `async (CryptoKey) → boolean` | Returns true if verify token decrypts to `VERIFY_PAYLOAD` |
-| `initCrypto(password)` | `async (string) → CryptoKey` | Handles new vault, legacy 310k→600k migration, normal unlock |
-| `changePassword(oldKey, newPw)` | `async (CryptoKey, string) → CryptoKey` | Re-derives, re-encrypts vault and verify token |
-| `exportEncryptedBackup(key, pw)` | `async (CryptoKey, string) → string` | Exports `{v:1, salt, data, ts}` JSON re-encrypted with backup password |
-| `importEncryptedBackup(json, pw, currentKey)` | `async (...) → unknown` | Imports backup; tries 600k then 310k iterations |
-| `exportJSON(key)` | `async (CryptoKey) → string` | Exports plaintext JSON of all stores |
-| `importJSON(json, key)` | `async (string, CryptoKey) → unknown` | Validates and imports JSON; rejects unknown stores |
+| Function                                      | Signature                                       | Purpose                                                                              |
+| --------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `_vaultDbOpen()`                              | `() → Promise<IDBDatabase>`                     | Opens `nexus_vault_v2`                                                               |
+| `_vaultMetaGet(k)`                            | `async (string) → unknown`                      | Reads from meta store; returns null on miss/error                                    |
+| `_vaultMetaSet(k, v)`                         | `async (string, unknown) → void`                | Writes to meta store; throws readable error on failure                               |
+| `_migrateLocalStorageToIDB()`                 | `async () → void`                               | One-time: moves legacy localStorage vault data to IDB, removes old keys. Idempotent. |
+| `getSalt()`                                   | `async () → Uint8Array`                         | Returns existing salt or generates and stores a new one                              |
+| `isFirstRun()`                                | `async () → boolean`                            | True if `SALT_KEY` not in IDB                                                        |
+| `loadVault(key)`                              | `async (CryptoKey) → Record<string, unknown[]>` | Reads and decrypts vault blob. Throws on decryption failure.                         |
+| `saveVault(key, data)`                        | `async (CryptoKey, Record) → void`              | Encrypts and writes vault blob                                                       |
+| `writeVerifyToken(key)`                       | `async (CryptoKey) → void`                      | Encrypts `VERIFY_PAYLOAD` and writes to IDB                                          |
+| `verifyPassword(key)`                         | `async (CryptoKey) → boolean`                   | Returns true if verify token decrypts to `VERIFY_PAYLOAD`                            |
+| `initCrypto(password)`                        | `async (string) → CryptoKey`                    | Handles new vault, legacy 310k→600k migration, normal unlock                         |
+| `changePassword(oldKey, newPw)`               | `async (CryptoKey, string) → CryptoKey`         | Re-derives, re-encrypts vault and verify token                                       |
+| `exportEncryptedBackup(key, pw)`              | `async (CryptoKey, string) → string`            | Exports `{v:1, salt, data, ts}` JSON re-encrypted with backup password               |
+| `importEncryptedBackup(json, pw, currentKey)` | `async (...) → unknown`                         | Imports backup; tries 600k then 310k iterations                                      |
+| `exportJSON(key)`                             | `async (CryptoKey) → string`                    | Exports plaintext JSON of all stores                                                 |
+| `importJSON(json, key)`                       | `async (string, CryptoKey) → unknown`           | Validates and imports JSON; rejects unknown stores                                   |
 
 ---
 
@@ -261,11 +275,11 @@ Owns all operations against `nexus_vault_v2` IDB, including higher-level crypto 
 
 Manages the non-extractable `CryptoKey` cached in `nexus_keys_v1`. Survives F5; clears on tab close.
 
-| Function | Purpose |
-|----------|---------|
-| `cacheSessionKey(key)` | Stores `CryptoKey` object in IDB |
-| `loadSessionKey()` | Returns cached key or null |
-| `clearSessionKey()` | Deletes cached key (used on app reset) |
+| Function               | Purpose                                |
+| ---------------------- | -------------------------------------- |
+| `cacheSessionKey(key)` | Stores `CryptoKey` object in IDB       |
+| `loadSessionKey()`     | Returns cached key or null             |
+| `clearSessionKey()`    | Deletes cached key (used on app reset) |
 
 ---
 
@@ -275,13 +289,13 @@ Manages the non-extractable `CryptoKey` cached in `nexus_keys_v1`. Survives F5; 
 
 Per-record AES-GCM operations for `documents` and `conversations` in `nexus_data_v1`. The `cryptoKey` parameter is passed explicitly — there is no global key reference.
 
-| Function | Signature | Purpose |
-|----------|-----------|---------|
-| `_dataDbOpen()` | `() → Promise<IDBDatabase>` | Opens `nexus_data_v1` |
-| `_idbLoadStore(storeName, cryptoKey)` | `async (string, CryptoKey) → unknown[]` | Loads and decrypts all records |
-| `_idbPutRecord(storeName, record, cryptoKey)` | `async (string, {id,...}, CryptoKey) → void` | Encrypts and writes one record |
-| `_idbDeleteRecord(storeName, id)` | `async (string, string) → void` | Deletes one record |
-| `_idbClearStore(storeName)` | `async (string) → void` | Clears entire store (used by reset) |
+| Function                                      | Signature                                    | Purpose                             |
+| --------------------------------------------- | -------------------------------------------- | ----------------------------------- |
+| `_dataDbOpen()`                               | `() → Promise<IDBDatabase>`                  | Opens `nexus_data_v1`               |
+| `_idbLoadStore(storeName, cryptoKey)`         | `async (string, CryptoKey) → unknown[]`      | Loads and decrypts all records      |
+| `_idbPutRecord(storeName, record, cryptoKey)` | `async (string, {id,...}, CryptoKey) → void` | Encrypts and writes one record      |
+| `_idbDeleteRecord(storeName, id)`             | `async (string, string) → void`              | Deletes one record                  |
+| `_idbClearStore(storeName)`                   | `async (string) → void`                      | Clears entire store (used by reset) |
 
 ---
 
@@ -293,59 +307,59 @@ In-memory store backed by vault (CRM data) and IDB (documents/conversations). Ex
 
 ### 9.1 Adapter Wiring
 
-| Function | Purpose |
-|----------|---------|
+| Function        | Purpose                                                |
+| --------------- | ------------------------------------------------------ |
 | `setAdapter(a)` | Injects the active sync adapter (called from entry.ts) |
-| `getAdapter()` | Returns current adapter |
+| `getAdapter()`  | Returns current adapter                                |
 
 ### 9.2 Initialization & Flush
 
-| Function | Purpose |
-|----------|---------|
-| `dbInit(cryptoKey)` | Sets `_dbKey`, loads vault into `_dbData`, loads IDB stores, runs `adapter.pull()` |
-| `dbFlush()` | Encrypts `_buildCrmPayload()` → writes to IDB vault → fires `adapter.push()` → triggers `fsWriteVault()` if FS ready |
-| `_scheduleFlush()` | 300ms debounced flush; called by create/update/delete |
-| `_buildCrmPayload()` | Returns `{store: records[]}` for all `STORES` (excludes IDB stores) |
+| Function             | Purpose                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `dbInit(cryptoKey)`  | Sets `_dbKey`, loads vault into `_dbData`, loads IDB stores, runs `adapter.pull()`                                   |
+| `dbFlush()`          | Encrypts `_buildCrmPayload()` → writes to IDB vault → fires `adapter.push()` → triggers `fsWriteVault()` if FS ready |
+| `_scheduleFlush()`   | 300ms debounced flush; called by create/update/delete                                                                |
+| `_buildCrmPayload()` | Returns `{store: records[]}` for all `STORES` (excludes IDB stores)                                                  |
 
 `beforeunload` forces an immediate flush if a debounced write is pending.
 
 ### 9.3 Core Helpers
 
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `uid()` | `() → string` | `Date.now().toString(36)` + 9 random bytes base-36 |
-| `nowISO()` | `() → string` | `new Date().toISOString()` |
-| `getStore(s)` | `(string) → unknown[]` | Reference to in-memory array; initialises if missing |
-| `dbGetAll(s)` | `(string) → unknown[]` | Shallow copy |
-| `dbGetById(s, id)` | `(string, string) → unknown \| null` | Find by id |
-| `dbCreate(s, rec)` | `async → object` | Adds `id`, `createdAt`, `updatedAt`; routes to IDB or `_scheduleFlush` |
-| `dbUpdate(s, id, changes)` | `async → object` | Merges, updates `updatedAt` |
-| `dbDelete(s, id)` | `async → boolean` | Removes from memory; IDB delete or flush |
-| `softDelete(s, id)` | `async → boolean` | Copies to `trash` with `_store`/`deletedAt`, hard-deletes original |
-| `restoreFromTrash(tid)` | `async → boolean` | Moves trash item back to original store |
-| `permanentDelete(tid)` | `async → boolean` | Hard-deletes from trash |
+| Function                   | Signature                            | Notes                                                                  |
+| -------------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
+| `uid()`                    | `() → string`                        | `Date.now().toString(36)` + 9 random bytes base-36                     |
+| `nowISO()`                 | `() → string`                        | `new Date().toISOString()`                                             |
+| `getStore(s)`              | `(string) → unknown[]`               | Reference to in-memory array; initialises if missing                   |
+| `dbGetAll(s)`              | `(string) → unknown[]`               | Shallow copy                                                           |
+| `dbGetById(s, id)`         | `(string, string) → unknown \| null` | Find by id                                                             |
+| `dbCreate(s, rec)`         | `async → object`                     | Adds `id`, `createdAt`, `updatedAt`; routes to IDB or `_scheduleFlush` |
+| `dbUpdate(s, id, changes)` | `async → object`                     | Merges, updates `updatedAt`                                            |
+| `dbDelete(s, id)`          | `async → boolean`                    | Removes from memory; IDB delete or flush                               |
+| `softDelete(s, id)`        | `async → boolean`                    | Copies to `trash` with `_store`/`deletedAt`, hard-deletes original     |
+| `restoreFromTrash(tid)`    | `async → boolean`                    | Moves trash item back to original store                                |
+| `permanentDelete(tid)`     | `async → boolean`                    | Hard-deletes from trash                                                |
 
 ### 9.4 Domain Helpers
 
-| Function | Purpose |
-|----------|---------|
-| `createNotification(title, body, type, relatedId)` | Creates notification record |
-| `getUnreadNotifications()` | Returns unread notifications sorted newest-first |
-| `markNotificationRead(id)` | Sets `read: true` |
-| `markAllNotificationsRead()` | Marks all unread as read |
-| `checkDueDates()` | Scans tasks for overdue/due-today/due-soon; creates notifications |
-| `startTimer(taskId, description?)` | Stops running timer if any, creates new entry with `running: true` |
-| `stopTimer(id)` | Sets `running: false`, calculates `duration` in seconds |
-| `getRunningTimer()` | Returns running `timeEntry` or null |
-| `globalSearch(q)` | Searches clients, departments, projects, tasks, people, documents. Returns up to 20 results. |
+| Function                                           | Purpose                                                                                      |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `createNotification(title, body, type, relatedId)` | Creates notification record                                                                  |
+| `getUnreadNotifications()`                         | Returns unread notifications sorted newest-first                                             |
+| `markNotificationRead(id)`                         | Sets `read: true`                                                                            |
+| `markAllNotificationsRead()`                       | Marks all unread as read                                                                     |
+| `checkDueDates()`                                  | Scans tasks for overdue/due-today/due-soon; creates notifications                            |
+| `startTimer(taskId, description?)`                 | Stops running timer if any, creates new entry with `running: true`                           |
+| `stopTimer(id)`                                    | Sets `running: false`, calculates `duration` in seconds                                      |
+| `getRunningTimer()`                                | Returns running `timeEntry` or null                                                          |
+| `globalSearch(q)`                                  | Searches clients, departments, projects, tasks, people, documents. Returns up to 20 results. |
 
 ### 9.5 Internal Accessors (for other modules)
 
-| Function | Purpose |
-|----------|---------|
-| `_getDbKey()` | Returns current `_dbKey` (for AI secrets IDB access in main.ts) |
-| `_getDbData()` | Returns raw `_dbData` object |
-| `_setDbData(d)` | Replaces `_dbData` (used by import operations) |
+| Function        | Purpose                                                         |
+| --------------- | --------------------------------------------------------------- |
+| `_getDbKey()`   | Returns current `_dbKey` (for AI secrets IDB access in main.ts) |
+| `_getDbData()`  | Returns raw `_dbData` object                                    |
+| `_setDbData(d)` | Replaces `_dbData` (used by import operations)                  |
 
 ---
 
@@ -353,16 +367,16 @@ In-memory store backed by vault (CRM data) and IDB (documents/conversations). Ex
 
 **File:** `packages/core/src/fs.ts`
 
-| Function/export | Purpose |
-|----------------|---------|
-| `fsInit()` | On startup: restores handle from IDB, checks permission, recovers vault from disk if IDB is empty |
-| `fsWriteVault()` | Reads vault/salt/verify from `nexus_vault_v2`, writes `{v:2, ts, salt, verify, vault}` JSON to disk |
-| `fsReadVault(handle)` | Reads disk file, writes salt/verify/vault back to IDB |
-| `fsPickFile(forceNew?)` | Opens file picker (open or save-as), stores handle in IDB |
-| `fsUnlink()` | Clears handle, resets `_fsReady`/`_fsLastSave`, deletes IDB entry |
-| `isFsReady()` | Returns `boolean` — whether a writable handle is active |
-| `getFsHandle()` | Returns current `FileSystemFileHandle \| null` |
-| `getFsLastSave()` | Returns last save timestamp |
+| Function/export         | Purpose                                                                                             |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| `fsInit()`              | On startup: restores handle from IDB, checks permission, recovers vault from disk if IDB is empty   |
+| `fsWriteVault()`        | Reads vault/salt/verify from `nexus_vault_v2`, writes `{v:2, ts, salt, verify, vault}` JSON to disk |
+| `fsReadVault(handle)`   | Reads disk file, writes salt/verify/vault back to IDB                                               |
+| `fsPickFile(forceNew?)` | Opens file picker (open or save-as), stores handle in IDB                                           |
+| `fsUnlink()`            | Clears handle, resets `_fsReady`/`_fsLastSave`, deletes IDB entry                                   |
+| `isFsReady()`           | Returns `boolean` — whether a writable handle is active                                             |
+| `getFsHandle()`         | Returns current `FileSystemFileHandle \| null`                                                      |
+| `getFsLastSave()`       | Returns last save timestamp                                                                         |
 
 `db.ts`'s `dbFlush()` imports `fs.ts` dynamically (lazy) to call `fsWriteVault()` after every vault write, avoiding a circular import at module-evaluation time.
 
@@ -374,21 +388,21 @@ In-memory store backed by vault (CRM data) and IDB (documents/conversations). Ex
 
 ### 11.1 Functions
 
-| Function | Signature | Purpose |
-|----------|-----------|---------|
-| `subscribe(fn)` | `(fn) → unsubscribe` | Adds listener; store return value to unsubscribe |
-| `getState()` | `() → AppState` | Returns current state |
-| `setState(patch)` | `(Partial<AppState>) → void` | Shallow merge; notifies all listeners |
-| `setTheme(t)` | `(string) → void` | Sets `data-theme` attribute, writes to localStorage |
-| `initTheme()` | `() → void` | Applies current theme on startup |
-| `reloadData()` | `() → void` | Reads all stores from `_dbData` into state |
-| `showToast(message, type?, duration?)` | `(string, string, number) → void` | Sets toast state; auto-clears after duration (default 3500ms) |
-| `showConfirm(message, onConfirm, onCancel?)` | Sets confirm dialog state |
-| `closeConfirm()` | Clears confirm dialog state |
-| `openRecordModal(store, id?, defaults?)` | Opens record create/edit modal |
-| `closeRecordModal()` | Closes record modal |
-| `navigate(view)` | Changes `currentView`; intercepts `'ai'` for first-run onboarding |
-| `setAIHooks(needsOnboarding, openWizard)` | Injects AI hook functions (called from main.ts) |
+| Function                                     | Signature                                                         | Purpose                                                       |
+| -------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `subscribe(fn)`                              | `(fn) → unsubscribe`                                              | Adds listener; store return value to unsubscribe              |
+| `getState()`                                 | `() → AppState`                                                   | Returns current state                                         |
+| `setState(patch)`                            | `(Partial<AppState>) → void`                                      | Shallow merge; notifies all listeners                         |
+| `setTheme(t)`                                | `(string) → void`                                                 | Sets `data-theme` attribute, writes to localStorage           |
+| `initTheme()`                                | `() → void`                                                       | Applies current theme on startup                              |
+| `reloadData()`                               | `() → void`                                                       | Reads all stores from `_dbData` into state                    |
+| `showToast(message, type?, duration?)`       | `(string, string, number) → void`                                 | Sets toast state; auto-clears after duration (default 3500ms) |
+| `showConfirm(message, onConfirm, onCancel?)` | Sets confirm dialog state                                         |
+| `closeConfirm()`                             | Clears confirm dialog state                                       |
+| `openRecordModal(store, id?, defaults?)`     | Opens record create/edit modal                                    |
+| `closeRecordModal()`                         | Closes record modal                                               |
+| `navigate(view)`                             | Changes `currentView`; intercepts `'ai'` for first-run onboarding |
+| `setAIHooks(needsOnboarding, openWizard)`    | Injects AI hook functions (called from main.ts)                   |
 
 ### 11.2 AppState Interface
 
@@ -432,28 +446,28 @@ In-memory store backed by vault (CRM data) and IDB (documents/conversations). Ex
 
 **File:** `packages/core/src/utils.ts`
 
-| Function | Signature | Purpose |
-|----------|-----------|---------|
-| `sanitize(s, max?)` | `(string, number) → string` | Trim + slice to max (default 10000) |
-| `formatDate(iso)` | `(string) → string` | e.g. "May 16, 2026" |
-| `formatRelative(iso)` | `(string) → string` | e.g. "3h ago", "just now" |
-| `formatDuration(s)` | `(number) → string` | Seconds → "H:MM:SS" |
-| `formatFileSize(b)` | `(number) → string` | Bytes → "1.2 MB" |
-| `parseDateLocal(ds)` | `(string) → Date \| null` | Parses YYYY-MM-DD without timezone shift |
-| `daysUntil(ds)` | `(string) → number \| null` | Days until date; negative if past |
-| `initials(n)` | `(string) → string` | First letter of each word, up to 2 |
-| `avatarColor(s)` | `(string) → [string, string]` | Deterministic `[bg, fg]` pair |
-| `sortRecords(recs, field, dir)` | `(array, string, string) → array` | Sorted copy; handles date fields |
-| `filterRecords(recs, filters)` | `(array, object) → array` | Filters by key-value pairs; skips `'all'` |
-| `searchRecords(recs, q, fields)` | `(array, string, array) → array` | Case-insensitive substring |
-| `debounce(fn, ms)` | `(fn, number) → fn` | Standard debounce |
-| `downloadText(name, content, mime)` | Triggers file download |
-| `toCSV(recs, fields)` | `(array, array) → string` | CSV with header row |
-| `plural(n, w)` | `(number, string) → string` | "3 tasks" / "1 task" |
-| `readFileAsText(file)` | `(File) → Promise<string>` | FileReader wrapper |
-| `readFileAsBase64(file)` | `(File) → Promise<string>` | FileReader base64 wrapper |
-| `clamp(v, min, max)` | `(number, number, number) → number` | |
-| `escH(s)` | `(unknown) → string` | HTML-escapes for innerHTML — use on all user strings |
+| Function                            | Signature                           | Purpose                                              |
+| ----------------------------------- | ----------------------------------- | ---------------------------------------------------- |
+| `sanitize(s, max?)`                 | `(string, number) → string`         | Trim + slice to max (default 10000)                  |
+| `formatDate(iso)`                   | `(string) → string`                 | e.g. "May 16, 2026"                                  |
+| `formatRelative(iso)`               | `(string) → string`                 | e.g. "3h ago", "just now"                            |
+| `formatDuration(s)`                 | `(number) → string`                 | Seconds → "H:MM:SS"                                  |
+| `formatFileSize(b)`                 | `(number) → string`                 | Bytes → "1.2 MB"                                     |
+| `parseDateLocal(ds)`                | `(string) → Date \| null`           | Parses YYYY-MM-DD without timezone shift             |
+| `daysUntil(ds)`                     | `(string) → number \| null`         | Days until date; negative if past                    |
+| `initials(n)`                       | `(string) → string`                 | First letter of each word, up to 2                   |
+| `avatarColor(s)`                    | `(string) → [string, string]`       | Deterministic `[bg, fg]` pair                        |
+| `sortRecords(recs, field, dir)`     | `(array, string, string) → array`   | Sorted copy; handles date fields                     |
+| `filterRecords(recs, filters)`      | `(array, object) → array`           | Filters by key-value pairs; skips `'all'`            |
+| `searchRecords(recs, q, fields)`    | `(array, string, array) → array`    | Case-insensitive substring                           |
+| `debounce(fn, ms)`                  | `(fn, number) → fn`                 | Standard debounce                                    |
+| `downloadText(name, content, mime)` | Triggers file download              |
+| `toCSV(recs, fields)`               | `(array, array) → string`           | CSV with header row                                  |
+| `plural(n, w)`                      | `(number, string) → string`         | "3 tasks" / "1 task"                                 |
+| `readFileAsText(file)`              | `(File) → Promise<string>`          | FileReader wrapper                                   |
+| `readFileAsBase64(file)`            | `(File) → Promise<string>`          | FileReader base64 wrapper                            |
+| `clamp(v, min, max)`                | `(number, number, number) → number` |                                                      |
+| `escH(s)`                           | `(unknown) → string`                | HTML-escapes for innerHTML — use on all user strings |
 
 ---
 
@@ -479,29 +493,29 @@ Exports `_ttPolicy` and `_rawPolicy`. Runs `patchInnerHTML()` IIFE as a side eff
 
 ### 15.1 Render Functions
 
-| Function | Returns |
-|----------|---------|
-| `renderToast(toast)` | Toast notification HTML |
-| `renderConfirmDialog(d)` | Confirm modal HTML |
-| `bindConfirmDialog(d)` | OK/Cancel/backdrop click listeners |
-| `renderAvatar(name, size?, style?)` | Avatar div HTML |
-| `renderPriorityBadge(p)` | Priority `<span class="badge">` |
-| `renderDueBadge(ds)` | Due-date badge or empty string |
-| `renderSpinner(msg?)` | Centered spinner HTML |
-| `renderEmpty(icon, title, sub?, action?)` | Empty state HTML |
-| `renderSearchInput(val?, ph?, id?)` | Search field HTML |
-| `renderViewTabs(cur)` | List/Grid/Kanban/Spatial tab bar |
-| `renderCommandPalette(open)` | Command palette overlay HTML |
-| `bindCommandPalette()` | Keyboard + click + input listeners |
-| `renderNotifPanel(notifications, open)` | Notification dropdown HTML |
+| Function                                  | Returns                            |
+| ----------------------------------------- | ---------------------------------- |
+| `renderToast(toast)`                      | Toast notification HTML            |
+| `renderConfirmDialog(d)`                  | Confirm modal HTML                 |
+| `bindConfirmDialog(d)`                    | OK/Cancel/backdrop click listeners |
+| `renderAvatar(name, size?, style?)`       | Avatar div HTML                    |
+| `renderPriorityBadge(p)`                  | Priority `<span class="badge">`    |
+| `renderDueBadge(ds)`                      | Due-date badge or empty string     |
+| `renderSpinner(msg?)`                     | Centered spinner HTML              |
+| `renderEmpty(icon, title, sub?, action?)` | Empty state HTML                   |
+| `renderSearchInput(val?, ph?, id?)`       | Search field HTML                  |
+| `renderViewTabs(cur)`                     | List/Grid/Kanban/Spatial tab bar   |
+| `renderCommandPalette(open)`              | Command palette overlay HTML       |
+| `bindCommandPalette()`                    | Keyboard + click + input listeners |
+| `renderNotifPanel(notifications, open)`   | Notification dropdown HTML         |
 
 ### 15.2 Command Palette
 
-| Export | Purpose |
-|--------|---------|
-| `CMD_ACTIONS` | Static array of `{label, icon, action}` — all nav and create actions |
-| `getCmdItems()` | Filters `CMD_ACTIONS` by query; appends global search results |
-| `_cmdQuery`, `_cmdSel` | Module-level state for palette input and selection index |
+| Export                 | Purpose                                                              |
+| ---------------------- | -------------------------------------------------------------------- |
+| `CMD_ACTIONS`          | Static array of `{label, icon, action}` — all nav and create actions |
+| `getCmdItems()`        | Filters `CMD_ACTIONS` by query; appends global search results        |
+| `_cmdQuery`, `_cmdSel` | Module-level state for palette input and selection index             |
 
 ### 15.3 Hook Injection
 
@@ -515,30 +529,30 @@ All view files are in `packages/core/src/views/`.
 
 ### 16.1 View Registry
 
-| `currentView` | File | Render fn | Bind fn |
-|--------------|------|-----------|---------|
-| `dashboard` | `dashboard.ts` | `renderDashboard` | `bindDashboard` |
-| `clients` `departments` `projects` `tasks` `people` `standaloneNotes` | `workspace.ts` | `renderWorkspaceView` | `bindWorkspaceView` |
-| `calendar` | `calendar.ts` | `renderCalendar` | `bindCalendar` |
-| `time` | `time-tracker.ts` | `renderTimeTracker` | `bindTimeTracker` |
-| `reports` | `reports.ts` | `renderReports` | `bindReports` |
-| `ai` | `ai/ai-ui.ts` | `renderAIChatWorkspace` | `bindAIChatWorkspace` |
-| `library` | `library.ts` | `renderLibrary` | `bindLibrary` |
-| `settings` | `settings.ts` | `renderSettings` | `bindSettings` |
-| `trash` | `trash.ts` | `renderTrash` | `bindTrash` |
+| `currentView`                                                         | File              | Render fn               | Bind fn               |
+| --------------------------------------------------------------------- | ----------------- | ----------------------- | --------------------- |
+| `dashboard`                                                           | `dashboard.ts`    | `renderDashboard`       | `bindDashboard`       |
+| `clients` `departments` `projects` `tasks` `people` `standaloneNotes` | `workspace.ts`    | `renderWorkspaceView`   | `bindWorkspaceView`   |
+| `calendar`                                                            | `calendar.ts`     | `renderCalendar`        | `bindCalendar`        |
+| `time`                                                                | `time-tracker.ts` | `renderTimeTracker`     | `bindTimeTracker`     |
+| `reports`                                                             | `reports.ts`      | `renderReports`         | `bindReports`         |
+| `ai`                                                                  | `ai/ai-ui.ts`     | `renderAIChatWorkspace` | `bindAIChatWorkspace` |
+| `library`                                                             | `library.ts`      | `renderLibrary`         | `bindLibrary`         |
+| `settings`                                                            | `settings.ts`     | `renderSettings`        | `bindSettings`        |
+| `trash`                                                               | `trash.ts`        | `renderTrash`           | `bindTrash`           |
 
 ### 16.2 Generic View Modes (`list-grid-kanban-spatial.ts`)
 
-| Function | Purpose |
-|----------|---------|
-| `renderListView(store, records, ...)` | Table view with sortable columns |
-| `bindListView(onOpen, onSort)` | Row click + sort click handlers |
-| `renderGridView(store, records, onOpen)` | Card grid view |
-| `bindGridView(onOpen)` | Card click handlers |
-| `renderKanbanView(store, records, onOpen)` | Column-based board |
-| `bindKanbanView(store, records, onOpen, onRefresh)` | Drag-drop between columns |
-| `renderSpatialCanvas(store, records, onOpen)` | Free-position canvas |
-| `bindSpatialCanvas(store, records, onOpen, onRefresh)` | Drag nodes on canvas |
+| Function                                               | Purpose                          |
+| ------------------------------------------------------ | -------------------------------- |
+| `renderListView(store, records, ...)`                  | Table view with sortable columns |
+| `bindListView(onOpen, onSort)`                         | Row click + sort click handlers  |
+| `renderGridView(store, records, onOpen)`               | Card grid view                   |
+| `bindGridView(onOpen)`                                 | Card click handlers              |
+| `renderKanbanView(store, records, onOpen)`             | Column-based board               |
+| `bindKanbanView(store, records, onOpen, onRefresh)`    | Drag-drop between columns        |
+| `renderSpatialCanvas(store, records, onOpen)`          | Free-position canvas             |
+| `bindSpatialCanvas(store, records, onOpen, onRefresh)` | Drag nodes on canvas             |
 
 ### 16.3 Project Canvas (`project-canvas.ts`)
 
@@ -548,11 +562,11 @@ Hook injection: `setPCHooks(appRenderWorkspace)`.
 
 ### 16.4 Record Modal (`record-modal.ts`)
 
-| Function | Purpose |
-|----------|---------|
+| Function                    | Purpose                                                |
+| --------------------------- | ------------------------------------------------------ |
 | `renderRecordModal(config)` | `config = {store, id, defaults}` — create or edit form |
-| `bindRecordModal(config)` | Form submit, file upload in modal |
-| `getSCHEMAS()` | Returns per-store field definitions used by the modal |
+| `bindRecordModal(config)`   | Form submit, file upload in modal                      |
+| `getSCHEMAS()`              | Returns per-store field definitions used by the modal  |
 
 Hook injection: `setRecordModalHooks(appRenderWorkspace)`.
 
@@ -564,23 +578,25 @@ Hook injection: `setDashHooks(appRenderWorkspace)`, `setDashAIHooks(needsOnboard
 
 ### 16.6 Documents (`documents.ts`)
 
-| Function | Purpose |
-|----------|---------|
-| `renderDocuments(state)` | Document list |
+| Function                      | Purpose                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------ |
+| `renderDocuments(state)`      | Document list                                                            |
 | `renderDocumentEditor(state)` | Rich-text editor (contenteditable) with AI Edit modal and inline toolbar |
-| `bindDocumentEditor()` | Save, toolbar, exports, version restore, file upload, AI actions |
-| `renderDocModal(state)` | Full-screen editor overlay (`doc-modal-backdrop`) |
-| `bindDocModal()` | Backdrop click-to-close + `bindDocumentEditor()` |
-| `saveDocument()` | Saves editor content; creates version snapshot |
-| `closeDocumentEditor()` | Aborts any active AI stream, exits editor, resets state |
-| `buildDocxBlob(title, html)` | Internal — converts HTML to OOXML `.docx` ZIP blob |
+| `bindDocumentEditor()`        | Save, toolbar, exports, version restore, file upload, AI actions         |
+| `renderDocModal(state)`       | Full-screen editor overlay (`doc-modal-backdrop`)                        |
+| `bindDocModal()`              | Backdrop click-to-close + `bindDocumentEditor()`                         |
+| `saveDocument()`              | Saves editor content; creates version snapshot                           |
+| `closeDocumentEditor()`       | Aborts any active AI stream, exits editor, resets state                  |
+| `buildDocxBlob(title, html)`  | Internal — converts HTML to OOXML `.docx` ZIP blob                       |
 
 Hook injection:
+
 - `setDocsHooks(appRenderWorkspace, fullRender)`
 - `setDocsAIHooks(aiReady, aiHistory)`
 - `setDocsStreamHook(fn)` — injected streaming dispatcher that routes to the active AI tier
 
 **AI features:**
+
 - **AI Edit modal** — whole-document rewrite; streams token-by-token into editor; Stop button halts stream; auto-saves version snapshot before write.
 - **Inline selection toolbar** — appears above selected text when AI is ready; actions: Rewrite, Improve, Expand, Summarise, Translate, Table, Make Formal, Shorten; preview-first UX with Replace / Insert Below / Regenerate / Discard.
 
@@ -588,14 +604,14 @@ Hook injection:
 
 ### 16.7 Library (`library.ts`)
 
-| Function | Purpose |
-|----------|---------|
-| `renderLibrary(state)` | Unified documents + files card grid |
-| `bindLibrary()` | Card interactions |
-| `openDocumentEditor(docId)` | Sets doc state hooks and calls `setState({ docModal: true })` |
-| `closeDocumentEditor()` | Clears doc state hooks and calls `setState({ docModal: false })` |
-| `renderFileViewer(fileId)` | File preview (image/text/PDF) |
-| `bindFileViewer()` | |
+| Function                    | Purpose                                                          |
+| --------------------------- | ---------------------------------------------------------------- |
+| `renderLibrary(state)`      | Unified documents + files card grid                              |
+| `bindLibrary()`             | Card interactions                                                |
+| `openDocumentEditor(docId)` | Sets doc state hooks and calls `setState({ docModal: true })`    |
+| `closeDocumentEditor()`     | Clears doc state hooks and calls `setState({ docModal: false })` |
+| `renderFileViewer(fileId)`  | File preview (image/text/PDF)                                    |
+| `bindFileViewer()`          |                                                                  |
 
 Hook injection: `setLibraryHooks({appRenderWorkspace, confirmAction, dbSoftDelete})`, `setLibraryDocHooks({setDocOpenId, setDocDirty, setDocEditorActive})`.
 
@@ -637,72 +653,72 @@ Hook injection: `setLibraryHooks({appRenderWorkspace, confirmAction, dbSoftDelet
 
 Build profiles can restrict these tiers through `deployment-policy.ts`. The offline profile allows only the `browser` tier (Gemini Nano on Chrome, Phi-4-mini on Edge — same `window.LanguageModel` API). WebGPU/transformers.js and all cloud providers are aliased to disabled stubs at build time; `browser-nano.ts` remains active.
 
-| Tier | Backend |
-|------|---------|
+| Tier        | Backend                                                                                                                                   |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `'browser'` | Chrome Built-in AI (Gemini Nano) / Edge Built-in AI (Phi-4-mini) via `window.LanguageModel`, or transformers.js + WebGPU in non-OT builds |
-| `'ollama'` | Local Ollama HTTP API |
-| `'cloud'` | Anthropic / OpenAI / Google REST APIs |
+| `'ollama'`  | Local Ollama HTTP API                                                                                                                     |
+| `'cloud'`   | Anthropic / OpenAI / Google REST APIs                                                                                                     |
 
 ### 17.2 Module Map
 
-| File | Owns |
-|------|------|
-| `ai-prefs.ts` | `AIPrefs` type; singleton `aiPrefs`; `loadAIPrefs`, `saveAIPrefs`, `syncAIPrefsLegacy` |
-| `providers/browser-nano.ts` | Chrome/Edge Prompt API (`window.LanguageModel`) — `loadNano(updateTxt, systemPrompt, onProgress?)`, `callNano`, `destroyNanoSession`; single `create()` with `monitor` for real download progress; sessions passed in as params |
-| `providers/browser-transformers.ts` | WebGPU via bundled `@huggingface/transformers` — `loadWebLLM`, `callWebLLM`; `WebLLMPipeline` type |
-| `providers/ollama.ts` | `loadOllama`, `callOllama`, `fetchOllamaModels`, `probeOllama`, `pullOllamaModel`, `deleteOllamaModel` |
-| `providers/anthropic.ts` | `callAnthropic(opts)` — SSE streaming, returns `{text, tokensIn, tokensOut}`; `testAnthropicKey` |
-| `providers/openai.ts` | `callOpenAI(opts)` — same contract as anthropic |
-| `providers/google.ts` | `callGoogle(opts)` — same contract as anthropic |
-| `ai-runtime.ts` | **Single owner of all mutable AI state** (`aiRuntime` object); `startAILoad`, `disconnectAI`, `callBackend`, model helpers, hook setters |
-| `ai-tools.ts` | Tool catalog, `buildSystemPrompt`, `handleModelOutput`, `extractToolCall`, `routeToolCall`, `applyPendingAction`, `execTool`, `speakResult` |
-| `ai-settings.ts` | `BROWSER_MODELS`, `OLLAMA_CATALOG`, `CLOUD_PROVIDERS`, wizard (`renderAIWizard`, `bindAIWizard`, `openAIWizard`, `closeAIWizard`), Nano modal (`openNanoDownloadModal`, `closeNanoDownloadModal`, `renderNanoDownloadModal`, `bindNanoDownloadModal`), secrets, cost tracking |
-| `ai-ui.ts` | `renderAIPanel`, `bindAIPanel`, `renderAIChatWorkspace`, `bindAIChatWorkspace`, `renderModelChip`, `renderModelPicker`, `sendAIMessage` |
-| `deployment-policy.ts` | Profile policy. `apps/offline` sets `OT_ONLY_DEPLOYMENT_POLICY`: `allowedTiers: ['browser']` (Gemini Nano only); cloud tier, WebGPU/transformers.js, and in-app model pulls disabled. The `allowedTiers` field controls which tiers the UI wizard offers. `assertLocalAIEndpointAllowed` enforces localhost/private-IP/internal-hostname constraints when validating endpoints. |
-| `providers/browser-transformers-disabled.ts` | Offline-build stub aliased over `@huggingface/transformers` — prevents the ONNX/WebGPU runtime from being bundled. |
-| `providers/browser-ai-disabled.ts` | Offline-build stub aliased over `./providers/browser-transformers.js` — stubs `loadWebLLM`/`callWebLLM` only; `browser-nano.ts` (Chrome Prompt API) is **not** aliased and remains live in the offline bundle. |
-| `providers/cloud-disabled.ts` | Offline-build stub aliased over `anthropic.js`, `openai.js`, and `google.js` — cloud provider endpoints not bundled in the OT artifact. |
+| File                                         | Owns                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ai-prefs.ts`                                | `AIPrefs` type; singleton `aiPrefs`; `loadAIPrefs`, `saveAIPrefs`, `syncAIPrefsLegacy`                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `providers/browser-nano.ts`                  | Chrome/Edge Prompt API (`window.LanguageModel`) — `loadNano(updateTxt, systemPrompt, onProgress?)`, `callNano`, `destroyNanoSession`; single `create()` with `monitor` for real download progress; sessions passed in as params                                                                                                                                                                                                                                                                             |
+| `providers/browser-transformers.ts`          | WebGPU via bundled `@huggingface/transformers` — `loadWebLLM`, `callWebLLM`; `WebLLMPipeline` type                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `providers/ollama.ts`                        | `loadOllama`, `callOllama`, `fetchOllamaModels`, `probeOllama`, `pullOllamaModel`, `deleteOllamaModel`                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `providers/anthropic.ts`                     | `callAnthropic(opts)` — SSE streaming, returns `{text, tokensIn, tokensOut}`; `testAnthropicKey`                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `providers/openai.ts`                        | `callOpenAI(opts)` — same contract as anthropic                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `providers/google.ts`                        | `callGoogle(opts)` — same contract as anthropic                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `ai-runtime.ts`                              | **Single owner of all mutable AI state** (`aiRuntime` object); `startAILoad`, `disconnectAI`, `callBackend`, model helpers, hook setters                                                                                                                                                                                                                                                                                                                                                                    |
+| `ai-tools.ts`                                | Tool catalog, `buildSystemPrompt`, `handleModelOutput`, `extractToolCall`, `routeToolCall`, `applyPendingAction`, `execTool`, `speakResult`                                                                                                                                                                                                                                                                                                                                                                 |
+| `ai-settings.ts`                             | `BROWSER_MODELS`, `OLLAMA_CATALOG`, `CLOUD_PROVIDERS`, wizard (`renderAIWizard`, `bindAIWizard`, `openAIWizard`, `closeAIWizard`), Nano modal (`openNanoDownloadModal`, `closeNanoDownloadModal`, `renderNanoDownloadModal`, `bindNanoDownloadModal`), secrets, cost tracking                                                                                                                                                                                                                               |
+| `ai-ui.ts`                                   | `renderAIPanel`, `bindAIPanel`, `renderAIChatWorkspace`, `bindAIChatWorkspace`, `renderModelChip`, `renderModelPicker`, `sendAIMessage`                                                                                                                                                                                                                                                                                                                                                                     |
+| `deployment-policy.ts`                       | Profile policy. The **browser-ai** profile (`entry-browser-ai.ts`) sets `OT_ONLY_DEPLOYMENT_POLICY`: `allowedTiers: ['browser']` — Chrome Gemini Nano or Edge Phi-4-mini only; cloud tier, WebGPU/transformers.js, and in-app Ollama pulls disabled. The **no-ai** profile sets `allowedTiers: []`. The **internal-ai** profile sets `allowedTiers: ['browser', 'ollama']` for browser AI + private LAN Ollama. `assertLocalAIEndpointAllowed` enforces localhost/private-IP/internal-hostname constraints. |
+| `providers/browser-transformers-disabled.ts` | Offline-build stub aliased over `@huggingface/transformers` — prevents the ONNX/WebGPU runtime from being bundled.                                                                                                                                                                                                                                                                                                                                                                                          |
+| `providers/browser-ai-disabled.ts`           | Offline-build stub aliased over `./providers/browser-transformers.js` — stubs `loadWebLLM`/`callWebLLM` only; `browser-nano.ts` (Chrome Prompt API) is **not** aliased and remains live in the offline bundle.                                                                                                                                                                                                                                                                                              |
+| `providers/cloud-disabled.ts`                | Offline-build stub aliased over `anthropic.js`, `openai.js`, and `google.js` — cloud provider endpoints not bundled in the OT artifact.                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### 17.3 Runtime State (`aiRuntime` object in `ai-runtime.ts`)
 
 All mutable AI state lives on the exported `aiRuntime` object so any module can read or write properties without owning the ESM binding. Key properties:
 
-| Property | Type | Purpose |
-|----------|------|---------|
-| `ready` | `boolean` | True when a backend is loaded and usable |
-| `loadStarted` | `boolean` | True while `startAILoad()` is in progress |
-| `backend` | `string \| null` | `'nano'` \| `'webllm'` \| `'ollama'` \| `'cloud'` \| `null` |
-| `streaming` | `boolean` | True while a response is streaming |
-| `nanoSession` | `AnyRecord \| null` | Chrome Prompt API session object |
-| `webllmPipeline` | `WebLLMPipeline \| null` | transformers.js pipeline |
-| `abortController` | `AbortController \| null` | Per-request controller; abort cancels the stream |
-| `history` | `Message[]` | Conversation history |
-| `pendingAction` | `{tool, args, summary} \| null` | Tool call awaiting user confirmation |
-| `ollamaModelsCache` | `AnyRecord[] \| null` | Cached `/api/tags` response |
+| Property            | Type                            | Purpose                                                     |
+| ------------------- | ------------------------------- | ----------------------------------------------------------- |
+| `ready`             | `boolean`                       | True when a backend is loaded and usable                    |
+| `loadStarted`       | `boolean`                       | True while `startAILoad()` is in progress                   |
+| `backend`           | `string \| null`                | `'nano'` \| `'webllm'` \| `'ollama'` \| `'cloud'` \| `null` |
+| `streaming`         | `boolean`                       | True while a response is streaming                          |
+| `nanoSession`       | `AnyRecord \| null`             | Chrome Prompt API session object                            |
+| `webllmPipeline`    | `WebLLMPipeline \| null`        | transformers.js pipeline                                    |
+| `abortController`   | `AbortController \| null`       | Per-request controller; abort cancels the stream            |
+| `history`           | `Message[]`                     | Conversation history                                        |
+| `pendingAction`     | `{tool, args, summary} \| null` | Tool call awaiting user confirmation                        |
+| `ollamaModelsCache` | `AnyRecord[] \| null`           | Cached `/api/tags` response                                 |
 
 ### 17.4 Key Functions
 
-| Function | Module | Purpose |
-|----------|--------|---------|
-| `startAILoad()` | `ai-runtime` | Detects tier from `aiPrefs`, loads the appropriate backend |
-| `disconnectAI()` | `ai-runtime` | Tears down session/pipeline, clears history |
-| `callBackend(system, history, onToken, signal?)` | `ai-runtime` | Dispatches to active backend; returns full response text |
-| `buildSystemPrompt()` | `ai-tools` | Composes system prompt with CRM context |
-| `handleModelOutput(raw, ctx)` | `ai-tools` | Parses response; routes to tool call or final render |
-| `extractToolCall(text)` | `ai-tools` | Parses `{tool, args}` JSON block from model output |
-| `routeToolCall(tc, ctx)` | `ai-tools` | Confirms destructive actions; stores `aiRuntime.pendingAction` |
-| `applyPendingAction(yes, ctx)` | `ai-tools` | Executes or discards the pending action |
-| `execTool(tool, args)` | `ai-tools` | Applies a CRM operation |
-| `sendAIMessage(text, ctx)` | `ai-ui` | Entry point for user messages; creates AbortController, calls `callBackend`, calls `handleModelOutput` |
-| `openAIWizard(step?)` | `ai-settings` | Opens setup wizard; in offline/OT builds (`__OT_ONLY_BUILD__`) redirects to `openNanoDownloadModal` |
-| `closeAIWizard()` | `ai-settings` | Closes wizard |
-| `aiNeedsOnboarding()` | `ai-settings` | True if tier not yet configured |
-| `openNanoDownloadModal()` | `ai-settings` | Opens Gemini Nano setup modal for offline/OT builds; checks Chrome Prompt API availability, shows disclaimer → download → error phases |
-| `closeNanoDownloadModal()` | `ai-settings` | Closes Nano modal and stops background polling timer |
-| `renderNanoDownloadModal()` | `ai-settings` | Returns HTML for current Nano modal phase |
-| `bindNanoDownloadModal()` | `ai-settings` | Attaches close, backdrop, and enable-Nano click listeners |
-| `aiSecretsLoad/Save/Wipe/Refresh` | `ai-settings` | IDB-backed encrypted secrets management |
-| `testCloudKey(provider, key)` | `ai-settings` | Validates a cloud API key |
+| Function                                         | Module        | Purpose                                                                                                                                |
+| ------------------------------------------------ | ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `startAILoad()`                                  | `ai-runtime`  | Detects tier from `aiPrefs`, loads the appropriate backend                                                                             |
+| `disconnectAI()`                                 | `ai-runtime`  | Tears down session/pipeline, clears history                                                                                            |
+| `callBackend(system, history, onToken, signal?)` | `ai-runtime`  | Dispatches to active backend; returns full response text                                                                               |
+| `buildSystemPrompt()`                            | `ai-tools`    | Composes system prompt with CRM context                                                                                                |
+| `handleModelOutput(raw, ctx)`                    | `ai-tools`    | Parses response; routes to tool call or final render                                                                                   |
+| `extractToolCall(text)`                          | `ai-tools`    | Parses `{tool, args}` JSON block from model output                                                                                     |
+| `routeToolCall(tc, ctx)`                         | `ai-tools`    | Confirms destructive actions; stores `aiRuntime.pendingAction`                                                                         |
+| `applyPendingAction(yes, ctx)`                   | `ai-tools`    | Executes or discards the pending action                                                                                                |
+| `execTool(tool, args)`                           | `ai-tools`    | Applies a CRM operation                                                                                                                |
+| `sendAIMessage(text, ctx)`                       | `ai-ui`       | Entry point for user messages; creates AbortController, calls `callBackend`, calls `handleModelOutput`                                 |
+| `openAIWizard(step?)`                            | `ai-settings` | Opens setup wizard; in offline/OT builds (`__OT_ONLY_BUILD__`) redirects to `openNanoDownloadModal`                                    |
+| `closeAIWizard()`                                | `ai-settings` | Closes wizard                                                                                                                          |
+| `aiNeedsOnboarding()`                            | `ai-settings` | True if tier not yet configured                                                                                                        |
+| `openNanoDownloadModal()`                        | `ai-settings` | Opens Gemini Nano setup modal for offline/OT builds; checks Chrome Prompt API availability, shows disclaimer → download → error phases |
+| `closeNanoDownloadModal()`                       | `ai-settings` | Closes Nano modal and stops background polling timer                                                                                   |
+| `renderNanoDownloadModal()`                      | `ai-settings` | Returns HTML for current Nano modal phase                                                                                              |
+| `bindNanoDownloadModal()`                        | `ai-settings` | Attaches close, backdrop, and enable-Nano click listeners                                                                              |
+| `aiSecretsLoad/Save/Wipe/Refresh`                | `ai-settings` | IDB-backed encrypted secrets management                                                                                                |
+| `testCloudKey(provider, key)`                    | `ai-settings` | Validates a cloud API key                                                                                                              |
 
 ### 17.5 AI Tools
 
@@ -711,18 +727,18 @@ Defined in `ai-tools.ts`:
 
 ### 17.6 Hook Injection
 
-| Setter | Called from | Injects |
-|--------|------------|---------|
-| `setRuntimeHooks({appRenderWorkspace, fullRender})` | `main.ts` | Render callbacks into ai-runtime |
-| `setRuntimeSecretsGetter(fn)` | `ai-settings.ts` (module init) | `_aiSecrets` getter into ai-runtime |
-| `setRuntimePromptBuilder(fn)` | `ai-tools.ts` | `buildSystemPrompt` into ai-runtime |
-| `setRuntimeUsageTracker(fn)` | `ai-settings.ts` | `aiTrackUsage` into ai-runtime |
-| `setRuntimeCloudLabelGetters(modelFn, provFn)` | `ai-settings.ts` (module init) | Label helpers into ai-runtime |
-| `setAIToolsHooks({SCHEMAS, streamToBubble, finalRender})` | `ai-ui.ts` (via `setAIUISchemas`) | Record schemas and UI callbacks into ai-tools |
-| `setAIUIHooks({appRenderWorkspace, setSettingsSection, openAIWizard})` | `main.ts` | Navigation callbacks into ai-ui |
-| `setAIUISchemas(schemas)` | `main.ts` | Wires SCHEMAS into ai-tools via ai-ui |
-| `setAISettingsHooks({fullRender})` | `main.ts` | fullRender into ai-settings |
-| `setAIV2IDBHooks({idbLoadStore, idbPutRecord, idbDeleteRecord, dbKeyGetter})` | `main.ts` | IDB access for secrets into ai-settings |
+| Setter                                                                        | Called from                       | Injects                                       |
+| ----------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------- |
+| `setRuntimeHooks({appRenderWorkspace, fullRender})`                           | `main.ts`                         | Render callbacks into ai-runtime              |
+| `setRuntimeSecretsGetter(fn)`                                                 | `ai-settings.ts` (module init)    | `_aiSecrets` getter into ai-runtime           |
+| `setRuntimePromptBuilder(fn)`                                                 | `ai-tools.ts`                     | `buildSystemPrompt` into ai-runtime           |
+| `setRuntimeUsageTracker(fn)`                                                  | `ai-settings.ts`                  | `aiTrackUsage` into ai-runtime                |
+| `setRuntimeCloudLabelGetters(modelFn, provFn)`                                | `ai-settings.ts` (module init)    | Label helpers into ai-runtime                 |
+| `setAIToolsHooks({SCHEMAS, streamToBubble, finalRender})`                     | `ai-ui.ts` (via `setAIUISchemas`) | Record schemas and UI callbacks into ai-tools |
+| `setAIUIHooks({appRenderWorkspace, setSettingsSection, openAIWizard})`        | `main.ts`                         | Navigation callbacks into ai-ui               |
+| `setAIUISchemas(schemas)`                                                     | `main.ts`                         | Wires SCHEMAS into ai-tools via ai-ui         |
+| `setAISettingsHooks({fullRender})`                                            | `main.ts`                         | fullRender into ai-settings                   |
+| `setAIV2IDBHooks({idbLoadStore, idbPutRecord, idbDeleteRecord, dbKeyGetter})` | `main.ts`                         | IDB access for secrets into ai-settings       |
 
 ---
 
@@ -730,9 +746,9 @@ Defined in `ai-tools.ts`:
 
 **File:** `packages/core/src/auth.ts`
 
-| Function | Purpose |
-|----------|---------|
-| `renderAuth()` | `async () → string` — password screen HTML; detects first run vs unlock |
+| Function                     | Purpose                                                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `renderAuth()`               | `async () → string` — password screen HTML; detects first run vs unlock                                                              |
 | `bindAuth(appEl, onSuccess)` | Form submit → `initCrypto` → `verifyPassword` → `onSuccess(key)`. Brute-force lockout: exponential delay starting 500ms, capped 30s. |
 
 Module-level state: `_authFailCount`, `_authLockedUntil`.
@@ -745,11 +761,11 @@ Module-level state: `_authFailCount`, `_authLockedUntil`.
 
 ### 19.1 Exported Functions
 
-| Function | Purpose |
-|----------|---------|
-| `init()` | `async () → void` — full startup sequence |
-| `fullRender(state)` | Full re-render: sets `appEl.innerHTML`, re-binds all listeners |
-| `appRenderWorkspace(view)` | Partial re-render: replaces only `#workspace-container` |
+| Function                   | Purpose                                                        |
+| -------------------------- | -------------------------------------------------------------- |
+| `init()`                   | `async () → void` — full startup sequence                      |
+| `fullRender(state)`        | Full re-render: sets `appEl.innerHTML`, re-binds all listeners |
+| `appRenderWorkspace(view)` | Partial re-render: replaces only `#workspace-container`        |
 
 ### 19.2 `init()` Startup Sequence
 
@@ -779,6 +795,7 @@ Module-level state: `_authFailCount`, `_authLockedUntil`.
 ### 19.4 `_wireHooks()`
 
 Called once in `init()` before first render. Injects all cross-module function references:
+
 - `setAIHooks(aiNeedsOnboarding, openAIWizard)` → state.ts
 - `setRuntimeHooks(...)` → ai-runtime.ts
 - `setAIUIHooks(...)`, `setAIUISchemas(...)` → ai-ui.ts
@@ -793,18 +810,20 @@ Called once in `init()` before first render. Injects all cross-module function r
 
 ```ts
 abstract class SyncAdapter {
-  async pull(checkpoint: unknown): Promise<{ records: Record<string, unknown[]>; checkpoint: unknown }>
+  async pull(
+    checkpoint: unknown,
+  ): Promise<{ records: Record<string, unknown[]>; checkpoint: unknown }>
   async push(changes: Record<string, unknown[]>): Promise<{ conflicts: unknown[] }>
   stream(onRemoteChange: (changes: Record<string, unknown[]>) => void): () => void
   async clear(): Promise<void>
 }
 ```
 
-| Adapter | File | Status |
-|---------|------|--------|
-| `NullAdapter` | `packages/adapter-null/src/index.ts` | Active — all methods are inherited no-ops. Current default. |
-| `RxDBAdapter` | `packages/adapter-rxdb/src/index.ts` | Stub — not implemented |
-| `DataverseAdapter` | `packages/adapter-dataverse/src/index.ts` | Stub — not implemented |
+| Adapter            | File                                      | Status                                                      |
+| ------------------ | ----------------------------------------- | ----------------------------------------------------------- |
+| `NullAdapter`      | `packages/adapter-null/src/index.ts`      | Active — all methods are inherited no-ops. Current default. |
+| `RxDBAdapter`      | `packages/adapter-rxdb/src/index.ts`      | Stub — not implemented                                      |
+| `DataverseAdapter` | `packages/adapter-dataverse/src/index.ts` | Stub — not implemented                                      |
 
 ---
 
@@ -812,22 +831,22 @@ abstract class SyncAdapter {
 
 All records share: `id: string`, `createdAt: ISO string`, `updatedAt: ISO string`
 
-| Store | Additional fields |
-|-------|-----------------|
-| `clients` | `name`, `contactName`, `email`, `phone`, `description`, `stage`, `tagIds[]` |
-| `departments` | `name`, `description` |
-| `projects` | `name`, `description`, `clientId`, `ownerId`, `deptId`, `stage`, `priority`, `dueDate`, `startDate`, `narrative`, `_panelLayouts` |
-| `tasks` | `title`, `description`, `projectId`, `assigneeId`, `status`, `priority`, `dueDate`, `done`, `tagIds[]` |
-| `people` | `name`, `role`, `email`, `phone`, `deptId`, `clientId` |
-| `standaloneNotes` | `body`, `tagIds[]` |
-| `tags` | `name`, `color` |
-| `communications` | `type`, `body`, `clientId`, `projectId`, `personId`, `date` |
-| `files` | `name`, `size`, `mime`, `dataUrl`, `clientId`, `projectId` |
-| `timeEntries` | `taskId`, `description`, `startedAt`, `endedAt`, `running`, `duration` |
-| `notifications` | `title`, `body`, `type`, `relatedId`, `read` |
-| `trash` | all fields of original + `_store`, `deletedAt` |
-| `documents` | `title`, `content` (HTML), `excerpt`, `section`, `tagIds[]`, `pinned`, `versions[]` |
-| `conversations` | `title`, `messages[]`, `modelId`, `createdAt` |
+| Store             | Additional fields                                                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `clients`         | `name`, `contactName`, `email`, `phone`, `description`, `stage`, `tagIds[]`                                                       |
+| `departments`     | `name`, `description`                                                                                                             |
+| `projects`        | `name`, `description`, `clientId`, `ownerId`, `deptId`, `stage`, `priority`, `dueDate`, `startDate`, `narrative`, `_panelLayouts` |
+| `tasks`           | `title`, `description`, `projectId`, `assigneeId`, `status`, `priority`, `dueDate`, `done`, `tagIds[]`                            |
+| `people`          | `name`, `role`, `email`, `phone`, `deptId`, `clientId`                                                                            |
+| `standaloneNotes` | `body`, `tagIds[]`                                                                                                                |
+| `tags`            | `name`, `color`                                                                                                                   |
+| `communications`  | `type`, `body`, `clientId`, `projectId`, `personId`, `date`                                                                       |
+| `files`           | `name`, `size`, `mime`, `dataUrl`, `clientId`, `projectId`                                                                        |
+| `timeEntries`     | `taskId`, `description`, `startedAt`, `endedAt`, `running`, `duration`                                                            |
+| `notifications`   | `title`, `body`, `type`, `relatedId`, `read`                                                                                      |
+| `trash`           | all fields of original + `_store`, `deletedAt`                                                                                    |
+| `documents`       | `title`, `content` (HTML), `excerpt`, `section`, `tagIds[]`, `pinned`, `versions[]`                                               |
+| `conversations`   | `title`, `messages[]`, `modelId`, `createdAt`                                                                                     |
 
 ---
 
@@ -835,12 +854,12 @@ All records share: `id: string`, `createdAt: ISO string`, `updatedAt: ISO string
 
 Intentional — all non-sensitive preferences:
 
-| Key | Purpose |
-|-----|---------|
-| `taskapp_theme` / `nexus_theme` | Light/dark theme |
-| `taskapp_dash_v1` | Dashboard widget positions |
-| `taskapp_ai_prefs_v2` | AI tier, model, usage stats |
-| `taskapp_ai_prefs_v1` | Read-only — legacy migration source |
+| Key                             | Purpose                             |
+| ------------------------------- | ----------------------------------- |
+| `taskapp_theme` / `nexus_theme` | Light/dark theme                    |
+| `taskapp_dash_v1`               | Dashboard widget positions          |
+| `taskapp_ai_prefs_v2`           | AI tier, model, usage stats         |
+| `taskapp_ai_prefs_v1`           | Read-only — legacy migration source |
 
 Vault data was moved to IndexedDB `nexus_vault_v2`. Migration handled by `_migrateLocalStorageToIDB()` in `vault.ts`.
 
@@ -855,10 +874,16 @@ pnpm run build:offline   # compile + CSP hash
 # then open: dist/offline/index.html in Chrome or Edge
 ```
 
-For an offline OT build that can reach an internal LAN AI server:
+The browser-ai build (default) allows adding CSP origins at build time (does **not** enable Ollama — only affects `connect-src`):
 
 ```bash
-OT_AI_CONNECT_SRC="http://localhost:11434 http://127.0.0.1:11434 https://ai-server.internal" pnpm run build:offline
+OT_AI_CONNECT_SRC="https://ai-server.internal" pnpm run build:offline
+```
+
+The internal-ai build (Phase 1) — enables browser AI + private Ollama via `OT_AI_CONNECT_SRC`:
+
+```bash
+OT_AI_CONNECT_SRC="http://ai-server.internal:11434" pnpm run build:offline:internal-ai
 ```
 
 ### Adding a new CRM store
@@ -874,6 +899,7 @@ OT_AI_CONNECT_SRC="http://localhost:11434 http://127.0.0.1:11434 https://ai-serv
 ### Adding a new large-content store
 
 Do **not** add to `STORES`. Instead:
+
 1. Add to `IDB_STORES` in `constants.ts`
 2. Create its object store in `_dataDbOpen()` in `idb-data.ts`
 3. Route all reads through `_idbLoadStore`, writes through `_idbPutRecord`

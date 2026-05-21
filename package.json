@@ -3,25 +3,62 @@
   "private": true,
   "version": "1.0.0",
   "description": "Offline-first AES-256-GCM encrypted CRM — monorepo",
+  "engines": {
+    "node": ">=22.22.3",
+    "pnpm": ">=11"
+  },
   "scripts": {
-    "build:offline": "vite build --config apps/offline/vite.config.ts && node generate-csp.mjs dist/offline/index.html",
-    "build:sync": "vite build --config apps/sync/vite.config.ts    && node generate-csp.mjs dist/sync/index.html",
+    "build:offline": "vite build --config apps/offline-web/vite.config.ts && node generate-csp.mjs dist/offline/index.html",
+    "build:sync": "vite build --config apps/pwa-sync/vite.config.ts    && node generate-csp.mjs dist/sync/index.html",
     "build:dataverse": "vite build --config apps/dataverse/vite.config.ts",
     "build:all": "pnpm run build:offline && pnpm run build:sync && pnpm run build:dataverse",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint packages apps config server",
+    "lint:fix": "eslint packages apps config server --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "husky",
+    "assert:offline-bundle": "node scripts/assert-offline-bundle.mjs",
+    "assert:bundle-size": "node scripts/assert-bundle-size.mjs",
+    "changeset": "changeset",
+    "version-packages": "changeset version"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --cache --no-error-on-unmatched-pattern",
+      "prettier --write"
+    ],
+    "*.{json,md,yaml,yml}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
+    "@changesets/cli": "^2.31.0",
+    "@commitlint/cli": "^21.0.1",
+    "@commitlint/config-conventional": "^21.0.1",
     "@types/dompurify": "^3.2.0",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "@types/qrcode-generator": "^1.0.6",
-    "typescript": "^5.5.3",
-    "vite": "^5.4.0",
-    "vite-plugin-singlefile": "^2.0.1"
+    "eslint": "^10.4.0",
+    "eslint-plugin-security": "^4.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.5",
+    "prettier": "^3.8.3",
+    "turbo": "^2.9.14",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.4",
+    "vite": "^8.0.13",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^4.1.7"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
-    "dompurify": "^3.4.3",
-    "qrcode-generator": "^2.0.4"
+    "dompurify": "^3.4.5",
+    "qrcode-generator": "^2.0.4",
+    "valibot": "^1.4.0"
   },
   "packageManager": "pnpm@11.1.2+sha512.415a1cc25974731e75455c1468371be74c5aa5fb7621b50d4056d222451609f11412f23fd602e6169f1e060466641f798597e1be961a10688836a67b16569499"
 }

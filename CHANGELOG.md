@@ -6,14 +6,102 @@ Versions are dated; there is no semantic version number — the public interface
 
 ---
 
+## [2026-05-20] — Toolchain upgrade + ESLint zero-error baseline
+
+### Changed — Dependency upgrades
+
+- **Vite** 5 → 8 (ESM-native, faster cold start, Rollup 4 bundler)
+- **vite-plugin-singlefile** minor bump — compatible with Vite 8
+- **TypeScript** 5 → 6 (strict ES2025 output target)
+- **Vitest** 3 → 4 (built on Vite 8)
+- **ESLint** 9 → 10 + **typescript-eslint** 8.59.4 (flat config; `strictTypeChecked`)
+- **eslint-plugin-security** 3 → 4 (14 security rules, all active)
+- **commitlint** 19 → 21 + **lint-staged** 15 → 17
+- **DOMPurify**, **@types/node** patch bumps
+
+### Added — ESLint rule coverage
+
+- `no-eval: 'error'` added explicitly (defense-in-depth; no eval calls exist in codebase)
+- `@typescript-eslint/no-implied-eval: 'error'` active via `strictTypeChecked`
+- All `eslint-plugin-security` v4 recommended rules active; `detect-object-injection` disabled for typed `Record<K,V>` bracket access (safe with TypeScript's type system)
+
+### Fixed — ESLint violations (151 errors → 0 errors)
+
+All errors fixed with code changes; no blanket `eslint-disable` comments added.
+Key categories resolved: `no-unsafe-assignment` (typed `JSON.parse` results), `prefer-promise-reject-errors` (null-coalescing on IDB error properties), `no-floating-promises` (explicit `void` on fire-and-forget async calls), `no-dynamic-delete` (object spread pattern), `no-unnecessary-type-conversion`, `use-unknown-in-catch-callback-variable`, `require-await` (stubs changed to `() => Promise.resolve()`).
+
+### Changed — ESLint config narrow overrides added
+
+- `views/documents.ts`: `no-deprecated: 'warn'` — `document.execCommand` is the only viable API for synchronous contenteditable formatting; no browser has a removal timeline for the formatting commands in use (see ADR-037).
+- `providers/*-disabled.ts`: `no-extraneous-class: 'off'` — constructor-only classes are build-alias stubs matching real provider class shapes.
+
+### Changed — `mfa.ts`
+
+- `generateNewTOTPSecret` now returns `Promise<string>` (non-async, returns `Promise.resolve(...)`) to satisfy both `require-await` and the `settings.ts` hook interface.
+
+### Fixed — `lint-staged`
+
+- Added `--cache` flag to ESLint command in lint-staged config for faster incremental pre-commit checks.
+- `.eslintcache` added to `.gitignore`.
+
+---
+
+## [2026-05-20] — Phase 8 complete + Phase 9 enterprise server scaffold
+
+### Added — Mobile scaffold (Phase 8)
+
+- **`apps/mobile/README.md`** — production-readiness checklist: Capacitor install steps, concrete adapter prerequisites, MASVS 2.0 test plan (7 controls), iOS ATS and Android NSC notes, `PrivacyInfo.xcprivacy` update guidance for App Store submission.
+- **`packages/adapter-mobile-native/README.md`** — Capacitor dependency notes, iOS ATS requirements table, Android NSC requirements table, MASVS 2.0 acceptance criteria table, backup format compatibility note.
+
+### Added — Enterprise server scaffold (Phase 9)
+
+- **`server/src/auth/oidc.ts`** — `OidcService` interface stub: `buildAuthorizationUrl`, `exchangeCodeForToken`, `validateToken`, `rotateRefreshToken`, `revokeToken`. Full RFC 9700 (PKCE mandatory, implicit flow prohibited) and RFC 9449 (DPoP near-term) design comments.
+- **`server/src/authorization/policy-engine.ts`** — `PolicyEngine` interface stub: `evaluate` (deny-by-default, object-level), `loadPolicies`. OPA vs Cedar comparison, BOLA/IDOR requirement, policy middleware TODO chain.
+- **`server/src/kms/key-service.ts`** — `KeyService` interface stub: `issueKey`, `wrapKey`, `unwrapKey`, `scheduleKeyDestruction`, `getKeyStatus`. Full per-user DEK/KEK hierarchy documentation, GDPR Article 17 / EDPB 2026 enforcement notes, legal hold design.
+- **`server/src/observability/otel.ts`** — `OtelService` interface stub: `init`, `startRequestSpan`, `log`. SLO definitions (P99 < 500ms, error rate < 0.1%, uptime > 99.9%), RED metrics spec, structured log field list with PII-forbidden fields.
+- **`server/src/ai-gateway/policy-engine.ts`** — `AiGatewayPolicyEngine` interface stub: `isProviderApproved`, `getExcludedFields`, `recordAiRequest`, `validateToolCall`. ISO 42001:2023 alignment, DPA review requirement, human-approval invariant for write-action tool calls.
+- **`server/src/api/routes/.gitkeep`**, **`server/src/db/schema/.gitkeep`**, **`server/src/db/migrations/.gitkeep`** — placeholder directories.
+- **`server/package.json`** — `name: @tktaskapp/server, private: true`.
+- **`apps/enterprise-web/src/entry.ts`** — documented stub: full wiring order, prerequisites checklist (identity, authorization, storage, compliance, observability, AI governance, accessibility), imports `ENTERPRISE_PROFILE` for build-time validation.
+- **`tsconfig.json`** — added `server/src/**/*.ts` to `include` so server interface stubs are type-checked by `pnpm run typecheck`.
+
+### Architecture — Decided
+
+- **ADR-035** — Mobile scaffold uses abstract TypeScript classes; Capacitor deferred until concrete implementations are ready for device testing.
+- **ADR-036** — Enterprise server lives in `server/` (not `packages/` or `apps/`); added to pnpm workspace only when real dependencies are introduced in Phase 11.
+
+---
+
+## [2026-05-19] — Enterprise architecture assessment and roadmap documentation
+
+### Documentation — Added
+
+- **`OFFLINE-ASSESSMENT.md`** — comprehensive audit of the offline build against 2026 enterprise production standards. Findings O-01–O-15 cover: three offline sub-profiles, CSP hardening, Trusted Types enterprise blockers, `pnpm v11 allowBuilds`, lockout state migration, Zod schema validation, WCAG 2.2 accessibility, SLSA supply chain, Permissions-Policy audit, and more. Includes 6-phase roadmap, Definition of Done, appendices with acceptance criteria.
+- **`MOBILE-ASSESSMENT.md`** — audit of the Capacitor mobile build strategy. Findings M-01–M-13 cover: Capacitor 8 setup, native vault implementation, biometric auth, MASVS 2.0 baseline, CSP for WebView, platform abstraction layer (`packages/core/src/platform/`), AI supply chain for on-device models, iOS App Transport Security (`NSAllowsArbitraryLoads: false`), Android Network Security Config, three mobile build profiles, GDPR data residency for mobile. Includes MASVS test plan, native controls table, 6-phase roadmap.
+- **`ENTERPRISE-ASSESSMENT.md`** — audit of the enterprise/Dataverse build path. Findings E-01–E-16 cover: Zero Trust architecture, OIDC+PKCE mandatory (RFC 9700), policy-as-code authorization (OPA/Cedar), multi-tenant data isolation, GDPR crypto-shredding (per-user DEK/KEK — E-16 Critical), DPoP token binding (RFC 9449), OpenTelemetry observability, SLSA Level 2/3 + Sigstore/Cosign, ISO 42001 AI governance, OWASP ASVS 5.0 Level 2 target. Includes Zero Trust pillar assessment, implementation playbook, certification evidence package, enterprise test plan.
+- **`filerevamp.md`** fully rewritten — complete enterprise production architecture plan for the monorepo evolution. Covers all three build families (offline, mobile, enterprise), 10-phase roadmap, OIDC/PKCE/DPoP identity, OPA/Cedar authorization, GDPR crypto-shredding, OpenTelemetry, SLSA/Sigstore supply chain, iOS ATS, Zod schema validation, WCAG 2.2, ISO 42001 AI governance, expanded acceptance criteria (25 entries), and 25-entry references table.
+
+### Architecture — Decided (pending implementation — see ADR-029–ADR-034)
+
+- **Three offline sub-profiles** (`offline-no-ai`, `offline-browser-ai`, `offline-internal-ai`) replace the current single offline build with runtime flags.
+- **OIDC with PKCE mandatory** (RFC 9700) for enterprise and sync builds; implicit flow prohibited.
+- **Policy-as-code authorization** (OPA or AWS Cedar) replaces hardcoded RBAC for enterprise.
+- **GDPR crypto-shredding** via per-user DEK wrapped by KMS-managed KEK — key destruction = Article 17 erasure including encrypted backups.
+- **OpenTelemetry** as the mandatory observability standard for enterprise server components, from day one.
+- **SLSA Level 2** minimum for all releases; Level 3 (hermetic builds + OIDC provenance) for enterprise; Sigstore/Cosign keyless signing for all artifacts.
+
+---
+
 ## [2026-05-19] — AI document Write UX fixes + chat input visibility
 
 ### AI — Fixed
+
 - **AI Edit "Write" inserted at cursor position** — rewritten to insert AI-generated content immediately after the block element (paragraph, heading, list item, etc.) where the cursor was sitting before the modal opened, rather than replacing the entire document. Falls back to appending at the end when no cursor position is available. The streaming container shows a blue left-border accent during inference; on completion it is replaced with clean parsed nodes via `_safeHtmlFragment`.
 - **AI Edit "Write" content disappeared after streaming** — the `finally` block called `_reRenderDocModal()` (which re-renders the editor from DB) before calling `saveDocument()`, so the new AI content was overwritten by the old DB state before it was ever persisted. Fixed: `await saveDocument()` is called first, then `_reRenderDocModal()` reads the freshly saved content.
 - **AI Edit "Write" streamed to detached DOM node** — the overlay was previously closed by calling `_reRenderDocModal()` before streaming started. `_reRenderDocModal()` replaces the entire doc modal DOM via `replaceWith()`, detaching the `editor` reference captured in the closure; all streaming `onToken` writes went to an invisible orphaned node, and `saveDocument()` read the now-empty live editor. Fixed by removing only the overlay element directly (`getElementById('doc-ai-edit-overlay').remove()`) so the editor remains in the live DOM.
 
 ### UI — Fixed
+
 - **Chat input card indistinguishable from background** — in light mode, `--chat-input-bg` was `var(--slate-50)`, the same shade as the AI workspace background. Changed to `#fff` (white). Added a dedicated `--chat-input-border` variable (`slate-400` light / `slate-600` dark) replacing the previously too-light `--border-default`, plus a subtle `box-shadow` to visually lift the card off the surrounding surface.
 
 ---
@@ -21,17 +109,20 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-19] — AI document security hardening + chat UX fixes
 
 ### Security — Fixed
+
 - **`Range.createContextualFragment` Trusted Types violation** — Replace and Insert Below in the document inline AI toolbar called this DOM sink with a plain string, violating `require-trusted-types-for 'script'` and throwing a silent `TypeError` that prevented insertion entirely. Replaced with a `tempDiv.innerHTML` approach that routes through the existing patched setter (`_rawPolicy` → TrustedHTML). Both operations now work correctly and are wrapped in `try/catch` with user-visible error toasts.
-- **AI document renderer now escapes before tagging** — The `_mdToHtml` renderer previously passed model output through regex substitutions without HTML-escaping first, meaning a model that emitted raw HTML could bypass the renderer. Rewritten as a line-by-line state machine: every text segment is HTML-escaped (`&→&amp;`, `<→&lt;`, etc.) *before* being wrapped in structural tags. Model output can no longer inject markup regardless of what the model emits.
+- **AI document renderer now escapes before tagging** — The `_mdToHtml` renderer previously passed model output through regex substitutions without HTML-escaping first, meaning a model that emitted raw HTML could bypass the renderer. Rewritten as a line-by-line state machine: every text segment is HTML-escaped (`&→&amp;`, `<→&lt;`, etc.) _before_ being wrapped in structural tags. Model output can no longer inject markup regardless of what the model emits.
 - **Model instructions changed from HTML to Markdown** — System prompts for all document AI features (full-document write, inline rewrite/improve/expand/summarise/translate/table/formal/shorten) now explicitly request Markdown output and prohibit HTML tags. Aligns with the industry-standard pipeline used by ChatGPT, Notion AI, GitHub Copilot, and Gemini.
 
 ### AI — Fixed
+
 - **AI Edit "Write" button silent failure** — when the AI stream hook was not ready, clicking Write silently returned with no feedback. Now shows a `'Connect AI first in Settings → AI'` toast.
-- **Streaming bubble showed raw JSON tool calls** — model output like `{"tool":"answer_question","args":{}}` was streamed verbatim into the chat bubble. Now replaced with a human-readable label (e.g. *Looking up information…*) matching the pattern used by ChatGPT and Gemini.
+- **Streaming bubble showed raw JSON tool calls** — model output like `{"tool":"answer_question","args":{}}` was streamed verbatim into the chat bubble. Now replaced with a human-readable label (e.g. _Looking up information…_) matching the pattern used by ChatGPT and Gemini.
 - **Built-in AI wait hint** — the streaming bubble now shows a secondary note ("Built-in AI can take 10–30 s on first use") when the browser tier is active, preventing users from thinking nothing is happening during Nano/Phi-4-mini inference.
 - **Suggestion chips give immediate feedback** — clicking a suggestion chip now disables all chips instantly (prevents double-send) before `sendAIMessage` makes the full DOM update.
 
 ### UI — Fixed
+
 - **Chat input indistinguishable from background** — `chat-input-card` switched from `--bg-base` to `--bg-elevated`, border weight increased to 1.5px, subtle box-shadow added, focus ring added (3px accent glow). The toolbar row (model picker + send button) is now separated from the textarea by a `--border-subtle` top border. Matches the visual language of major AI chat interfaces.
 
 ---
@@ -39,6 +130,7 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-18] — Built-in AI UX fix + Edge/Phi-4-mini support
 
 ### Fixed
+
 - **Browser built-in AI reconnect** — re-enabling AI after disable (or navigating to the AI view after a browser restart) silently called `startAILoad()` with no visible feedback when the model was already present. Now navigates to the AI view and shows the workspace connecting spinner correctly.
 - **Disclaimer shown on every re-enable** — disabling AI cleared `hasCompletedOnboarding`, causing the one-time download disclaimer to reappear on every subsequent enable. Added `nanoDisclaimerAcknowledged` to `AIPrefs` (persisted in `taskapp_ai_prefs_v2`); the disclaimer now only shows when the browser model genuinely needs downloading and is never shown again after first acknowledgement.
 - **No real download progress** — the download modal showed elapsed time only. Now uses the browser's `downloadprogress` event (`loaded`/`total` bytes) via the `monitor` callback on `LanguageModel.create()` to drive a real percentage progress bar. Falls back to indeterminate animation if the event is not fired.
@@ -47,6 +139,7 @@ Versions are dated; there is no semantic version number — the public interface
 - **`browser-nano.ts` simplified** — removed the fire-and-forget `create()` + polling loop. One `create()` call with `initialPrompts` + `monitor` handles download, progress reporting, and session creation.
 
 ### Changed
+
 - `aiRuntime` object gains `downloadProgress: { loaded: number; total: number } | null` field, cleared on load completion or failure.
 - `browser-nano.ts` `loadNano()` accepts optional `onProgress` callback; no change to call sites that omit it.
 - Error messages in the built-in AI modal now mention both Chrome (`chrome://flags`) and Edge (`edge://flags`) flags.
@@ -59,21 +152,25 @@ Versions are dated; there is no semantic version number — the public interface
 ### Security — Added
 
 **New modules:**
+
 - `packages/core/src/audit.ts` — Encrypted audit log (AES-256-GCM, `nexus_data_v1`). 25 event types: `session_start`, `auth_success`, `auth_failure`, `auth_locked`, `auth_unlocked`, `mfa_success`, `mfa_failure`, `mfa_enabled`, `mfa_disabled`, `passkey_registered`, `passkey_removed`, `app_locked`, `app_unlocked`, `password_changed`, `vault_file_opened`, `vault_exported`, `vault_imported`, `backup_exported`, `backup_imported`, `data_exported`, `data_imported`, `app_reset`, `ai_key_added`, `ai_key_removed`, `ai_query`. CSV and JSON Lines export. Auto-purge policy (30/90/365 days/never, stored in `localStorage`).
 - `packages/core/src/totp.ts` — Pure WebCrypto TOTP (RFC 6238 / RFC 4226). HMAC-SHA1, 6-digit codes, 30-second window, Base32 secret, ±1 window drift tolerance. QR code generation via `qrcode-generator`.
 - `packages/core/src/webauthn.ts` — WebAuthn Level 3 with PRF extension. Passkey registers, uses PRF output to derive AES-256-GCM key protecting the master password. Only enabled on `https://` origins (AAL2+). Graceful degradation to TOTP-only on `file://`.
 - `packages/core/src/mfa.ts` — MFA orchestration layer. Stores TOTP config as `{ id: '__mfa_totp__' }` in `nexus_data_v1`. Exposes `loadMFAStatus`, `verifyMFACode`, `enableTOTP`, `disableTOTP`, `generateNewTOTPSecret`.
 
 **App lock & idle timeout (NIST AC-11):**
+
 - `lockApp(reason)` in `main.ts` — clears in-memory `CryptoKey`, all DB state, session key, AI secrets, and re-renders the auth screen. Triggered by idle timeout, lock button, or manual call.
 - Idle detection on `pointermove`, `pointerdown`, `keydown`, `touchstart`, `wheel`, `scroll`. Default timeout: 15 minutes (1–60 min configurable, or Off).
 - Lock button added to topbar.
 
 **Brute-force lockout:**
+
 - Failed-auth counter and lockout timestamp moved from `sessionStorage` to `localStorage` so lockout persists across tab closes (NIST AC-7).
 - Exponential backoff with 30-second cap.
 
 **Settings → Security tab:**
+
 - Session lock timeout selector (5/10/15/30/60 min or Off).
 - Change password form (requires current password).
 - TOTP setup wizard with QR code (Microsoft Authenticator, Google Authenticator, Authy compatible) and manual secret entry.
@@ -82,6 +179,7 @@ Versions are dated; there is no semantic version number — the public interface
 - Danger Zone (reset app).
 
 **Data protection:**
+
 - `sanitize.ts`: `sanitizeDataUrl()` — restricts `href`/`src` to `data:` URIs and `https:` only; rejects `javascript:`, `file:`, `blob:`, etc.
 - `sanitize.ts`: `sanitizeDocHtml()` — DOMPurify 3.4.3 integration for document editor HTML.
 - Prompt injection mitigation in AI tools: `<crm_data>` delimiters, 500-char field truncation.
@@ -104,6 +202,7 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-17] — Sidebar IA redesign + Recycle Bin + mobile "More" sheet
 
 ### Navigation — Changed
+
 - **Sidebar restructured to flat IA** — `NAV_ENTRIES` replaces the old `NAV_ITEMS` section groups. Navigation is now a flat list with thin `.nav-divider` separators and compact `.nav-entry-label` section headings (CRM, Content), matching contemporary sidebar patterns.
 - **Time Tracker removed from sidebar** — no longer appears as a nav item; view still exists for future work.
 - **Settings moved to sidebar footer** — a gear icon button in the user footer row (`data-nav="settings"`) navigates to Settings; Settings is no longer a main nav entry.
@@ -112,10 +211,12 @@ Versions are dated; there is no semantic version number — the public interface
 - **Mobile sheet mirrors desktop sidebar** — the sheet uses the same `SheetEntry[]` structure as `NAV_ENTRIES` (Dashboard, AI Chat, divider, CRM label, Clients/Projects/Tasks, divider, People/Departments, divider, Content label, Notes/Library/Calendar, divider, Reports, divider, Settings).
 
 ### Recycle Bin — Changed
+
 - **"Trash" renamed to "Recycle Bin"** across all UI text — topbar title, trash view, record modal soft-delete confirmation, project canvas, document library, AI tool responses.
 - **Recycle Bin moved into Settings → Recycle Bin** — the Recycle Bin section is now a subsection of Settings with full restore/permanent-delete/empty-all actions; the `trash` nav item is no longer in the sidebar.
 
 ### CSS — Added / Changed
+
 - `.nav-divider` — 1 px hairline separator (`rgba(255,255,255,.06)`) between sidebar nav groups.
 - `.nav-entry-label` — compact uppercase section label (10px, 700 weight); hidden when sidebar is collapsed.
 - `.sidebar-footer-user`, `.sidebar-user-name`, `.sidebar-settings-btn` — user identity row in sidebar footer.
@@ -129,15 +230,18 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-17] — Topbar/sidebar UX overhaul + Settings → Storage
 
 ### UI — Changed
+
 - **Save button removed from topbar** — vault file management (link, unlink, save, status) moved to Settings → Storage.
 - **Topbar simplified** — now shows a view icon beside the page title, a vertical divider separating the search bar from the icon group, and an indigo fill on the AI button when the panel is open.
 - **Search bar expands on focus** — `min-width` transitions from 180 px to 240 px with an accent border on focus.
 - **Sidebar logo mark badge** — a small green ✓ or amber ! badge overlaid on the `N` logo mark indicates vault file link status at a glance; visible collapsed or expanded; hidden when File System Access API is not supported.
 
 ### Settings — Added
+
 - **Storage section** — new Settings → Storage section exposes vault file controls: create a new vault file, link an existing file, save now, link a different file, and unlink. Shows current link status and last-saved time. Falls back to an info message on unsupported browsers.
 
 ### fs.ts — Added
+
 - `fsUnlink()` — clears the in-memory handle, resets `_fsReady`/`_fsLastSave`, and deletes the IDB entry.
 
 ---
@@ -145,6 +249,7 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-17] — AI production hardening
 
 ### Offline Profile — Changed
+
 - **Offline build is now OT-only for AI** — `apps/offline` sets `OT_ONLY_DEPLOYMENT_POLICY` with `allowedTiers: ['browser']`, meaning only Gemini Nano is available. Cloud AI, WebGPU/transformers.js, Hugging Face model downloads, and in-app Ollama model pulls are disabled. The AI wizard in this profile redirects to a Nano setup modal (one-time flag + model download required; after that AI works fully offline).
 - **Offline build excludes Transformers payload** — `apps/offline/vite.config.ts` aliases `@huggingface/transformers` to a disabled stub so the OT artifact does not carry browser-model runtime code it cannot use.
 - **Offline build stubs WebGPU/transformers.js provider** — the `browser-transformers.js` provider module is aliased to a disabled stub. The Chrome Prompt API provider (`browser-nano.ts`) is **not** aliased and remains active in the offline bundle.
@@ -153,12 +258,14 @@ Versions are dated; there is no semantic version number — the public interface
 - **Internal LAN AI endpoints are build allowlisted** — set `OT_AI_CONNECT_SRC` when building offline to include approved origins such as `https://ai-server.internal` or `http://10.10.1.20:11434`.
 
 ### Security — Fixed
+
 - **Transformers.js bundled locally** — replaced the jsDelivr dynamic import with the `@huggingface/transformers` npm package and removed the CDN script allowlist from CSP.
 - **`connect-src` tightened** — replaced broad `https:` with explicit AI provider, Hugging Face model-weight, and default Ollama localhost endpoints.
 - **AI tool writes validate schemas** — model-proposed create/update fields are now allowlisted against record schemas, required fields are enforced on create, select/date values are validated, and relations must resolve.
 - **Internal AI secrets filtered from documents** — the encrypted `__ai_secrets__` record no longer appears in normal document state/list reads.
 
 ### AI — Fixed
+
 - **Live AI state hooks** — document and settings views now read AI readiness/secrets through live getters instead of stale one-time snapshots.
 - **Model picker persistence** — model switching now writes the structured `aiPrefs` fields consumed by `startAILoad()`.
 - **Prompt and usage hooks wired** — Nano initialization receives the real system prompt, and cloud token/cost tracking is connected.
@@ -170,6 +277,7 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-16] — WebAssembly CSP fix for in-browser AI (transformers.js)
 
 ### Security — Fixed
+
 - **`'wasm-unsafe-eval'` added to `script-src`** — the ONNX runtime inside transformers.js compiles `.wasm` binaries at runtime; without this directive the browser blocks `WebAssembly.instantiate()` with a CSP violation, preventing the Gemma WebGPU models from loading. `'wasm-unsafe-eval'` is scoped to WebAssembly compilation only — unlike `'unsafe-eval'` it does not permit arbitrary JavaScript `eval()`.
 - **`generate-csp.mjs` regex fixed** — `resetPlaceholders()` was stripping all single-quoted tokens from `script-src` (using `'[^']*'`), which silently dropped any static keyword like `'wasm-unsafe-eval'` on every rebuild. The regex now only strips hash tokens (`sha256-`, `sha384-`, `sha512-`) and nonce tokens, leaving static directives intact across re-runs.
 
@@ -178,6 +286,7 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-16] — AI system architecture refactor (nine-module split)
 
 ### Architecture — Changed
+
 - **`ai-v1.ts` and `ai-v2.ts` deleted** — 2,000+ lines across two mixed-concern files replaced by nine focused modules in `packages/core/src/ai/`.
 - **`ai-prefs.ts`** — isolated preference singleton (`aiPrefs`), `AIPrefs` type, `loadAIPrefs`, `saveAIPrefs`, `syncAIPrefsLegacy`, migration from v1 prefs schema.
 - **`providers/`** — six stateless provider files: `browser-nano.ts` (Chrome Prompt API sessions owned by caller), `browser-transformers.ts` (WebGPU via CDN dynamic import), `ollama.ts` (load, call, fetch models, probe, pull, delete), `anthropic.ts`, `openai.ts`, `google.ts` (SSE streaming, token accounting, key testing). Providers receive everything as parameters — no module state.
@@ -188,6 +297,7 @@ Versions are dated; there is no semantic version number — the public interface
 - **`main.ts`** — AI import section replaced with new modules; `_wireHooks()` calls `setRuntimeHooks`, `setAIUIHooks`, `setAIUISchemas`, `setAISettingsHooks`, `setAIV2IDBHooks`. `setDocsStreamHook` dispatcher simplified from 40-line inline tier dispatch to single `callBackend(...)` call.
 
 ### Architecture — Fixed
+
 - **ESM live binding workaround eliminated** — the IIFE hoisting pattern (`const _orig = (function(){ return startAILoad; })()`) that allowed `ai-v2.ts` to override `ai-v1.ts`'s exported function is no longer needed. Mutable state lives on the `aiRuntime` object; any module can write `aiRuntime.property` without owning the binding.
 - **Circular import chain broken** — the `ai-v1 ↔ ai-v2` cross-import cycle is gone. New import graph is a strict DAG.
 - **`exactOptionalPropertyTypes` compliance** — cloud provider call sites now use conditional spread (`signal !== undefined ? { signal } : {}`) instead of passing `signal: AbortSignal | undefined` directly to a `signal?: AbortSignal` parameter.
@@ -198,15 +308,18 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-16] — Document editor fixes, production DOCX export, Copilot-style inline AI
 
 ### Documents — Fixed
+
 - **Save button non-functional** — `bindDocumentEditor()` was never called when the modal opened because the deferred hook in `library.ts` was never wired up. Fixed by moving `renderDocModal`/`bindDocModal` fully into `documents.ts` and calling `bindDocumentEditor()` directly from `bindDocModal()`. All editor listeners (Save, toolbar, tabs, file upload, exports, AI) now attach reliably on every open.
 - **Close (×) icon overlapping Save button** — the floating `doc-modal-close` button was `position:absolute` over the topbar where Save sits. Removed the button and its CSS rule. The topbar Back button auto-saves and closes; backdrop click-to-close still works.
 
 ### Documents — Added
+
 - **Production DOCX export** — replaces the previous HTML-disguised-as-Word hack. Generates a standards-compliant OOXML `.docx` (ZIP + XML) in pure TypeScript with no external library. Supports: H1/H2/H3 with Word's built-in Heading styles (Calibri Light), paragraphs, bold, italic, underline, bullet lists, numbered lists, tables (header row shading), hyperlinks (proper `r:id` relationship entries), blockquotes, line breaks. Opens natively in Word with full style editability.
 - **AI Edit modal (whole-document rewrite)** — clicking "AI Edit" opens a focused prompt modal inside the document editor. User enters an instruction; clicking Write closes the modal, saves a version snapshot, and streams the AI's rewrite token-by-token directly into the editor. A Stop button in the topbar halts the stream. Works with cloud (Anthropic/OpenAI/Google) and Ollama tiers.
 - **Inline Copilot-style selection toolbar** — when text is selected in the editor and AI is connected, a floating toolbar appears above the selection with 8 actions: Rewrite (with instruction input), Improve, Expand, Summarise, Translate (with language input), Table, Make Formal, Shorten. AI output streams into a preview bubble; user chooses Replace, Insert Below, Regenerate, or Discard. Matches Microsoft Copilot Word 2026 workflow.
 
 ### Architecture — Changed
+
 - `renderDocModal` and `bindDocModal` moved from `library.ts` to `documents.ts` — consolidates the full document editor lifecycle in one module. `library.ts` retains `openDocumentEditor`/`closeDocumentEditor` which call through hooks to set state.
 - New `setDocsStreamHook(fn)` in `documents.ts` — injected from `main.ts` with a tier-dispatching streaming function that routes to `callAnthropic`, `callOpenAI`, `callGoogle`, or a direct Ollama SSE reader depending on `_aiPrefs.tier`.
 
@@ -215,6 +328,7 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-16] — Monorepo migration: TypeScript modules, Vite build, adapter interface
 
 ### Architecture — Changed
+
 - **Single HTML file (`taskapp.html`) extracted into TypeScript monorepo** — all 7,853 lines split into 35 typed modules across `packages/core/src/`. The original `taskapp.html` remains in the repo root as a historical reference.
 - **pnpm workspaces** — monorepo managed with pnpm; packages: `core`, `adapter-null`, `adapter-rxdb` (stub), `adapter-dataverse` (stub); apps: `offline`, `sync`, `dataverse`, `mobile`.
 - **Vite build pipeline** (`vite-plugin-singlefile`) — `pnpm run build:offline` produces `dist/offline/index.html` (~276 kB), a single self-contained HTML file functionally identical to the original. Deployment experience unchanged: open in Chrome or Edge from `file://`.
@@ -222,6 +336,7 @@ Versions are dated; there is no semantic version number — the public interface
 - **`generate-csp.mjs` integrated into build** — runs automatically post-build via `build:offline` script; computes SHA-256 of the single bundled script block; writes hash to CSP meta tag and `dist/offline/index.sha256`. No longer needs to be run manually.
 
 ### Architecture — Added
+
 - **Sync adapter interface** (`packages/core/src/adapter-interface.ts`) — four-method contract: `pull`, `push`, `stream`, `clear`. Wired into `dbInit` (pull on unlock) and `dbFlush` (push after every write).
 - **`NullAdapter`** (`packages/adapter-null/src/index.ts`) — offline-only no-op adapter. All four methods inherited from `SyncAdapter` base. Current default for all builds. Zero behaviour change from original.
 - **`RxDBAdapter`** stub (`packages/adapter-rxdb/src/index.ts`) — not yet implemented.
@@ -231,6 +346,7 @@ Versions are dated; there is no semantic version number — the public interface
 - **`_wireHooks()`** in `main.ts` — single startup function that injects all cross-module function references before first render.
 
 ### Breaking — Internal (no user-visible change)
+
 - **`_idbLoadStore` and `_idbPutRecord` now take `cryptoKey` as explicit parameter** — resolved circular import between `idb-data.ts` and `db.ts` (see ADR-019).
 - **`fs.ts` imported lazily inside `dbFlush()`** — dynamic `import('./fs.js')` breaks module-evaluation cycle; `fsWriteVault()` still called after every flush as before.
 - **`initCrypto` moved from `crypto.ts` to `vault.ts`** — owns vault operations; avoids circular import with crypto module.
@@ -240,6 +356,7 @@ Versions are dated; there is no semantic version number — the public interface
 ## [2026-05-15] — Security hardening, storage migration, code quality pass
 
 ### Security — Added
+
 - **Content Security Policy** (`Content-Security-Policy` meta tag) with SHA-256 hashes for all 15 inline script blocks; `strict-dynamic`; `object-src 'none'`; `base-uri 'none'`; `trusted-types nexus-crm nexus-crm-raw`; `require-trusted-types-for 'script'`. Style blocks are not hashed — when `style-src` contains hashes, browsers ignore `unsafe-inline` per spec, which blocks the 177+ inline `style=` attributes throughout render functions. `frame-ancestors` is not in the meta tag — browsers ignore it there per spec (only works in HTTP response headers).
 - **`require-trusted-types-for 'script'`** in CSP — any future unguarded `innerHTML` assignment now throws instead of silently executing
 - **Trusted Types policies**: `nexus-crm` (sanitises user data) and `nexus-crm-raw` (wraps safe template HTML) registered once at module scope; `patchInnerHTML()` IIFE overrides `Element.prototype.innerHTML` so all existing template assignments are routed through the raw policy automatically
@@ -250,16 +367,19 @@ Versions are dated; there is no semantic version number — the public interface
 - **`navigator.storage.persist()`** called once at startup — requests browser mark IDB data as persistent so it won't be evicted under storage pressure
 
 ### Security — Fixed
+
 - **`btoa(String.fromCharCode(...array))` stack overflow** — replaced all 5 occurrences with `u8ToBase64()` helper (`Uint8Array.prototype.toBase64()` with 64KB-chunked `btoa` fallback); and `base64ToU8()` for decoding. The old pattern throws a `RangeError` when the encrypted vault exceeds ~65KB, causing silent data loss.
 - **Duplicate Trusted Types policy creation** — `_ttRaw()` was calling `trustedTypes.createPolicy('nexus-crm-raw', ...)` on every invocation; `patchInnerHTML` had already registered that name; per spec this throws a `TypeError`. Fixed by hoisting `_rawPolicy` to module scope so both share the single registered instance.
 - **Double `reset-app-btn` event listener** — a leftover incomplete handler was registered back-to-back with the correct async handler on the same line; on click both fired, producing two stacked confirm dialogs and running `localStorage.clear()` before IDB cleanup completed. Removed the leftover handler.
 - **`_vaultMetaSet` had no error handling** — IDB write failures (disk full, quota exceeded, private browsing) propagated as unhandled rejections with no user-visible error; wrapped in `try/catch` that rethrows a readable message.
 
 ### Storage — Changed
+
 - **Vault, salt, verify token, and KDF version migrated from `localStorage` to IndexedDB** (`nexus_vault_v2` / store `meta`). Removes the 5MB `localStorage` cap as a hard ceiling on CRM data. One-time silent migration on first load — reads existing `localStorage` data, writes to IDB, removes `localStorage` keys. Idempotent.
 - **`dbFlush()` debounced** — `dbCreate`, `dbUpdate`, `dbDelete` now call `_scheduleFlush()` (300ms debounce) instead of `await dbFlush()` directly. Eliminates redundant encrypt+write cycles during rapid consecutive mutations (bulk import, fast field edits). In-memory `_dbData` still updates immediately so reads are never stale. A `beforeunload` handler forces an immediate flush on tab close.
 
 ### Code quality — Fixed
+
 - **Eliminated redundant IDB round-trip in `initCrypto()`** — `getSalt()` already fetches `SALT_KEY`; the subsequent `isFirstRun()` call fetched the same key again. Replaced with a single `!hasVault` check.
 - **`navigator.storage.persist()` moved from `afterUnlock()` to `init()`** — was called on every unlock including session-key restores (every F5); now runs once per session.
 - **`subscribe()` return value stored** — the unsubscribe function returned by `subscribe()` in `afterUnlock` is now captured as `_unsubscribe`.
@@ -286,4 +406,4 @@ The following were already in place before this hardening pass and are recorded 
 
 ---
 
-*`generate-csp.mjs` runs automatically as part of `pnpm run build:offline`. Run `pnpm run build:offline` after every source edit to produce an updated `dist/offline/index.html` with correct CSP hashes.*
+_`generate-csp.mjs` runs automatically as part of `pnpm run build:offline`. Run `pnpm run build:offline` after every source edit to produce an updated `dist/offline/index.html` with correct CSP hashes._

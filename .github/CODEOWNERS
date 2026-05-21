@@ -1,0 +1,7 @@
+# Global code owners — all files require review from the primary maintainer
+* @techkeydeveloper
+
+# Security-sensitive areas require explicit review
+packages/core/src/security/ @techkeydeveloper
+packages/core/src/storage/ @techkeydeveloper
+.github/workflows/ @techkeydeveloper

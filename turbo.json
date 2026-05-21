@@ -1,0 +1,46 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "vite.config.ts", "tsconfig.json"],
+      "outputs": ["dist/**"]
+    },
+    "build:offline": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "vite.config.ts", "tsconfig.json"],
+      "outputs": ["../../dist/offline/**"]
+    },
+    "//#typecheck": {
+      "dependsOn": []
+    },
+    "//#test": {
+      "dependsOn": [],
+      "inputs": ["tests/**", "packages/*/src/**", "vitest.config.ts"]
+    },
+    "//#test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
+    },
+    "//#lint": {
+      "dependsOn": []
+    },
+    "lint": {},
+    "//#build:offline": {
+      "dependsOn": [],
+      "outputs": ["dist/offline/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "tests/**"]
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
