@@ -1,0 +1,7 @@
+# This directory is populated by openapi-typescript at build time.
+# Do not edit files in this directory — they will be overwritten on next generation.
+#
+# Generate with:
+#   pnpm dlx openapi-typescript docs/api/openapi.yaml -o server/src/api/generated/api.d.ts
+#
+# Re-run whenever docs/api/openapi.yaml changes.
