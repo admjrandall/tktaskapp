@@ -5,6 +5,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 
 ---
 
+## [2026-05-22] — Phase 4: Lockdown Mode + Compliance Pack
+
+### Added — `packages/core/src/`
+
+**Hash-chained audit log (C.6)**
+
+- `security/audit.ts`: extended `AuditEntry` with optional chain fields (`chainPosition`, `prevHash`, `signedDigest`); `_appendToLog()` now computes SHA-256 chain on every write using `crypto.subtle.digest`; added `verifyAuditChain()` that replays all hashes and reports the first broken position; auto-purge retention default raised to 2190 days (HIPAA 6-year minimum); added `gdpr_erasure_requested` and `compliance_pack_changed` to `AuditEventType`
+
+**Deployment policy extensions (C.7)**
+
+- `deployment-policy.ts`: added `PolicyLockdownLevel` type, `lockdownLevel?` and `auditRetentionDays?` to `DeploymentPolicy` interface, `getDeploymentLockdownLevel()` helper, `ENTERPRISE_DEPLOYMENT_POLICY` (standard lockdown, 2190-day retention, all AI tiers), `DATAVERSE_DEPLOYMENT_POLICY` (standard lockdown, 2190-day retention, browser+cloud)
+
+**DLP warning component (C.7)**
+
+- `ui/components.ts`: `renderDLPWarning(action)` modal, `bindDLPWarning(onProceed, onCancel)`, `guardedAction(lockdownLevel, action, onProceed)` one-call helper — no-ops below strong, shows confirmation modal in strong/strict
+
+**Admin console — compliance surface (C.6, C.7)**
+
+- `views/admin-console.ts`: added "Verify Chain" button to audit tab (calls `verifyAuditChain()`, toasts result); compliance tab now reads `tk_compliance_{hipaa,eu-ai-act,gdpr,soc2}` from localStorage and renders live toggle buttons; users tab has GDPR Article 17 erasure request form (`#admin-gdpr-user-id`, `#admin-gdpr-date`, `#admin-gdpr-request`) that writes a `gdpr_erasure_requested` audit event
+
+### Added — `server/src/`
+
+**Lockdown middleware (C.7)**
+
+- `server/src/middleware/lockdown.ts` (new): reads `org_settings.lockdown_level` per tenant, 30 s in-process cache, sets `lockdownLevel` on Hono context and `X-Lockdown-Level` response header; in strong/strict mode peeks at `POST /api/v1/audit` body and rejects entries missing `prevHash` (422 `CHAIN_REQUIRED`); `invalidateLockdownCache(tenantId)` for admin PATCH flushes
+
+**Server audit schema (C.6)**
+
+- `server/src/db/schema/audit-events.ts`: added nullable `chain_position` (bigserial), `prev_hash` (text), `signed_digest` (text) columns — backward-compatible with pre-Phase-4 rows
+
+**AI gateway lockdown gate (C.7)**
+
+- `server/src/ai-gateway/policy-engine.ts`: step 0 before model allowlist checks `ai_endpoint_allowlist` table for tenant-permitted providers; strong/strict lockdown blocks any model not listed; writes `lockdown_blocked:<level>` audit event on denial
+
+### Changed
+
+- `server/src/hono-types.ts`: added `lockdownLevel: string` to `HonoEnv.Variables`
+
+---
+
 ## [2026-05-22] — Phase 2 + 3: AI attributes, sync protocol, admin console
 
 ### Added — `packages/core/src/ai/`
