@@ -71,5 +71,6 @@ export const AuditEntrySchema = v.object({
   signedDigest: v.optional(v.string()),
 })
 
-export type AuditEventType = v.InferOutput<typeof AuditEventTypeSchema>
+// AuditEventType is authoritative in security/audit.ts — re-export from there.
+export type { AuditEventType } from '../security/audit.js'
 export type AuditEntry = v.InferOutput<typeof AuditEntrySchema>

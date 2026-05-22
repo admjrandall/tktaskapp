@@ -74,7 +74,7 @@ const VIEW_ICONS: Record<string, (s?: number) => string> = {
 }
 
 function renderLockdownBanner(level: AppState['lockdownLevel']): string {
-  if (level === 'off') return ''
+  if (!level || level === 'off') return ''
   const msg =
     BRAND.lockdown[
       `banner${level.charAt(0).toUpperCase() + level.slice(1)}` as keyof typeof BRAND.lockdown

@@ -46,6 +46,10 @@ export const aiRuntime = {
   downloadProgress: null as { loaded: number; total: number } | null,
   conversationId: null as string | null,
   savedMessageCount: 0,
+  // Owned by ai-settings.ts — stored here to avoid export let (C.9 contract).
+  _aiSecrets: {} as Record<string, string>,
+  _aiWizard: null as AnyRecord | null,
+  _nanoModal: null as AnyRecord | null,
 }
 
 // ── Conversation helpers ───────────────────────────────────────────────────────

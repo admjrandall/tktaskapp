@@ -13,7 +13,7 @@
     "build:dataverse": "vite build --config apps/dataverse/vite.config.ts",
     "build:all": "pnpm run build:offline && pnpm run build:sync && pnpm run build:dataverse",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint packages apps config server",
+    "lint": "eslint packages apps config",
     "lint:fix": "eslint packages apps config server --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

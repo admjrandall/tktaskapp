@@ -3,6 +3,7 @@
 // Fire-and-forget writes; async reads for display/export.
 
 export type AuditEventType =
+  // Auth
   | 'session_start'
   | 'auth_success'
   | 'auth_failure'
@@ -17,6 +18,7 @@ export type AuditEventType =
   | 'app_locked'
   | 'app_unlocked'
   | 'password_changed'
+  // Data
   | 'vault_file_opened'
   | 'vault_exported'
   | 'vault_imported'
@@ -25,12 +27,40 @@ export type AuditEventType =
   | 'data_exported'
   | 'data_imported'
   | 'app_reset'
+  | 'record_permanent_delete'
+  | 'adapter_clear'
+  // AI (base)
   | 'ai_key_added'
   | 'ai_key_removed'
   | 'ai_query'
   | 'ai_tool_rejected'
-  | 'record_permanent_delete'
-  | 'adapter_clear'
+  // AI extended (C.6)
+  | 'ai_attribute_computed'
+  | 'ai_attribute_failed'
+  | 'ai_command_executed'
+  | 'ai_command_rejected'
+  | 'ai_chat_message'
+  // Adaptive UX (C.6)
+  | 'adaptive_suggestion_proposed'
+  | 'adaptive_suggestion_accepted'
+  | 'adaptive_suggestion_dismissed'
+  // DLP / lockdown (C.6)
+  | 'dlp_warning_shown'
+  | 'dlp_action_proceeded'
+  | 'lockdown_violation_blocked'
+  // Sync (C.6)
+  | 'sync_pull'
+  | 'sync_push'
+  | 'sync_conflict_resolved'
+  // Extension objects (C.6)
+  | 'extension_object_defined'
+  | 'extension_object_instance_created'
+  | 'extension_object_instance_updated'
+  | 'extension_object_instance_deleted'
+  // Workspace / persona (C.6)
+  | 'workspace_layout_changed'
+  | 'persona_selected'
+  | 'persona_changed'
 
 export interface AuditEntry {
   id: string
