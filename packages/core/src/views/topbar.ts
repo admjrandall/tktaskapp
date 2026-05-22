@@ -1,9 +1,13 @@
 // ── TOPBAR ────────────────────────────────────────────────────────────────────
-// Extracted from taskapp.html lines 7492–7525.
+// Rebuilt for Phase 1: search centerpiece, AI button, persona avatar, lockdown banner.
+// Export API is stable — hooks-wiring.ts and render-pipeline.ts depend on it.
 
 import { Icons } from '../ui/icons.js'
 import { setState } from '../state.js'
 import type { AppState } from '../state.js'
+import { BRAND } from '../branding.js'
+import { PERSONA_PRESETS } from '../personas/index.js'
+import { escH } from '../utils.js'
 
 // ── Hook injection ────────────────────────────────────────────────────────────
 let _aiNeedsOnboarding: () => boolean = () => false
@@ -25,7 +29,6 @@ export function setTopbarHooks(hooks: TopbarHooks): void {
   if (hooks.lockApp) _lockApp = hooks.lockApp
 }
 
-// ── View label + icon maps ────────────────────────────────────────────────────
 const VIEW_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
   clients: 'Clients',
@@ -44,6 +47,8 @@ const VIEW_LABELS: Record<string, string> = {
   files: 'Library',
   library: 'Library',
   communications: 'Communications',
+  deals: 'Deals',
+  pipelines: 'Pipelines',
 }
 
 const VIEW_ICONS: Record<string, (s?: number) => string> = {
@@ -64,24 +69,57 @@ const VIEW_ICONS: Record<string, (s?: number) => string> = {
   files: Icons.Files,
   documents: Icons.Doc,
   communications: Icons.Bell,
+  deals: Icons.Projects,
+  pipelines: Icons.Projects,
 }
 
-// ── Renderer ──────────────────────────────────────────────────────────────────
+function renderLockdownBanner(level: AppState['lockdownLevel']): string {
+  if (level === 'off') return ''
+  const msg =
+    BRAND.lockdown[
+      `banner${level.charAt(0).toUpperCase() + level.slice(1)}` as keyof typeof BRAND.lockdown
+    ] ?? ''
+  const colors: Record<string, string> = {
+    standard: 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe',
+    strong: 'background:#fffbeb;color:#92400e;border-color:#fde68a',
+    strict: 'background:#fef2f2;color:#991b1b;border-color:#fecaca',
+  }
+  const style = colors[level] ?? ''
+  return `<div id="lockdown-banner" style="${escH(style)};border-bottom:1px solid;padding:.375rem 1rem;font-size:.8125rem;font-weight:500;display:flex;align-items:center;gap:.5rem">${Icons.Lock(14)}<span>${escH(msg)}</span></div>`
+}
+
+function renderPersonaChip(state: AppState): string {
+  if (!state.currentPersona) return ''
+  const preset = PERSONA_PRESETS[state.currentPersona]
+  return `<button class="btn btn-ghost btn-sm" id="topbar-persona-btn" title="Active persona: ${escH(preset.label)}" style="font-size:.8125rem;gap:.25rem;color:var(--text-secondary)"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>${escH(preset.label)}</button>`
+}
+
 export function renderTopbar(state: AppState): string {
   const unread = (state.notifications as Array<Record<string, unknown>>).filter(
     (n) => !n.read,
   ).length
   const iconFn = VIEW_ICONS[state.currentView]
   const viewIcon = iconFn ? `<span class="topbar-view-icon">${iconFn(16)}</span>` : ''
+  const viewLabel = VIEW_LABELS[state.currentView] ?? escH(state.currentView)
 
   const lockBtn = state.authed
     ? `<button class="btn btn-ghost btn-icon" id="topbar-lock-btn" title="Lock app">${Icons.Lock(16)}</button>`
     : ''
 
-  return `<header class="topbar"><span class="topbar-title">${viewIcon}${VIEW_LABELS[state.currentView] || state.currentView}</span><div class="topbar-spacer"></div><button class="global-search" id="global-search-btn">${Icons.Search(14)}<span>Search…</span><span class="kbd">⌘K</span></button><div class="topbar-divider"></div><button class="btn btn-ghost btn-icon${state.aiPanelOpen ? ' ai-btn-active' : ''}" id="ai-toggle-btn" title="AI Assistant">${Icons.AI()}</button><div style="position:relative"><button class="btn btn-ghost btn-icon" id="notif-btn">${Icons.Bell()}</button>${unread > 0 ? `<span class="notif-badge">${unread > 9 ? '9+' : unread}</span>` : ''}</div><button class="btn btn-ghost btn-icon" id="theme-toggle">${state.theme === 'dark' ? Icons.Sun() : Icons.Moon()}</button>${lockBtn}</header>`
+  const aiBtn = `<button class="btn btn-ghost btn-icon${state.aiPanelOpen ? ' ai-btn-active' : ''}" id="ai-toggle-btn" title="${escH(BRAND.aiAssistantName)}">${Icons.AI()}</button>`
+
+  const notifBtn = `<div style="position:relative"><button class="btn btn-ghost btn-icon" id="notif-btn">${Icons.Bell()}</button>${unread > 0 ? `<span class="notif-badge">${unread > 9 ? '9+' : unread}</span>` : ''}</div>`
+
+  const searchBtn = `<button class="global-search" id="global-search-btn">${Icons.Search(14)}<span>Search…</span><span class="kbd">⌘K</span></button>`
+
+  const themeBtn = `<button class="btn btn-ghost btn-icon" id="theme-toggle" title="Toggle theme">${state.theme === 'dark' ? Icons.Sun() : Icons.Moon()}</button>`
+
+  const banner = renderLockdownBanner(state.lockdownLevel)
+  const personaChip = renderPersonaChip(state)
+
+  return `${banner}<header class="topbar"><span class="topbar-title">${viewIcon}${viewLabel}</span>${personaChip}<div class="topbar-spacer"></div>${searchBtn}<div class="topbar-divider"></div>${aiBtn}${notifBtn}${themeBtn}${lockBtn}</header>`
 }
 
-// ── Event binding ─────────────────────────────────────────────────────────────
 export function bindTopbar(state: AppState): void {
   document.getElementById('global-search-btn')?.addEventListener('click', () => {
     setState({ commandOpen: true })
@@ -106,5 +144,10 @@ export function bindTopbar(state: AppState): void {
 
   document.getElementById('topbar-lock-btn')?.addEventListener('click', () => {
     _lockApp()
+  })
+
+  document.getElementById('topbar-persona-btn')?.addEventListener('click', () => {
+    // Navigate to settings → persona section
+    setState({ currentView: 'settings' })
   })
 }
