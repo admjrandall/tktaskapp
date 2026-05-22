@@ -76,6 +76,41 @@ export function _truncField(val: unknown, maxLen = 500): string {
 }
 
 export const AI_TOOLS: Record<string, { desc: string; args: string[] }> = {
+  // ── AI Attribute tools (C.2) ─────────────────────────────────────────────
+  compute_attribute: {
+    desc: 'Compute a single AI Attribute value for a record. defId: attribute definition id. recordId: record id. store: entity store name.',
+    args: ['defId', 'store', 'recordId'],
+  },
+  list_attributes: {
+    desc: 'List AI Attribute definitions for an entity type.',
+    args: ['entityType'],
+  },
+  refresh_attribute: {
+    desc: 'Force-recompute an AI Attribute, bypassing cache. defId + store + recordId.',
+    args: ['defId', 'store', 'recordId'],
+  },
+  // ── Command intent tools ──────────────────────────────────────────────────
+  execute_command: {
+    desc: 'Execute a recognised UI command by intent string (e.g. "open_dashboard", "start_timer", "export_csv"). intent: string.',
+    args: ['intent', 'params?'],
+  },
+  preview_action: {
+    desc: 'Preview what a proposed action will do before confirming. tool: any tool name. args: the arguments.',
+    args: ['tool', 'args'],
+  },
+  // ── Adaptive UX tools ─────────────────────────────────────────────────────
+  suggest_layout: {
+    desc: 'Propose a workspace layout change to the user. type: pin_view|reorder_sidebar|add_widget. payload: change data.',
+    args: ['type', 'label', 'description', 'payload'],
+  },
+  accept_layout: {
+    desc: 'Accept a pending adaptive layout suggestion. id: suggestion id.',
+    args: ['id'],
+  },
+  dismiss_layout: {
+    desc: 'Dismiss a pending adaptive layout suggestion. id: suggestion id.',
+    args: ['id'],
+  },
   create_record: {
     desc: 'Create a new record. store: tasks|clients|projects|people|departments|communications|files. fields: object matching schema.',
     args: ['store', 'fields'],
@@ -520,6 +555,91 @@ export async function execTool(tool: string, args: AnyRecord): Promise<unknown> 
     }
     case 'answer_question':
       return { context: buildDataSummary(), question: args['question'] }
+
+    // ── AI Attribute tools ────────────────────────────────────────────────
+    case 'compute_attribute':
+    case 'refresh_attribute': {
+      const { computeAttribute: _computeAttr } = await import('./attributes-engine.js')
+      const defs = await _loadAttributeDefs()
+      const defRaw = defs.find((d) => d['id'] === String(args['defId'] ?? ''))
+      if (!defRaw) throw new Error(`AI Attribute def not found: ${args['defId']}`)
+      const store = String(args['store'] ?? '')
+      const rec = dbGetById(store, String(args['recordId'] ?? ''))
+      if (!rec) throw new Error(`Record not found: ${store}/${args['recordId']}`)
+      // IDB record shape matches AIAttributeDef at runtime — cast through unknown
+      return await _computeAttr(
+        defRaw as unknown as Parameters<typeof _computeAttr>[0],
+        rec as AnyRecord,
+      )
+    }
+    case 'list_attributes': {
+      const defs = await _loadAttributeDefs()
+      const entityType = String(args['entityType'] ?? '')
+      return defs.filter((d) => d.entityType === entityType)
+    }
+
+    // ── Command intent tools ──────────────────────────────────────────────
+    case 'execute_command': {
+      const intent = String(args['intent'] ?? '')
+      aiRuntime.lastCommandIntent = intent
+      const SAFE_INTENTS: Record<string, string> = {
+        open_dashboard: 'dashboard',
+        open_clients: 'clients',
+        open_tasks: 'tasks',
+        open_projects: 'projects',
+        open_people: 'people',
+        open_ai: 'ai',
+        open_reports: 'reports',
+        open_calendar: 'calendar',
+      }
+      if (SAFE_INTENTS[intent]) {
+        auditLog('ai_command_executed', { intent })
+        setTimeout(() => {
+          navigate(SAFE_INTENTS[intent]!)
+        }, 50)
+        return { executed: intent, navigated: SAFE_INTENTS[intent] }
+      }
+      auditLog('ai_command_rejected', { intent, reason: 'unknown_intent' })
+      throw new Error(`Unknown command intent: ${intent}`)
+    }
+    case 'preview_action': {
+      const previewTool = String(args['tool'] ?? '')
+      const previewArgs = (args['args'] || {}) as AnyRecord
+      if (!AI_TOOLS[previewTool]) throw new Error(`Unknown tool: ${previewTool}`)
+      return {
+        preview: true,
+        tool: previewTool,
+        args: previewArgs,
+        summary: summarizeAction(previewTool, previewArgs),
+      }
+    }
+
+    // ── Adaptive UX tools ─────────────────────────────────────────────────
+    case 'suggest_layout': {
+      const { _proposeSuggestionFromAI } = await import('./adaptive-engine.js')
+      return _proposeSuggestionFromAI({
+        type: String(args['type'] ?? 'add_widget') as
+          | 'pin_view'
+          | 'reorder_sidebar'
+          | 'add_widget'
+          | 'focus_store',
+        label: String(args['label'] ?? ''),
+        description: String(args['description'] ?? ''),
+        payload: args['payload'] ?? {},
+        confidence: 0.7,
+      })
+    }
+    case 'accept_layout': {
+      const { acceptSuggestion } = await import('./adaptive-engine.js')
+      acceptSuggestion(String(args['id'] ?? ''))
+      return { accepted: args['id'] }
+    }
+    case 'dismiss_layout': {
+      const { dismissSuggestion } = await import('./adaptive-engine.js')
+      dismissSuggestion(String(args['id'] ?? ''))
+      return { dismissed: args['id'] }
+    }
+
     default:
       throw new Error(`Tool not implemented: ${tool}`)
   }
@@ -563,6 +683,19 @@ function sanitizeToolFields(store: string, source: AnyRecord, requireRequired: b
   }
   if (!Object.keys(out).length) throw new Error('No valid fields supplied')
   return out
+}
+
+// ── AI Attribute def loader (lazy IDB read) ────────────────────────────────────
+async function _loadAttributeDefs(): Promise<AnyRecord[]> {
+  try {
+    const { _idbLoadStore } = await import('../storage/idb-data.js')
+    const { _getDbKey } = await import('../storage/db.js')
+    const key = _getDbKey()
+    if (!key) return []
+    return (await _idbLoadStore('aiAttributeDefs', key)) as AnyRecord[]
+  } catch {
+    return []
+  }
 }
 
 // ── speakResult — convert tool result to natural-language reply ────────────────

@@ -3,13 +3,22 @@
 // Provides connectAI / disconnectAI / callBackend.
 // Providers are stateless and receive everything they need as parameters.
 
-import { showToast } from '../state.js'
+import { showToast, getState } from '../state.js'
 import type { AppState } from '../state.js'
 import {
   assertLocalAIEndpointAllowed,
   isAITierAllowed,
   allowedAITiers,
 } from '../deployment-policy.js'
+import { auditLog } from '../security/audit.js'
+
+// Thrown when lockdown policy blocks a backend call (C.7)
+export class LockdownViolationError extends Error {
+  constructor(tier: string) {
+    super(`AI backend "${tier}" blocked by lockdown policy`)
+    this.name = 'LockdownViolationError'
+  }
+}
 import { aiPrefs, saveAIPrefs, syncAIPrefsLegacy } from './ai-prefs.js'
 import type { WebLLMPipeline } from './providers/browser-transformers.js'
 import { loadNano, callNano, destroyNanoSession } from './providers/browser-nano.js'
@@ -46,6 +55,16 @@ export const aiRuntime = {
   downloadProgress: null as { loaded: number; total: number } | null,
   conversationId: null as string | null,
   savedMessageCount: 0,
+  // Provenance of the most recent backend call (C.5)
+  lastProvenance: null as {
+    provider: string
+    modelId: string
+    computedAt: string
+    computeDurationMs: number
+    confidence: number | null
+  } | null,
+  // Last accepted AI command intent
+  lastCommandIntent: null as string | null,
   // Owned by ai-settings.ts — stored here to avoid export let (C.9 contract).
   _aiSecrets: {} as Record<string, string>,
   _aiWizard: null as AnyRecord | null,
@@ -420,25 +439,51 @@ export async function callBackend(
   onToken: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<string> {
+  // C.7 lockdown enforcement — strong/strict blocks public (non-tenant) AI endpoints
+  const { lockdownLevel } = getState()
   const backend = aiRuntime.backend
+  if ((lockdownLevel === 'strong' || lockdownLevel === 'strict') && backend === 'cloud') {
+    auditLog('lockdown_violation_blocked', { context: 'ai_backend', tier: 'cloud', lockdownLevel })
+    throw new LockdownViolationError('cloud')
+  }
+  const t0 = performance.now()
+  let text = ''
   if (backend === 'nano') {
     if (!aiRuntime.nanoSession) throw new Error('Nano session not initialized')
-    const { text, session } = await callNano(aiRuntime.nanoSession, systemPrompt, history, onToken)
-    aiRuntime.nanoSession = session // session may have been recreated if system prompt changed
-    return text
-  }
-  if (backend === 'webllm') {
+    const result = await callNano(aiRuntime.nanoSession, systemPrompt, history, onToken)
+    aiRuntime.nanoSession = result.session
+    text = result.text
+  } else if (backend === 'webllm') {
     if (!aiRuntime.webllmPipeline) throw new Error('WebLLM pipeline not loaded')
-    return callWebLLM(aiRuntime.webllmPipeline, systemPrompt, history, onToken)
-  }
-  if (backend === 'ollama') {
+    text = await callWebLLM(aiRuntime.webllmPipeline, systemPrompt, history, onToken)
+  } else if (backend === 'ollama') {
     assertLocalAIEndpointAllowed(aiPrefs.ollama.url)
-    return callOllama(systemPrompt, history, onToken, signal)
+    text = await callOllama(systemPrompt, history, onToken, signal)
+  } else if (backend === 'cloud') {
+    text = await callCloud(systemPrompt, history, onToken, signal)
+  } else {
+    throw new Error('No AI backend connected')
   }
+  aiRuntime.lastProvenance = {
+    provider: backend ?? 'unknown',
+    modelId: _getModelIdForProvenance(backend),
+    computedAt: new Date().toISOString(),
+    computeDurationMs: Math.round(performance.now() - t0),
+    confidence: null,
+  }
+  return text
+}
+
+function _getModelIdForProvenance(backend: string | null): string {
+  if (!backend) return 'unknown'
+  if (backend === 'nano') return 'gemini-nano'
+  if (backend === 'webllm') return aiPrefs.browser.modelId || 'webllm'
+  if (backend === 'ollama') return aiPrefs.ollama.modelId || 'ollama'
   if (backend === 'cloud') {
-    return callCloud(systemPrompt, history, onToken, signal)
+    const prov = aiPrefs.cloud.provider ?? ''
+    return aiPrefs.cloud.modelByProvider[prov] ?? prov
   }
-  throw new Error('No AI backend connected')
+  return backend
 }
 
 async function callCloud(
