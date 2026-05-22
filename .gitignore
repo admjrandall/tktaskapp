@@ -21,3 +21,14 @@ axe-report.json
 
 # Microsoft Office temporary lock files
 ~$*
+
+# Credential / token files — never commit
+ghp_*.txt
+*.token
+*_token.txt
+
+# Claude Code local settings (machine-specific permission allowlist)
+.claude/settings.local.json
+
+# BMAD installer-managed per-user config
+_bmad/config.user.toml
