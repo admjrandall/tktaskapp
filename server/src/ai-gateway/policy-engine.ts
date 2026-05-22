@@ -11,6 +11,7 @@ export interface AiGatewayRequest {
   promptTokenEstimate: number
   systemPrompt?: string
   userMessage: string
+  lockdownLevel?: string // injected by lockdownMiddleware via c.get('lockdownLevel')
 }
 
 export interface AiGatewayDecision {
@@ -39,6 +40,25 @@ function _screenPii(message: string): { clean: string; detected: string[] } {
     pattern.lastIndex = 0
   }
   return { clean, detected }
+}
+
+// ── Lockdown enforcement helpers ──────────────────────────────────────────────
+import { withTenant } from '../services/base.js'
+import { sql } from 'drizzle-orm'
+
+// Check if the requested model is in the tenant's AI allowlist.
+// In strong/strict lockdown, a missing or empty allowlist means DENY ALL.
+async function _isTenantAllowedModel(orgId: string, model: string): Promise<boolean> {
+  try {
+    const result = await withTenant(orgId, async (tx) =>
+      tx.execute(sql`SELECT provider FROM ai_endpoint_allowlist WHERE org_id = ${orgId}::uuid`),
+    )
+    const entries = result.rows as Array<{ provider: string }>
+    if (entries.length === 0) return false
+    return entries.some((e) => model.startsWith(e['provider'] ?? ''))
+  } catch {
+    return false
+  }
 }
 
 // ── Model allowlist ────────────────────────────────────────────────────────────
@@ -128,7 +148,19 @@ async function _isOverBudget(orgId: string, promptTokenEstimate: number): Promis
 export async function evaluateAiGatewayRequest(
   request: AiGatewayRequest,
 ): Promise<AiGatewayDecision> {
-  const { context, model, promptTokenEstimate, userMessage } = request
+  const { context, model, promptTokenEstimate, userMessage, lockdownLevel } = request
+
+  // 0. Lockdown enforcement — strong/strict only permits tenant-allowlisted providers (C.7)
+  if (lockdownLevel === 'strong' || lockdownLevel === 'strict') {
+    const tenantAllowed = await _isTenantAllowedModel(context.orgId, model)
+    if (!tenantAllowed) {
+      await _auditLog(context, model, 'failure', `lockdown_blocked:${lockdownLevel}`)
+      return {
+        allowed: false,
+        reason: `Model '${model}' is not in the tenant AI allowlist (lockdown: ${lockdownLevel})`,
+      }
+    }
+  }
 
   // 1. Model allowlist
   if (!_ALLOWED_MODELS.has(model)) {
