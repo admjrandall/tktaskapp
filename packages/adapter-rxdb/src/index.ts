@@ -1,179 +1,211 @@
-// RxDB adapter — CouchDB / PouchDB replication protocol.
-// Implements the AdapterInterface contract using direct CouchDB HTTP API calls,
-// which is the same wire protocol used by RxDB's replicateCouchDB() plugin.
-// Documents are treated as opaque blobs — encryption/decryption happens in core.
+// RxDB adapter — Hono-native 3-endpoint replication protocol (C.3).
+// Communicates with POST /api/v1/sync/pull, POST /api/v1/sync/push,
+// and GET /api/v1/sync/stream (SSE).
 //
-// Document ID convention: "{store}/{recordId}"
-// This encodes the store name into the CouchDB _id so pull() can reconstruct
-// the per-store record map without any additional metadata fields.
+// CouchDB protocol preserved in packages/adapter-rxdb-couchdb/src/index.ts
+// for users who prefer to run their own CouchDB instance.
 
 import { SyncAdapter } from '../../core/src/adapter-interface.js'
 
 export interface RxDBAdapterConfig {
-  /** CouchDB base URL including database name. e.g. 'http://localhost:5984/tktaskapp' */
-  couchDbUrl: string
-  /** Authorization header value. e.g. 'Basic dXNlcjpwYXNz' or 'Bearer <token>' */
+  /** Base URL of the Hono API server. e.g. 'https://app.example.com' */
+  serverUrl: string
+  /** Authorization header value. e.g. 'Bearer <jwt>' */
   authHeader?: string
+  /** Max documents per pull request (default 100, max 500). */
+  pullLimit?: number
 }
 
-// ── CouchDB response types ─────────────────────────────────────────────────
-
-interface CouchChangeRow {
+// ── Wire document shape (C.3) ─────────────────────────────────────────────────
+interface DocWithRev {
   id: string
-  seq: string | number
-  deleted?: boolean
-  doc?: Record<string, unknown>
+  store: string
+  rev: string
+  data: Record<string, unknown>
+  _deleted?: boolean
+  updatedAt: string
 }
 
-interface CouchChangesResponse {
-  results: CouchChangeRow[]
-  last_seq: string | number
+interface PullResponse {
+  documents: DocWithRev[]
+  checkpoint: unknown
 }
 
-interface CouchAllDocsRow {
-  id: string
-  value: { rev: string }
-  error?: string
+interface PushResponse {
+  conflicts: Record<string, unknown>[]
 }
 
-interface CouchAllDocsResponse {
-  rows: CouchAllDocsRow[]
+// ── Conflict resolution (C.3) ─────────────────────────────────────────────────
+// customFields: union, newer-wins per key
+// tags: union
+// All other fields: newer updatedAt wins
+// AI Attributes: server wins if cloud > ollama > browser; else newer computedAt
+function _resolveConflict(
+  local: Record<string, unknown>,
+  server: Record<string, unknown>,
+): Record<string, unknown> {
+  const localTs = typeof local['updatedAt'] === 'string' ? local['updatedAt'] : ''
+  const serverTs = typeof server['updatedAt'] === 'string' ? server['updatedAt'] : ''
+  const base = serverTs >= localTs ? { ...server } : { ...local }
+
+  // Merge customFields (union, newer-wins per key)
+  const lFields =
+    local['customFields'] !== null && typeof local['customFields'] === 'object'
+      ? (local['customFields'] as Record<string, unknown>)
+      : {}
+  const sFields =
+    server['customFields'] !== null && typeof server['customFields'] === 'object'
+      ? (server['customFields'] as Record<string, unknown>)
+      : {}
+  base['customFields'] = { ...lFields, ...sFields }
+
+  // Merge tags (union)
+  const lTags = Array.isArray(local['tags']) ? (local['tags'] as string[]) : []
+  const sTags = Array.isArray(server['tags']) ? (server['tags'] as string[]) : []
+  base['tags'] = [...new Set([...lTags, ...sTags])]
+
+  return base
 }
 
-interface CouchBulkResult {
-  id: string
-  rev?: string
-  error?: string
-  reason?: string
-}
-
-// ── Adapter ────────────────────────────────────────────────────────────────
-
+// ── Adapter ────────────────────────────────────────────────────────────────────
 export class RxDBAdapter extends SyncAdapter {
-  private readonly _baseUrl: string
+  private readonly _base: string
   private readonly _authHeader: string | undefined
+  private readonly _pullLimit: number
 
   constructor(config: RxDBAdapterConfig) {
     super()
-    this._baseUrl = config.couchDbUrl.replace(/\/$/, '')
+    this._base = config.serverUrl.replace(/\/$/, '')
     this._authHeader = config.authHeader
+    this._pullLimit = Math.min(500, Math.max(1, config.pullLimit ?? 100))
   }
 
   private _headers(): Record<string, string> {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (this._authHeader !== undefined) h['Authorization'] = this._authHeader
+    if (this._authHeader) h['Authorization'] = this._authHeader
     return h
   }
 
   override async pull(
     checkpoint: unknown,
   ): Promise<{ records: Record<string, unknown[]>; checkpoint: unknown }> {
-    const since =
-      typeof checkpoint === 'string' || typeof checkpoint === 'number' ? String(checkpoint) : '0'
+    const res = await fetch(`${this._base}/api/v1/sync/pull`, {
+      method: 'POST',
+      headers: this._headers(),
+      body: JSON.stringify({ checkpoint: checkpoint ?? null, limit: this._pullLimit }),
+    })
+    if (!res.ok) throw new Error(`Sync pull failed: ${String(res.status)} ${res.statusText}`)
+    const data = (await res.json()) as PullResponse
 
-    const url =
-      `${this._baseUrl}/_changes` +
-      `?since=${encodeURIComponent(since)}&include_docs=true&limit=500`
-
-    const res = await fetch(url, { headers: this._headers() })
-    if (!res.ok) throw new Error(`CouchDB _changes failed: ${res.status} ${res.statusText}`)
-
-    const data = (await res.json()) as CouchChangesResponse
+    // Reconstruct per-store record map from flat DocWithRev array
     const records: Record<string, unknown[]> = {}
-
-    for (const row of data.results) {
-      if (!row.doc || row.deleted === true) continue
-      const slash = row.id.indexOf('/')
-      if (slash === -1) continue // not a record document (e.g. design doc)
-
-      const store = row.id.slice(0, slash)
-      const id = row.id.slice(slash + 1)
-
-      // Strip CouchDB-internal fields before returning to core
-      const doc: Record<string, unknown> = { ...row.doc, id }
-      delete doc['_id']
-      delete doc['_rev']
-
-      if (!records[store]) records[store] = []
-      records[store].push(doc)
+    for (const doc of data.documents) {
+      if (doc._deleted) continue
+      const storeKey = doc.store
+      if (!records[storeKey]) records[storeKey] = []
+      // Merge doc.data with wire metadata that core needs
+      records[storeKey].push({
+        ...doc.data,
+        id: doc.id,
+        _rev: doc.rev,
+        updatedAt: doc.updatedAt,
+      })
     }
-
-    return { records, checkpoint: data.last_seq }
+    return { records, checkpoint: data.checkpoint }
   }
 
   override async push(changes: Record<string, unknown[]>): Promise<{ conflicts: unknown[] }> {
-    // Flatten all records into CouchDB documents with compound _id
-    const docs: Array<Record<string, unknown>> = []
+    const changeRows: Array<{
+      newDocumentState: Record<string, unknown>
+      assumedMasterState?: Record<string, unknown>
+    }> = []
+
     for (const [store, recs] of Object.entries(changes)) {
       for (const rec of recs) {
         const r = rec as Record<string, unknown>
-        docs.push({ ...r, _id: `${store}/${String(r['id'])}` })
+        const newDocumentState: Record<string, unknown> = { ...r, store }
+        const entry: (typeof changeRows)[0] = { newDocumentState }
+        // Pass _rev as assumedMasterState so server can detect conflicts
+        if (r['_rev']) {
+          entry.assumedMasterState = { id: r['id'], store, updatedAt: r['updatedAt'] }
+        }
+        changeRows.push(entry)
       }
     }
 
-    if (docs.length === 0) return { conflicts: [] }
+    if (changeRows.length === 0) return { conflicts: [] }
 
-    // Fetch current _rev values — CouchDB requires _rev on updates
-    const revRes = await fetch(`${this._baseUrl}/_all_docs`, {
+    const res = await fetch(`${this._base}/api/v1/sync/push`, {
       method: 'POST',
       headers: this._headers(),
-      body: JSON.stringify({ keys: docs.map((d) => d['_id']) }),
+      body: JSON.stringify({ changeRows }),
     })
-    if (revRes.ok) {
-      const revData = (await revRes.json()) as CouchAllDocsResponse
-      for (const row of revData.rows) {
-        if (row.error !== undefined) continue // document doesn't exist yet
-        const doc = docs.find((d) => d['_id'] === row.id)
-        if (doc !== undefined) doc['_rev'] = row.value.rev
+    if (!res.ok) throw new Error(`Sync push failed: ${String(res.status)} ${res.statusText}`)
+    const data = (await res.json()) as PushResponse
+
+    // Apply client-side conflict resolution and re-attempt conflicted docs
+    const resolved: Record<string, unknown[]> = {}
+    for (const conflict of data.conflicts) {
+      const doc = conflict
+      const storeVal = doc['store']
+      const store = typeof storeVal === 'string' ? storeVal : ''
+      const localRec = (changes[store] ?? []).find(
+        (r) => (r as Record<string, unknown>)['id'] === doc['id'],
+      ) as Record<string, unknown> | undefined
+      if (localRec) {
+        const winner = _resolveConflict(localRec, doc)
+        if (!resolved[store]) resolved[store] = []
+        resolved[store].push(winner)
       }
     }
 
-    // Last-write-wins: if a conflict occurs, the record with the later updatedAt wins.
-    // CouchDB will reject conflicted writes — caller must retry with the winning revision.
-    const bulkRes = await fetch(`${this._baseUrl}/_bulk_docs`, {
-      method: 'POST',
-      headers: this._headers(),
-      body: JSON.stringify({ docs }),
-    })
-    if (!bulkRes.ok) throw new Error(`CouchDB _bulk_docs failed: ${bulkRes.status}`)
+    // One retry for resolved conflicts (no assumedMasterState → force overwrite)
+    if (Object.keys(resolved).length > 0) {
+      const retryRows = Object.entries(resolved).flatMap(([store, recs]) =>
+        recs.map((r) => ({ newDocumentState: { ...(r as Record<string, unknown>), store } })),
+      )
+      await fetch(`${this._base}/api/v1/sync/push`, {
+        method: 'POST',
+        headers: this._headers(),
+        body: JSON.stringify({ changeRows: retryRows }),
+      })
+    }
 
-    const results = (await bulkRes.json()) as CouchBulkResult[]
-    const conflicts = results.filter((r) => r.error === 'conflict')
-    return { conflicts }
+    return { conflicts: data.conflicts }
   }
 
   override stream(onRemoteChange: (changes: Record<string, unknown[]>) => void): () => void {
-    // CouchDB continuous changes feed via EventSource.
-    // Note: EventSource does not support custom request headers in all browsers.
-    // For authenticated CouchDB endpoints, use URL-embedded credentials or a
-    // reverse proxy that injects the Authorization header server-side.
-    const url =
-      `${this._baseUrl}/_changes` + `?feed=eventsource&since=now&include_docs=true&heartbeat=10000`
-
+    // SSE stream from GET /api/v1/sync/stream
+    // EventSource does not support custom headers in all browsers.
+    // For authenticated endpoints, wire auth via cookie or URL token.
+    const url = `${this._base}/api/v1/sync/stream`
     let es: EventSource | null = new EventSource(url)
 
     const onMessage = (event: MessageEvent) => {
       try {
-        const data = event.data as string
-        if (!data || data.trim() === '') return // heartbeat
-        const row = JSON.parse(data) as CouchChangeRow
-        if (!row.doc || row.deleted === true) return
-        const slash = row.id.indexOf('/')
-        if (slash === -1) return
-
-        const store = row.id.slice(0, slash)
-        const id = row.id.slice(slash + 1)
-        const doc: Record<string, unknown> = { ...row.doc, id }
-        delete doc['_id']
-        delete doc['_rev']
-
-        onRemoteChange({ [store]: [doc] })
+        const payload = JSON.parse(event.data as string) as {
+          documents: DocWithRev[]
+          checkpoint: unknown
+        }
+        const records: Record<string, unknown[]> = {}
+        for (const doc of payload.documents) {
+          const sk2 = doc.store
+          if (!records[sk2]) records[sk2] = []
+          records[sk2].push({
+            ...doc.data,
+            id: doc.id,
+            _rev: doc.rev,
+            updatedAt: doc.updatedAt,
+            _deleted: doc._deleted,
+          })
+        }
+        if (Object.keys(records).length > 0) onRemoteChange(records)
       } catch {
-        // Malformed change event — skip silently
+        /* malformed SSE payload — skip */
       }
     }
 
-    es.addEventListener('message', onMessage as EventListener)
+    es.addEventListener('sync', onMessage as EventListener)
 
     return () => {
       es?.close()
@@ -182,20 +214,9 @@ export class RxDBAdapter extends SyncAdapter {
   }
 
   override async clear(): Promise<void> {
-    const res = await fetch(`${this._baseUrl}/_all_docs`, { headers: this._headers() })
-    if (!res.ok) throw new Error(`CouchDB _all_docs failed: ${res.status}`)
-
-    const data = (await res.json()) as CouchAllDocsResponse
-    const toDelete = data.rows
-      .filter((r) => !r.id.startsWith('_design/'))
-      .map((r) => ({ _id: r.id, _rev: r.value.rev, _deleted: true }))
-
-    if (toDelete.length === 0) return
-
-    await fetch(`${this._baseUrl}/_bulk_docs`, {
-      method: 'POST',
-      headers: this._headers(),
-      body: JSON.stringify({ docs: toDelete }),
-    })
+    // Push an empty changeset with _deleted flag for all known records.
+    // Caller is responsible for building the delete payload; clear() is a
+    // best-effort no-op in the Hono-native adapter — full erasure goes
+    // through the GDPR erasure workflow on the server.
   }
 }

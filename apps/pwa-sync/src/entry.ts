@@ -2,9 +2,12 @@ import { RxDBAdapter } from '../../../packages/adapter-rxdb/src/index.js'
 import { setAdapter } from '../../../packages/core/src/storage/db.js'
 import { init } from '../../../packages/core/src/main.js'
 
-// CouchDB/PouchDB endpoint — set VITE_COUCHDB_URL at build time or in .env.local
-const couchDbUrl =
-  (import.meta.env['VITE_COUCHDB_URL'] as string | undefined) ?? 'http://localhost:5984/tktaskapp'
+// Hono server base URL — set VITE_SERVER_URL at build time or in .env.local
+const serverUrl =
+  (import.meta.env['VITE_SERVER_URL'] as string | undefined) ?? 'http://localhost:3000'
 
-setAdapter(new RxDBAdapter({ couchDbUrl }))
+// Auth header from env (e.g. a static dev token — production uses OIDC cookie)
+const authHeader = import.meta.env['VITE_AUTH_HEADER'] as string | undefined
+
+setAdapter(new RxDBAdapter({ serverUrl, ...(authHeader ? { authHeader } : {}) }))
 void init()
