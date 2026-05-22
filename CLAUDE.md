@@ -55,7 +55,7 @@ d:\techkeycrmapp\
 │   │   ├── ui/                   ← shared UI primitives
 │   │   │   ├── components.ts
 │   │   │   └── icons.ts
-│   │   ├── schemas/              ← Zod / runtime schemas
+│   │   ├── schemas/              ← Valibot / runtime schemas
 │   │   │   ├── index.ts
 │   │   │   ├── client.schema.ts
 │   │   │   ├── project.schema.ts
@@ -65,8 +65,27 @@ d:\techkeycrmapp\
 │   │   │   ├── file.schema.ts
 │   │   │   ├── import.schema.ts
 │   │   │   ├── audit.schema.ts
-│   │   │   └── ai-tool.schema.ts
-│   │   ├── views/                ← one file per view
+│   │   │   ├── ai-tool.schema.ts
+│   │   │   ├── communication.schema.ts
+│   │   │   ├── department.schema.ts
+│   │   │   ├── conversation.schema.ts
+│   │   │   ├── time-entry.schema.ts
+│   │   │   ├── notification.schema.ts
+│   │   │   ├── tag.schema.ts
+│   │   │   ├── standalone-note.schema.ts
+│   │   │   ├── deal.schema.ts
+│   │   │   ├── pipeline.schema.ts
+│   │   │   ├── custom-field.schema.ts
+│   │   │   ├── ai-attribute.schema.ts
+│   │   │   ├── extension-object.schema.ts
+│   │   │   ├── workspace-layout.schema.ts
+│   │   │   └── persona.schema.ts
+│   │   ├── views/                ← one file per view; onboarding.ts, workspace-canvas.ts, admin-console.ts added in Phase 1
+│   │   ├── personas/             ← personas/index.ts: PERSONA_PRESETS for all 5 persona IDs
+│   │   ├── application/          ← placeholder — application layer (Phase 1)
+│   │   ├── domain/               ← placeholder — domain layer (Phase 1)
+│   │   ├── migrations/           ← placeholder — migrations layer (Phase 1)
+│   │   ├── platform/             ← placeholder — platform layer (Phase 1)
 │   │   └── ai/                   ← ai-prefs.ts, ai-runtime.ts, ai-tools.ts, ai-settings.ts, ai-ui.ts, providers/
 │   ├── adapter-null/src/index.ts       ← NullAdapter (offline-only, no-op)
 │   ├── adapter-rxdb/src/index.ts       ← RxDBAdapter stub
@@ -196,16 +215,17 @@ Modules must be imported in this order (deeper dependencies first):
 15. security/webauthn.ts           — no dependencies (WebAuthn PRF passkeys; hooks injected by main.ts)
 16. security/mfa.ts                — totp; hooks injected by main.ts
 17. security/audit.ts              — no app deps (hooks injected by main.ts via setAuditHooks)
-18. views/*                        — state, db, utils, icons, components, sanitize
-19. ai/ai-prefs.ts                 — no dependencies (localStorage only)
-20. deployment-policy.ts           — no dependencies; build/profile policy
-21. ai/providers/*                 — stateless; no app-layer deps
-22. ai/ai-runtime.ts               — state, ai-prefs, deployment-policy, providers, (lazy: state.js)
-23. ai/ai-tools.ts                 — ai-runtime, (injected: SCHEMAS, streamToBubble, finalRender)
-24. ai/ai-settings.ts              — ai-prefs, ai-runtime, deployment-policy, providers/ollama
-25. ai/ai-ui.ts                    — ai-runtime, ai-tools, ai-settings, ai-prefs, deployment-policy, state, utils, icons
-26. security/auth.ts               — crypto, vault, session, state, utils, icons, fs, mfa
-27. main.ts                        — all of the above
+18. personas/index.ts              — state (PersonaId type only)
+19. views/*                        — state, db, utils, icons, components, sanitize, personas
+20. ai/ai-prefs.ts                 — no dependencies (localStorage only)
+21. deployment-policy.ts           — no dependencies; build/profile policy
+22. ai/providers/*                 — stateless; no app-layer deps
+23. ai/ai-runtime.ts               — state, ai-prefs, deployment-policy, providers, (lazy: state.js)
+24. ai/ai-tools.ts                 — ai-runtime, (injected: SCHEMAS, streamToBubble, finalRender)
+25. ai/ai-settings.ts              — ai-prefs, ai-runtime, deployment-policy, providers/ollama
+26. ai/ai-ui.ts                    — ai-runtime, ai-tools, ai-settings, ai-prefs, deployment-policy, state, utils, icons
+27. security/auth.ts               — crypto, vault, session, state, utils, icons, fs, mfa
+28. main.ts                        — all of the above
 ```
 
 ---
@@ -314,10 +334,12 @@ reloadData() // pulls fresh records from _dbData into state
 **State shape** (full `AppState` interface in `state.ts`):
 
 ```
-authed, cryptoKey, currentView, sidebarCollapsed, theme,
+authed, cryptoKey, currentView, sidebarCollapsed, theme, density,
 clients, departments, projects, tasks, people, standaloneNotes,
 tags, communications, files, timeEntries, notifications, trash,
 documents, conversations,
+deals, pipelines,
+currentPersona, workspaceLayout, aiAttributeValues, adaptiveSuggestions, lockdownLevel,
 aiPanelOpen, commandOpen, notifPanelOpen,
 toast, confirmDialog, recordModal, docModal, fileViewer,
 runningTimer, timerElapsed
@@ -535,7 +557,7 @@ pnpm test          # vitest
 2. Every DB query must go through `withTenant()` — never query CRM tables without RLS set.
 3. Every create/update/delete/suspend/erase endpoint writes an audit event via `writeAuditEvent()`.
 4. All secrets from environment variables — never hardcode credentials.
-5. Zod validation on all request bodies — return 400 with error details on failure.
+5. Valibot validation on all request bodies — schemas live in `server/src/schemas/index.ts`, parsed via `safeParseV` helper; return 400 with error details on failure.
 6. Do not edit files in `packages/core/src/` from server code — frontend and server are separate packages.
 
 ---

@@ -5,6 +5,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 
 ---
 
+## [2026-05-22] — Phase 1: UI foundation + data model
+
+### Added — `packages/core/src/`
+
+**Design tokens & UI primitives**
+
+- `ui/design-tokens.ts`: `TOKENS` const, `COLOR_VAR_MAP`, `applyTokens(theme, density)` — maps to existing CSS variable names
+- `ui/primitives/button.ts`, `badge.ts`, `avatar.ts`, `input.ts`, `modal.ts`, `index.ts`: typed, `escH()`-clean UI primitives
+- `branding.ts`: `BRAND` const with app name, lockdown banners, AI identity strings
+
+**Data model extensions (C.1)**
+
+- `constants.ts`: `deals` and `pipelines` added to `STORES`; 9 new `IDB_STORES` for extension objects, AI attributes, workspace layouts, persona profiles, automation rules, agent insights; `DEAL_STAGES`, `PIPELINE_TYPES`
+- `state.ts`: typed collections for all vault stores; `density`, `deals`, `pipelines`, `currentPersona`, `workspaceLayout`, `aiAttributeValues`, `adaptiveSuggestions`, `lockdownLevel` added to `AppState`
+
+**Schema extensions**
+
+- All 13 entity schemas (client, project, task, person, department, communication, tag, time-entry, notification, standalone-note, document, file, conversation) extended with `customFields`, `aiAttributes`, `extensionLinks`
+- `audit.schema.ts`: extended with C.6 event types (AI, persona, workspace, sync, extension events) and hash-chain fields
+- 7 new schemas: `deal`, `pipeline`, `custom-field`, `ai-attribute` (C.2 provenance), `extension-object`, `workspace-layout`, `persona`
+
+**Persona system**
+
+- `personas/index.ts`: `PERSONA_PRESETS` for all 5 presets (closer, maintainer, investigator, builder, inspector) with `sidebarOrder`, `defaultView`, `dashboardBlocks`, `lockdownDefault`
+
+**View updates**
+
+- `views/sidebar.ts`: `NAV_REGISTRY`, persona-adaptive nav order, persona badge in sidebar footer
+- `views/topbar.ts`: lockdown banner (standard/strong/strict), persona chip, extended `VIEW_LABELS`/`VIEW_ICONS` for deals/pipelines
+- `views/onboarding.ts` (new): persona selection onboarding flow with 3 persona cards
+- `views/workspace-canvas.ts` (new): drag/resize spatial canvas with `localStorage` persistence
+- `views/admin-console.ts` (new): lockdown level selector (C.7), compliance packs, AI gateway allowlist
+- `views/settings-user.ts` (new): re-export shim forwarding all `settings.ts` exports
+
+---
+
 ## [2026-05-21] — Server backend implementation
 
 ### Added — `server/` package
