@@ -10,6 +10,9 @@ export const TimeEntrySchema = v.looseObject({
   startedAt: v.string(),
   endedAt: v.optional(v.nullable(v.string())),
   durationSeconds: v.optional(v.number()),
+  customFields: v.optional(v.record(v.string(), v.unknown()), {}),
+  aiAttributes: v.optional(v.record(v.string(), v.unknown()), {}),
+  extensionLinks: v.optional(v.array(v.object({ defId: v.string(), instanceId: v.string() })), []),
 })
 
 export type TimeEntry = v.InferOutput<typeof TimeEntrySchema>

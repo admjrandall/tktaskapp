@@ -12,6 +12,9 @@ export const TaskSchema = v.looseObject({
   projectId: v.optional(v.string()),
   assigneeId: v.optional(v.string()),
   parentId: v.optional(v.string()),
+  customFields: v.optional(v.record(v.string(), v.unknown()), {}),
+  aiAttributes: v.optional(v.record(v.string(), v.unknown()), {}),
+  extensionLinks: v.optional(v.array(v.object({ defId: v.string(), instanceId: v.string() })), []),
 })
 
 export type Task = v.InferOutput<typeof TaskSchema>

@@ -14,6 +14,9 @@ export const ConversationSchema = v.looseObject({
   title: v.optional(v.string()),
   model: v.optional(v.string()),
   messages: v.optional(v.array(ConversationMessageSchema)),
+  customFields: v.optional(v.record(v.string(), v.unknown()), {}),
+  aiAttributes: v.optional(v.record(v.string(), v.unknown()), {}),
+  extensionLinks: v.optional(v.array(v.object({ defId: v.string(), instanceId: v.string() })), []),
 })
 
 export type ConversationMessage = v.InferOutput<typeof ConversationMessageSchema>

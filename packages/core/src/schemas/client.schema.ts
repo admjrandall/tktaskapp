@@ -11,6 +11,9 @@ export const ClientSchema = v.looseObject({
   website: v.optional(v.string()),
   stage: v.optional(v.picklist(['Prospect', 'Active', 'Inactive', 'Churned'])),
   description: v.optional(v.string()),
+  customFields: v.optional(v.record(v.string(), v.unknown()), {}),
+  aiAttributes: v.optional(v.record(v.string(), v.unknown()), {}),
+  extensionLinks: v.optional(v.array(v.object({ defId: v.string(), instanceId: v.string() })), []),
 })
 
 export type Client = v.InferOutput<typeof ClientSchema>

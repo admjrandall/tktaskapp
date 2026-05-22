@@ -10,6 +10,9 @@ export const StandaloneNoteSchema = v.looseObject({
   taskId: v.optional(v.string()),
   personId: v.optional(v.string()),
   createdBy: v.optional(v.string()),
+  customFields: v.optional(v.record(v.string(), v.unknown()), {}),
+  aiAttributes: v.optional(v.record(v.string(), v.unknown()), {}),
+  extensionLinks: v.optional(v.array(v.object({ defId: v.string(), instanceId: v.string() })), []),
 })
 
 export type StandaloneNote = v.InferOutput<typeof StandaloneNoteSchema>

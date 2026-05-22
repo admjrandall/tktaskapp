@@ -13,6 +13,9 @@ export const DocumentSchema = v.looseObject({
   pinned: v.optional(v.boolean()),
   createdBy: v.optional(v.string()),
   tagIds: v.optional(v.array(v.string())),
+  customFields: v.optional(v.record(v.string(), v.unknown()), {}),
+  aiAttributes: v.optional(v.record(v.string(), v.unknown()), {}),
+  extensionLinks: v.optional(v.array(v.object({ defId: v.string(), instanceId: v.string() })), []),
 })
 
 export type Document = v.InferOutput<typeof DocumentSchema>

@@ -12,6 +12,9 @@ export const NotificationSchema = v.looseObject({
   relatedStore: v.optional(v.string()),
   relatedId: v.optional(v.string()),
   read: v.optional(v.boolean()),
+  customFields: v.optional(v.record(v.string(), v.unknown()), {}),
+  aiAttributes: v.optional(v.record(v.string(), v.unknown()), {}),
+  extensionLinks: v.optional(v.array(v.object({ defId: v.string(), instanceId: v.string() })), []),
 })
 
 export type Notification = v.InferOutput<typeof NotificationSchema>

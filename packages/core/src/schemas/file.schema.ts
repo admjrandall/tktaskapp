@@ -14,6 +14,9 @@ export const FileSchema = v.looseObject({
   relatedId: v.optional(v.string()),
   uploadedBy: v.optional(v.string()),
   dataUrl: v.optional(v.string()),
+  customFields: v.optional(v.record(v.string(), v.unknown()), {}),
+  aiAttributes: v.optional(v.record(v.string(), v.unknown()), {}),
+  extensionLinks: v.optional(v.array(v.object({ defId: v.string(), instanceId: v.string() })), []),
 })
 
 export type File = v.InferOutput<typeof FileSchema>

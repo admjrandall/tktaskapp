@@ -14,6 +14,9 @@ export const CommunicationSchema = v.looseObject({
   relatedId: v.optional(v.string()),
   personId: v.optional(v.string()),
   clientId: v.optional(v.string()),
+  customFields: v.optional(v.record(v.string(), v.unknown()), {}),
+  aiAttributes: v.optional(v.record(v.string(), v.unknown()), {}),
+  extensionLinks: v.optional(v.array(v.object({ defId: v.string(), instanceId: v.string() })), []),
 })
 
 export type Communication = v.InferOutput<typeof CommunicationSchema>
