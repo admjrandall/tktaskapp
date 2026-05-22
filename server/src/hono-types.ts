@@ -9,5 +9,6 @@ export type HonoEnv = {
     role: string
     externalId: string
     email: string
+    lockdownLevel: string // set by lockdownMiddleware; 'off' | 'standard' | 'strong' | 'strict'
   }
 }
