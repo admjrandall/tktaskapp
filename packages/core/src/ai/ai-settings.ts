@@ -294,7 +294,7 @@ export async function aiSecretsSave(obj: Record<string, string>): Promise<void> 
     secrets: obj || {},
     updatedAt: nowISO(),
   })
-  _aiSecrets = { ...(obj || {}) }
+  aiRuntime._aiSecrets = { ...(obj || {}) }
 }
 
 export async function aiSecretsWipe(): Promise<void> {
@@ -303,18 +303,16 @@ export async function aiSecretsWipe(): Promise<void> {
   } catch {
     /* already gone */
   }
-  _aiSecrets = {}
+  aiRuntime._aiSecrets = {}
 }
 
-export let _aiSecrets: Record<string, string> = {}
-
 export async function aiSecretsRefresh(): Promise<Record<string, string>> {
-  _aiSecrets = await aiSecretsLoad()
-  return _aiSecrets
+  aiRuntime._aiSecrets = await aiSecretsLoad()
+  return aiRuntime._aiSecrets
 }
 
 // Wire secrets getter into ai-runtime so cloud calls can read keys
-setRuntimeSecretsGetter(() => _aiSecrets)
+setRuntimeSecretsGetter(() => aiRuntime._aiSecrets)
 
 // ── Cost tracking ──────────────────────────────────────────────────────────────
 export function aiCurrentMonthKey(): string {
@@ -375,8 +373,6 @@ export interface WizardState {
   cloudKeyInputs: Record<string, string>
 }
 
-export let _aiWizard: WizardState | null = null
-
 export function openAIWizard(step = 1): void {
   if (__OT_ONLY_BUILD__) {
     openNanoDownloadModal().catch((e: unknown) => {
@@ -386,7 +382,7 @@ export function openAIWizard(step = 1): void {
   }
   const tiers = allowedAITiers()
   const initialTier = isAITierAllowed(aiPrefs.tier) ? aiPrefs.tier : tiers[0] || null
-  _aiWizard = {
+  aiRuntime._aiWizard = {
     open: true,
     step,
     tier: initialTier,
@@ -413,7 +409,7 @@ export function closeAIWizard(): void {
     closeNanoDownloadModal()
     return
   }
-  _aiWizard = null
+  aiRuntime._aiWizard = null
   _fullRender(getState())
 }
 
@@ -425,12 +421,11 @@ interface NanoModalState {
   error: string | null
 }
 
-export let _nanoModal: NanoModalState | null = null
 let _nanoModalTimer: ReturnType<typeof setInterval> | null = null
 let _nanoModalPending = false // synchronous guard against double-trigger during async availability check
 
 export function isNanoModalOpen(): boolean {
-  return _nanoModal !== null || _nanoModalPending
+  return aiRuntime._nanoModal !== null || _nanoModalPending
 }
 
 function _getNanoAPI(): Record<string, unknown> | undefined {
@@ -454,7 +449,8 @@ function _startNanoDownload(): void {
   startAILoad().catch(() => {})
   let _loadObserved = false
   _nanoModalTimer = setInterval(() => {
-    if (!_nanoModal) {
+    const modal = aiRuntime._nanoModal as NanoModalState | null
+    if (!modal) {
       clearInterval(_nanoModalTimer!)
       _nanoModalTimer = null
       return
@@ -464,7 +460,7 @@ function _startNanoDownload(): void {
     if (aiRuntime.ready) {
       clearInterval(_nanoModalTimer!)
       _nanoModalTimer = null
-      _nanoModal = null
+      aiRuntime._nanoModal = null
       navigate('ai')
       _fullRender(getState())
       return
@@ -473,9 +469,9 @@ function _startNanoDownload(): void {
     if (_loadObserved && !aiRuntime.loadStarted) {
       clearInterval(_nanoModalTimer!)
       _nanoModalTimer = null
-      if (_nanoModal) {
-        _nanoModal.phase = 'error'
-        _nanoModal.error =
+      if (aiRuntime._nanoModal) {
+        modal.phase = 'error'
+        modal.error =
           'Built-in AI failed to initialize. Ensure the Prompt API flag is enabled (chrome://flags/#prompt-api-for-gemini-nano in Chrome, or edge://flags in Edge) and try again.'
         _fullRender(getState())
       }
@@ -483,7 +479,7 @@ function _startNanoDownload(): void {
     }
 
     // Partial DOM update — avoid a full re-render on every tick
-    _nanoModal.elapsed += 2
+    modal.elapsed += 2
     const progress = aiRuntime.downloadProgress
     const pct =
       progress && progress.total > 0
@@ -492,8 +488,8 @@ function _startNanoDownload(): void {
 
     const elapsedEl = document.getElementById('nano-modal-elapsed')
     if (elapsedEl) {
-      const mins = Math.floor(_nanoModal.elapsed / 60)
-      const secs = _nanoModal.elapsed % 60
+      const mins = Math.floor(modal.elapsed / 60)
+      const secs = modal.elapsed % 60
       elapsedEl.textContent = mins > 0 ? `${mins}m ${secs}s elapsed` : `${secs}s elapsed`
     }
     const barEl = document.getElementById('nano-modal-progress-bar')
@@ -504,18 +500,18 @@ function _startNanoDownload(): void {
 }
 
 export async function openNanoDownloadModal(): Promise<void> {
-  if (_nanoModalPending || _nanoModal) return // already open or opening
+  if (_nanoModalPending || aiRuntime._nanoModal) return // already open or opening
   _nanoModalPending = true
   try {
     const api = _getNanoAPI()
     if (!api) {
-      _nanoModal = {
+      aiRuntime._nanoModal = {
         open: true,
         phase: 'error',
         elapsed: 0,
         error:
           'Built-in AI (Prompt API) is not available in this browser. In Chrome, open chrome://flags/#prompt-api-for-gemini-nano and enable the flag, then relaunch. In Edge, open edge://flags and search for the Prompt API flag.',
-      }
+      } satisfies NanoModalState
       _fullRender(getState())
       return
     }
@@ -530,13 +526,13 @@ export async function openNanoDownloadModal(): Promise<void> {
     }
 
     if (avail === 'unavailable') {
-      _nanoModal = {
+      aiRuntime._nanoModal = {
         open: true,
         phase: 'error',
         elapsed: 0,
         error:
           'Built-in AI is not available on this device. Ensure Chrome/Edge 127+ with hardware acceleration enabled and the Prompt API flag active.',
-      }
+      } satisfies NanoModalState
       _fullRender(getState())
       return
     }
@@ -554,9 +550,19 @@ export async function openNanoDownloadModal(): Promise<void> {
     // Show disclaimer only on first-ever acknowledgement; skip it after that.
     _setNanoPrefs()
     if (!aiPrefs.nanoDisclaimerAcknowledged) {
-      _nanoModal = { open: true, phase: 'disclaimer', elapsed: 0, error: null }
+      aiRuntime._nanoModal = {
+        open: true,
+        phase: 'disclaimer',
+        elapsed: 0,
+        error: null,
+      } satisfies NanoModalState
     } else {
-      _nanoModal = { open: true, phase: 'downloading', elapsed: 0, error: null }
+      aiRuntime._nanoModal = {
+        open: true,
+        phase: 'downloading',
+        elapsed: 0,
+        error: null,
+      } satisfies NanoModalState
       _startNanoDownload()
     }
     _fullRender(getState())
@@ -570,13 +576,13 @@ export function closeNanoDownloadModal(): void {
     clearInterval(_nanoModalTimer)
     _nanoModalTimer = null
   }
-  _nanoModal = null
+  aiRuntime._nanoModal = null
   _fullRender(getState())
 }
 
 export function renderNanoDownloadModal(): string {
-  if (!_nanoModal) return ''
-  const m = _nanoModal
+  if (!aiRuntime._nanoModal) return ''
+  const m = aiRuntime._nanoModal as unknown as NanoModalState
   const disclaimer = `<p style="font-size:.875rem;color:var(--text-secondary);line-height:1.65;margin:0 0 .875rem">Your browser's built-in AI (Gemini Nano on Chrome, Phi-4-mini on Edge) requires a <strong>one-time local model download (~4 GB)</strong> managed entirely by the browser and stored on this device. All inference runs locally — no data is ever transmitted externally.</p>`
   let body = ''
   let footer = ''
@@ -620,8 +626,8 @@ export function renderNanoDownloadModal(): string {
 }
 
 export function bindNanoDownloadModal(): void {
-  if (!_nanoModal) return
-  const m = _nanoModal
+  if (!aiRuntime._nanoModal) return
+  const m = aiRuntime._nanoModal as unknown as NanoModalState
   document.getElementById('nano-modal-close')?.addEventListener('click', closeNanoDownloadModal)
   document.getElementById('nano-modal-backdrop')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'nano-modal-backdrop') closeNanoDownloadModal()
@@ -675,8 +681,8 @@ function _corsBlock(os: string): { title: string; cmd: string; after: string } {
 
 // ── Wizard renderer ───────────────────────────────────────────────────────────
 export function renderAIWizard(): string {
-  if (!_aiWizard) return ''
-  const w = _aiWizard
+  if (!aiRuntime._aiWizard) return ''
+  const w = aiRuntime._aiWizard as unknown as WizardState
   let body = ''
   if (w.step === 1) body = renderWizardStep1()
   else if (w.step === 2) body = renderWizardStep2()
@@ -710,7 +716,7 @@ export function renderAIWizard(): string {
 }
 
 function renderWizardActions(): string {
-  const w = _aiWizard!
+  const w = aiRuntime._aiWizard as unknown as WizardState
   if (w.step === 1)
     return `<button class="btn btn-secondary btn-sm" id="aiw-notnow">Not now</button><button class="btn btn-primary btn-sm" id="aiw-continue">Continue</button>`
   if (w.step === 2)
@@ -721,7 +727,9 @@ function renderWizardActions(): string {
       tierAllowed &&
       ((w.tier === 'browser' && !!w.draft.browserModelId) ||
         (w.tier === 'ollama' && !!w.draft.ollamaModelId && w.testResult?.['state'] === 'ok') ||
-        (w.tier === 'cloud' && !!w.draft.cloudProvider && !!_aiSecrets[w.draft.cloudProvider]))
+        (w.tier === 'cloud' &&
+          !!w.draft.cloudProvider &&
+          !!aiRuntime._aiSecrets[w.draft.cloudProvider]))
     return `<button class="btn btn-primary btn-sm" id="aiw-next" ${canNext ? '' : 'disabled'}>Next →</button>`
   }
   if (w.step === 4)
@@ -763,7 +771,7 @@ function renderWizardStep1(): string {
 }
 
 function renderWizardStep2(): string {
-  const w = _aiWizard!
+  const w = aiRuntime._aiWizard as unknown as WizardState
   const card = (tier: string, title: string, tag: string, pros: string[], cons: string[]) => `
     <div class="aiw-tier-card" data-aiw-tier="${tier}" style="border:2px solid ${w.tier === tier ? 'var(--accent)' : 'var(--border-subtle)'};border-radius:var(--radius-md);padding:1rem;cursor:pointer;background:${w.tier === tier ? 'var(--bg-base)' : 'transparent'};transition:all var(--transition);display:flex;flex-direction:column;gap:.5rem">
       <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-weight:600">${title}</span><span style="font-size:.65rem;background:var(--accent);color:#fff;padding:.125rem .5rem;border-radius:999px;text-transform:uppercase;letter-spacing:.04em">${tag}</span></div>
@@ -811,7 +819,7 @@ function renderWizardStep2(): string {
 }
 
 function renderWizardStep3Browser(): string {
-  const w = _aiWizard!
+  const w = aiRuntime._aiWizard as unknown as WizardState
   const hasWebGPU = 'gpu' in navigator
   const hasNano = !!(
     (window as unknown as AnyRecord)['LanguageModel'] ??
@@ -839,7 +847,7 @@ function renderWizardStep3Browser(): string {
 }
 
 function renderWizardStep3Ollama(): string {
-  const w = _aiWizard!
+  const w = aiRuntime._aiWizard as unknown as WizardState
   const os = _osHint()
   const cors = _corsBlock(os)
   const probe = w.testResult as { state: string; version?: string; models?: string[] } | null
@@ -932,7 +940,7 @@ function renderWizardStep3Ollama(): string {
 }
 
 function renderWizardStep3Cloud(): string {
-  const w = _aiWizard!
+  const w = aiRuntime._aiWizard as unknown as WizardState
   const prov = w.draft.cloudProvider
   const seg = `<div style="display:inline-flex;border:1px solid var(--border-subtle);border-radius:var(--radius-md);overflow:hidden;margin-bottom:.875rem">
     ${Object.keys(CLOUD_PROVIDERS)
@@ -947,7 +955,7 @@ function renderWizardStep3Cloud(): string {
     const def = CLOUD_PROVIDERS[prov]
     if (!def) return panel
     const draftKey = w.cloudKeyInputs[prov] ?? ''
-    const hasKey = !!_aiSecrets[prov]
+    const hasKey = !!aiRuntime._aiSecrets[prov]
     const tr = w.testResult && w.testResult['provider'] === prov ? w.testResult : null
     const modelRow = (
       m: (typeof def.models)[0],
@@ -978,7 +986,7 @@ function renderWizardStep3Cloud(): string {
 }
 
 function renderWizardStep4(): string {
-  const w = _aiWizard!
+  const w = aiRuntime._aiWizard as unknown as WizardState
   const tierLabel =
     w.tier === 'browser'
       ? 'In-browser'
@@ -1012,8 +1020,8 @@ function renderWizardStep4(): string {
 
 // ── Wizard event binding ───────────────────────────────────────────────────────
 export function bindAIWizard(): void {
-  if (!_aiWizard) return
-  const w = _aiWizard
+  if (!aiRuntime._aiWizard) return
+  const w = aiRuntime._aiWizard as unknown as WizardState
 
   document.getElementById('aiw-close')?.addEventListener('click', closeAIWizard)
   document.getElementById('aiw-backdrop')?.addEventListener('click', (e) => {
@@ -1148,7 +1156,7 @@ export function bindAIWizard(): void {
       const secrets = await aiSecretsLoad()
       secrets[prov] = k
       await aiSecretsSave(secrets)
-      _aiSecrets = secrets
+      aiRuntime._aiSecrets = secrets
       w.cloudKeyInputs[prov] = ''
       showToast('Key saved (encrypted)', 'success')
     } catch (e) {
@@ -1170,7 +1178,7 @@ export function bindAIWizard(): void {
   document.getElementById('aiw-cloud-test')?.addEventListener('click', async () => {
     const prov = w.draft.cloudProvider
     if (!prov) return
-    const k = _aiSecrets[prov]
+    const k = aiRuntime._aiSecrets[prov]
     if (!k) return
     w.testResult = { provider: prov, ok: false, error: 'testing…' }
     _fullRender(getState())
@@ -1212,7 +1220,7 @@ export function bindAIWizard(): void {
     aiPrefs.hasCompletedOnboarding = true
     syncAIPrefsLegacy(aiPrefs)
     saveAIPrefs(aiPrefs)
-    _aiWizard = null
+    aiRuntime._aiWizard = null
     setState({ aiPanelOpen: false })
     navigate('ai')
     try {

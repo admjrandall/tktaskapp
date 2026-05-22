@@ -6,7 +6,8 @@ import { Icons } from './icons.js'
 import { escH, formatDate, formatRelative, daysUntil, initials, avatarColor } from '../utils.js'
 import { getState, setState, navigate, openRecordModal, closeConfirm } from '../state.js'
 import { globalSearch } from '../storage/db.js'
-import { renderBadge, renderAvatar as _renderAvatarPrim } from './primitives/index.js'
+import { renderBadge } from './primitives/badge.js'
+import { renderAvatar as _renderAvatarPrim } from './primitives/avatar.js'
 
 type AnyRecord = Record<string, unknown>
 type Toast = { type?: string; message?: unknown } | null | undefined

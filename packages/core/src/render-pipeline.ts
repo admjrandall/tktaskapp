@@ -36,8 +36,8 @@ import {
   bindAIWizard,
   renderNanoDownloadModal,
   bindNanoDownloadModal,
-  _aiWizard,
 } from './ai/ai-settings.js'
+import { aiRuntime } from './ai/ai-runtime.js'
 import type { AppState } from './state.js'
 
 export const appEl = document.getElementById('app')!
@@ -220,7 +220,7 @@ export function fullRender(state: AppState): void {
           )
         : '',
       recordModal ? renderRecordModal(recordModal) : '',
-      _aiWizard?.open ? renderAIWizard() : renderNanoDownloadModal(),
+      aiRuntime._aiWizard?.['open'] ? renderAIWizard() : renderNanoDownloadModal(),
       docModal ? renderDocModal(state) : '',
       fileViewer ? renderFileViewer(fileViewer as string | null) : '',
       toast ? renderToast(toast) : '',
@@ -285,7 +285,7 @@ export function fullRender(state: AppState): void {
       )
     if (recordModal) bindRecordModal(recordModal)
     if (aiPanelOpen) bindAIPanel()
-    if (_aiWizard?.open) {
+    if (aiRuntime._aiWizard?.['open']) {
       try {
         bindAIWizard()
       } catch (e) {

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm run *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm test *)",
+      "Bash(node generate-csp.mjs *)",
+      "Bash(node scripts/*)",
+      "PowerShell(pnpm run *)",
+      "PowerShell(pnpm typecheck *)",
+      "PowerShell(Set-Location d:\\techkeycrmapp*)",
+      "PowerShell($env:CI = *; *)",
+      "WebFetch(domain:valibot.dev)",
+      "WebFetch(domain:zod.dev)",
+      "WebFetch(domain:biomejs.dev)",
+      "WebFetch(domain:capacitorjs.com)",
+      "WebFetch(domain:rxdb.info)"
+    ]
+  }
+}

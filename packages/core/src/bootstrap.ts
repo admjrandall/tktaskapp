@@ -28,15 +28,14 @@ import { setMFAHooks } from './security/mfa.js'
 import { setWebAuthnHooks } from './security/webauthn.js'
 import { fsInit } from './storage/fs.js'
 import { _idbLoadStore, _idbPutRecord } from './storage/idb-data.js'
-import { setActiveConversation, startAILoad } from './ai/ai-runtime.js'
-import { aiSecretsRefresh } from './ai/ai-settings.js'
+import { aiRuntime, setActiveConversation, startAILoad } from './ai/ai-runtime.js'
+import { aiSecretsRefresh, closeAIWizard } from './ai/ai-settings.js'
 import { aiPrefs, saveAIPrefs } from './ai/ai-prefs.js'
 import { isAITierAllowed } from './deployment-policy.js'
 import { wireHooks } from './hooks-wiring.js'
 import { appEl, appRenderWorkspace, fullRender } from './render-pipeline.js'
 import { lockApp, setOnAuthSuccess, _resetIdleTimer } from './app-lock.js'
 import { renderToast } from './ui/components.js'
-import { _aiWizard, closeAIWizard } from './ai/ai-settings.js'
 import { saveDocument, closeDocumentEditor, _docOpenId } from './views/documents.js'
 
 // ── Global error boundary (OWASP A10) ─────────────────────────────────────────
@@ -269,8 +268,8 @@ export async function init(): Promise<void> {
       }
       if (e.key === 'Escape') {
         const s = getState()
-        if (_aiWizard?.open) {
-          if ((_aiWizard as unknown as Record<string, unknown>).pullProgress) return
+        if (aiRuntime._aiWizard?.['open']) {
+          if (aiRuntime._aiWizard['pullProgress']) return
           closeAIWizard()
           return
         }

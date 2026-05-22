@@ -73,10 +73,10 @@ export function bindReports(state: AppState): void {
   })
   document.getElementById('rpt-csv')?.addEventListener('click', () => {
     const csv = [
-      toCSV(projects as AnyRecord[], ['name', 'stage', 'priority', 'dueDate']),
-      toCSV(tasks as AnyRecord[], ['title', 'status', 'priority', 'dueDate']),
-      toCSV(clients as AnyRecord[], ['name', 'contactName', 'email']),
-      toCSV(people as AnyRecord[], ['name', 'role', 'email']),
+      toCSV(projects, ['name', 'stage', 'priority', 'dueDate']),
+      toCSV(tasks, ['title', 'status', 'priority', 'dueDate']),
+      toCSV(clients, ['name', 'contactName', 'email']),
+      toCSV(people, ['name', 'role', 'email']),
     ].join('\n\n')
     downloadText('taskapp-report.csv', csv, 'text/csv')
     showToast('CSV exported', 'success')

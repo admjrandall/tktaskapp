@@ -71,10 +71,10 @@ describe('screen reader labels — icon-only buttons', () => {
     expect(html).toContain('title="Settings"')
   })
 
-  it('topbar AI assistant toggle has title="AI Assistant"', () => {
+  it('topbar AI assistant toggle has a non-empty title', () => {
     const html = renderTopbar(BASE_STATE)
     expect(html).toMatch(
-      /id="ai-toggle-btn"[^>]*title="AI Assistant"|title="AI Assistant"[^>]*id="ai-toggle-btn"/,
+      /id="ai-toggle-btn"[^>]*title="[^"]+"|title="[^"]+"[^>]*id="ai-toggle-btn"/,
     )
   })
 

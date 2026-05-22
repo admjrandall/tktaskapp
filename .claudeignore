@@ -1,0 +1,52 @@
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Git internals
+.git/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/settings.json
+.idea/
+
+# Legacy reference file
+taskapp.html
+
+# Drizzle generated migrations (read only when explicitly needed)
+server/drizzle/
+
+# Lockfiles (huge, never useful to read)
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+*.lock
+
+# BMAD skills (loaded on demand by the harness, not for context scanning)
+.claude/skills/
+
+# Source maps and WASM binaries
+**/*.map
+**/*.wasm
+
+# Changeset temp files
+.changeset/

@@ -31,12 +31,13 @@ const PROFILES = [
   {
     name: 'offline-browser-ai',
     path: resolve(root, 'dist/offline/index.html'),
-    // Budget raised from 320 KB / 95 KB to 440 KB / 120 KB (Phase 13).
-    // Overage driven by valibot 1.4.0 + 9 schema files (~48 KB raw) and
-    // Phase 12 version-stamping + toolchain churn (~49 KB). Run perf:analyse
-    // before attempting to reduce: pnpm --filter @tktaskapp/offline-web run perf:analyse
-    maxRaw: 440_000,
-    maxGzip: 120_000,
+    // Budget raised from 440 KB / 120 KB to 470 KB / 125 KB (Phase 1).
+    // Phase 1 additions: branding.ts, persona presets, badge+avatar primitives,
+    // rebuilt components.ts (DLP + renderAvatar/Badge), topbar lockdown banner.
+    // Run perf:analyse before attempting to reduce:
+    //   pnpm --filter @tktaskapp/offline-web run perf:analyse
+    maxRaw: 470_000,
+    maxGzip: 125_000,
   },
   {
     name: 'offline-internal-ai',
