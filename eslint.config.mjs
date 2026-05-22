@@ -65,13 +65,17 @@ export default tseslint.config(
     // innerHTML assignments in core views are safe: patchInnerHTML() routes all
     // string assignments through the nexus-crm-raw Trusted Types policy (IIFE in
     // trusted-types.ts). auth.ts and ai-ui.ts re-render full sub-sections of the
-    // DOM the same way views do. Scoped to views + main.ts + ui + auth + ai-ui.
+    // DOM the same way views do. render-pipeline.ts and app-lock.ts are Phase 0.5
+    // extractions from main.ts with identical safety guarantees.
     files: [
       'packages/core/src/views/**/*.ts',
       'packages/core/src/main.ts',
       'packages/core/src/ui/**/*.ts',
       'packages/core/src/security/auth.ts',
       'packages/core/src/ai/ai-ui.ts',
+      'packages/core/src/render-pipeline.ts',
+      'packages/core/src/app-lock.ts',
+      'packages/core/src/bootstrap.ts',
     ],
     rules: {
       'no-restricted-syntax': 'off',
