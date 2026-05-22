@@ -1,9 +1,35 @@
-// ── STATE ──────────────────────────────────────────────────────────────
-// Extracted from taskapp.html ~3422–3451
+// ── STATE ──────────────────────────────────────────────────────────────────
 // Tiny pub/sub system. _state is treated as immutable from outside —
 // always go through setState. Listeners receive the new state.
 
 import { dbGetAll, getRunningTimer } from './storage/db.js'
+import type { Client } from './schemas/client.schema.js'
+import type { Project } from './schemas/project.schema.js'
+import type { Task } from './schemas/task.schema.js'
+import type { Person } from './schemas/person.schema.js'
+import type { Department } from './schemas/department.schema.js'
+import type { Tag } from './schemas/tag.schema.js'
+import type { Communication } from './schemas/communication.schema.js'
+import type { TimeEntry } from './schemas/time-entry.schema.js'
+import type { Notification } from './schemas/notification.schema.js'
+import type { StandaloneNote } from './schemas/standalone-note.schema.js'
+
+// ── Persona types ──────────────────────────────────────────────────────────
+export type PersonaId = 'closer' | 'maintainer' | 'investigator' | 'builder' | 'inspector'
+
+// ── Lockdown levels (C.7) ──────────────────────────────────────────────────
+export type LockdownLevel = 'off' | 'standard' | 'strong' | 'strict'
+
+// ── Workspace layout block ─────────────────────────────────────────────────
+export interface CanvasBlock {
+  id: string
+  x: number
+  y: number
+  w: number
+  h: number
+  z?: number
+  type?: string
+}
 
 export interface AppState {
   authed: boolean
@@ -11,21 +37,37 @@ export interface AppState {
   currentView: string
   sidebarCollapsed: boolean
   theme: string
-  clients: unknown[]
-  departments: unknown[]
-  projects: unknown[]
-  tasks: unknown[]
-  people: unknown[]
-  standaloneNotes: unknown[]
-  tags: unknown[]
-  communications: unknown[]
-  files: unknown[]
-  timeEntries: unknown[]
-  notifications: unknown[]
-  trash: unknown[]
-  documents: unknown[]
-  conversations: unknown[]
+  density: 'comfortable' | 'compact'
+
+  // Typed CRM collections
+  clients: Client[]
+  departments: Department[]
+  projects: Project[]
+  tasks: Task[]
+  people: Person[]
+  standaloneNotes: StandaloneNote[]
+  tags: Tag[]
+  communications: Communication[]
+  files: Record<string, unknown>[]
+  timeEntries: TimeEntry[]
+  notifications: Notification[]
+  trash: Record<string, unknown>[]
+  documents: Record<string, unknown>[]
+  conversations: Record<string, unknown>[]
   activeConversationId: string | null
+
+  // Phase 1: deals + pipelines
+  deals: Record<string, unknown>[]
+  pipelines: Record<string, unknown>[]
+
+  // Workspace / persona state (Phase 1)
+  currentPersona: PersonaId | null
+  workspaceLayout: Record<string, CanvasBlock>
+  aiAttributeValues: Record<string, unknown>[]
+  adaptiveSuggestions: Array<{ id: string; type: string; payload: unknown }>
+  lockdownLevel: LockdownLevel
+
+  // UI state
   aiPanelOpen: boolean
   commandOpen: boolean
   notifPanelOpen: boolean
@@ -43,7 +85,8 @@ let _state: AppState = {
   cryptoKey: null,
   currentView: 'dashboard',
   sidebarCollapsed: false,
-  theme: localStorage.getItem('nexus_theme') || 'light',
+  theme: localStorage.getItem('taskapp_theme') || 'light',
+  density: (localStorage.getItem('taskapp_density') || 'comfortable') as 'comfortable' | 'compact',
   clients: [],
   departments: [],
   projects: [],
@@ -56,9 +99,16 @@ let _state: AppState = {
   timeEntries: [],
   notifications: [],
   trash: [],
-  documents: [],
-  conversations: [],
+  documents: [] as Record<string, unknown>[],
+  conversations: [] as Record<string, unknown>[],
   activeConversationId: null,
+  deals: [],
+  pipelines: [],
+  currentPersona: null,
+  workspaceLayout: {},
+  aiAttributeValues: [],
+  adaptiveSuggestions: [],
+  lockdownLevel: 'off',
   aiPanelOpen: false,
   commandOpen: false,
   notifPanelOpen: false,
@@ -89,13 +139,13 @@ function _notify(): void {
     fn(_state)
   })
 }
+
 export function getState(): AppState {
   return _state
 }
+
 export function setState(patch: Partial<AppState>): void {
   if (_isNotifying) {
-    // Re-entrant call from inside a subscriber: queue and drain after the
-    // current notification round completes (prevents infinite loops).
     _pendingPatches.push(patch)
     return
   }
@@ -106,9 +156,9 @@ export function setState(patch: Partial<AppState>): void {
   } finally {
     _isNotifying = false
   }
-  // Drain any patches that were queued by subscribers during notification.
   while (_pendingPatches.length > 0) {
-    const next = _pendingPatches.shift()!
+    const next = _pendingPatches.shift()
+    if (!next) break
     _state = { ..._state, ...next }
     _isNotifying = true
     try {
@@ -124,11 +174,19 @@ export function setTheme(t: string): void {
   localStorage.setItem('taskapp_theme', t)
   setState({ theme: t })
 }
+
+export function setDensity(d: 'comfortable' | 'compact'): void {
+  document.documentElement.setAttribute('data-density', d)
+  localStorage.setItem('taskapp_density', d)
+  setState({ density: d })
+}
+
 export function initTheme(): void {
   document.documentElement.setAttribute('data-theme', _state.theme)
 }
+
 export function initDensity(): void {
-  const d = localStorage.getItem('taskapp_density') || 'comfortable'
+  const d = _state.density
   if (d !== 'comfortable') document.documentElement.setAttribute('data-density', d)
 }
 
@@ -148,6 +206,8 @@ export function reloadData(): void {
     'trash',
     'documents',
     'conversations',
+    'deals',
+    'pipelines',
   ]
   const patch: Partial<AppState> = {}
   stores.forEach((s) => {
@@ -191,6 +251,7 @@ export function showConfirm(
 ): void {
   setState({ confirmDialog: { message, onConfirm, onCancel } })
 }
+
 export function closeConfirm(): void {
   setState({ confirmDialog: null })
 }
@@ -202,11 +263,12 @@ export function openRecordModal(
 ): void {
   setState({ recordModal: { store, id, defaults } })
 }
+
 export function closeRecordModal(): void {
   setState({ recordModal: null })
 }
 
-// AI hooks — injected from main.ts (avoids circular import).
+// ── AI hooks — injected from main.ts to avoid circular imports ─────────────
 let _aiNeedsOnboarding: (() => boolean) | null = null
 let _openAIWizard: ((step: number) => void) | null = null
 export function setAIHooks(
@@ -224,10 +286,5 @@ export function navigate(view: string): void {
       return
     }
   }
-  setState({
-    currentView: view,
-    aiPanelOpen: false,
-    commandOpen: false,
-    notifPanelOpen: false,
-  })
+  setState({ currentView: view, aiPanelOpen: false, commandOpen: false, notifPanelOpen: false })
 }

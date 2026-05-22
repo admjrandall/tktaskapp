@@ -34,9 +34,27 @@ export const STORES: string[] = [
   'timeEntries',
   'notifications',
   'trash',
+  // Phase 1 additions (C.1)
+  'deals',
+  'pipelines',
 ]
-// IDB-backed stores for large content (Documents + Conversations)
-export const IDB_STORES: string[] = ['documents', 'conversations']
+
+// IDB-backed stores for large content — each record individually AES-GCM encrypted (C.1)
+export const IDB_STORES: string[] = [
+  'documents',
+  'conversations',
+  // Phase 1 additions (C.1)
+  'customFieldDefs',
+  'aiAttributeDefs',
+  'aiAttributeValues',
+  'extensionObjectDefs',
+  'extensionObjectInstances',
+  'workspaceLayouts',
+  'personaProfiles',
+  'automationRules',
+  'agentInsights',
+]
+
 export const DATA_DB_NAME = 'nexus_data_v1'
 
 // ── File System persistence ────────────────────────────────────────────
@@ -50,6 +68,17 @@ export const PROJECT_STAGES = ['Lead', 'Active', 'Review', 'On Hold', 'Done', 'C
 export const TASK_STATUSES = ['Todo', 'In Progress', 'Blocked', 'Done']
 export const COMM_TYPES = ['Email', 'Call', 'Meeting', 'Note', 'Other']
 export const NOTIFICATION_TYPES = ['info', 'warning', 'due_soon', 'overdue', 'mention'] as const
+
+// ── Deal / pipeline domain constants ──────────────────────────────────
+export const DEAL_STAGES = [
+  'Prospect',
+  'Qualified',
+  'Proposal',
+  'Negotiation',
+  'Closed Won',
+  'Closed Lost',
+] as const
+export const PIPELINE_TYPES = ['sales', 'partnership', 'renewal', 'custom'] as const
 
 // ── Visual constants ───────────────────────────────────────────────────
 export const AVATAR_COLORS: [string, string][] = [
