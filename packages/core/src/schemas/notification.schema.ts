@@ -5,6 +5,7 @@ export const NotificationSchema = v.looseObject({
   id: v.string(),
   createdAt: v.string(),
   updatedAt: v.string(),
+  userId: v.optional(v.string()),
   title: v.pipe(v.string(), v.minLength(1)),
   body: v.optional(v.string()),
   type: v.picklist(NOTIFICATION_TYPES as unknown as [string, ...string[]]),

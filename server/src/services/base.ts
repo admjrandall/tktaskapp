@@ -9,6 +9,7 @@ export type Tx = NodePgDatabase<typeof schema>
 export async function withTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL app.tenant_id = ${tenantId}`)
+    await tx.execute(sql`SET LOCAL app.org_id = ${tenantId}::uuid`)
     return fn(tx as unknown as Tx)
   })
 }

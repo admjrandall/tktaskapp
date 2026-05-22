@@ -6,11 +6,14 @@ export const FileSchema = v.looseObject({
   updatedAt: v.string(),
   name: v.string(),
   url: v.optional(v.string()),
+  mimeType: v.optional(v.string()),
+  sizeBytes: v.optional(v.number()),
+  size: v.optional(v.number()),
   addedAt: v.optional(v.string()),
   relatedStore: v.optional(v.string()),
   relatedId: v.optional(v.string()),
+  uploadedBy: v.optional(v.string()),
   dataUrl: v.optional(v.string()),
-  size: v.optional(v.number()),
 })
 
 export type File = v.InferOutput<typeof FileSchema>

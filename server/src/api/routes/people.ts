@@ -1,20 +1,9 @@
 import { Hono } from 'hono'
-import { z } from 'zod'
 import { peopleService, type UpdatePersonInput } from '../../services/people.service.js'
 import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
-
-const CreateSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1),
-  role: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  departmentId: z.string().uuid().optional(),
-  clientId: z.string().uuid().optional(),
-})
-const UpdateSchema = CreateSchema.partial().omit({ id: true })
+import { CreatePersonSchema, UpdatePersonSchema, safeParseV } from '../../schemas/index.js'
 
 export const peopleRouter = new Hono<HonoEnv>()
 
@@ -49,9 +38,8 @@ peopleRouter.post('/', opaMiddleware('create'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const userId = c.get('userId') as string
   try {
-    const parsed = CreateSchema.safeParse(await c.req.json())
-    if (!parsed.success)
-      return c.json({ error: 'Validation failed', details: parsed.error.flatten() }, 400)
+    const parsed = safeParseV(CreatePersonSchema, await c.req.json())
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     return c.json(await peopleService.create(tenantId, userId, parsed.data), 201)
   } catch (err) {
     otel.log({
@@ -88,14 +76,13 @@ peopleRouter.patch('/:id', opaMiddleware('update'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const userId = c.get('userId') as string
   try {
-    const parsed = UpdateSchema.safeParse(await c.req.json())
-    if (!parsed.success)
-      return c.json({ error: 'Validation failed', details: parsed.error.flatten() }, 400)
+    const parsed = safeParseV(UpdatePersonSchema, await c.req.json())
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const row = await peopleService.update(
       tenantId,
       userId,
       c.req.param('id')!,
-      parsed.data as UpdatePersonInput,
+      parsed.data as unknown as UpdatePersonInput,
     )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {

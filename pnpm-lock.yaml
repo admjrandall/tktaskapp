@@ -140,9 +140,9 @@ importers:
       pg:
         specifier: ^8
         version: 8.21.0
-      zod:
-        specifier: ^3
-        version: 3.25.76
+      valibot:
+        specifier: ^1.4.0
+        version: 1.4.0(typescript@5.9.3)
     devDependencies:
       '@types/pg':
         specifier: ^8
@@ -7184,12 +7184,6 @@ packages:
       }
     engines: { node: '>=10' }
 
-  zod@3.25.76:
-    resolution:
-      {
-        integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==,
-      }
-
 snapshots:
   '@axe-core/playwright@4.11.3(playwright-core@1.60.0)':
     dependencies:
@@ -11284,6 +11278,10 @@ snapshots:
 
   uuid@9.0.1: {}
 
+  valibot@1.4.0(typescript@5.9.3):
+    optionalDependencies:
+      typescript: 5.9.3
+
   valibot@1.4.0(typescript@6.0.3):
     optionalDependencies:
       typescript: 6.0.3
@@ -11501,5 +11499,3 @@ snapshots:
       fd-slicer: 1.1.0
 
   yocto-queue@0.1.0: {}
-
-  zod@3.25.76: {}

@@ -10,6 +10,7 @@ export const ConversationSchema = v.looseObject({
   id: v.string(),
   createdAt: v.string(),
   updatedAt: v.string(),
+  userId: v.optional(v.string()),
   title: v.optional(v.string()),
   model: v.optional(v.string()),
   messages: v.optional(v.array(ConversationMessageSchema)),

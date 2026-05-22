@@ -1,24 +1,17 @@
 import { Hono } from 'hono'
-import { z } from 'zod'
 import {
   notificationsService,
+  type CreateNotificationInput,
   type UpdateNotificationInput,
 } from '../../services/notifications.service.js'
 import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
-
-const CreateSchema = z.object({
-  id: z.string().uuid(),
-  userId: z.string(),
-  title: z.string().min(1),
-  body: z.string().optional(),
-  type: z.enum(['info', 'warning', 'due_soon', 'overdue', 'mention']).optional(),
-  relatedStore: z.string().optional(),
-  relatedId: z.string().optional(),
-  read: z.boolean().optional(),
-})
-const UpdateSchema = CreateSchema.partial().omit({ id: true })
+import {
+  CreateNotificationSchema,
+  UpdateNotificationSchema,
+  safeParseV,
+} from '../../schemas/index.js'
 
 export const notificationsRouter = new Hono<HonoEnv>()
 
@@ -53,10 +46,16 @@ notificationsRouter.post('/', opaMiddleware('create'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const userId = c.get('userId') as string
   try {
-    const parsed = CreateSchema.safeParse(await c.req.json())
-    if (!parsed.success)
-      return c.json({ error: 'Validation failed', details: parsed.error.flatten() }, 400)
-    return c.json(await notificationsService.create(tenantId, userId, parsed.data), 201)
+    const parsed = safeParseV(CreateNotificationSchema, await c.req.json())
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+    return c.json(
+      await notificationsService.create(
+        tenantId,
+        userId,
+        parsed.data as unknown as CreateNotificationInput,
+      ),
+      201,
+    )
   } catch (err) {
     otel.log({
       timestamp: new Date().toISOString(),
@@ -92,14 +91,13 @@ notificationsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const userId = c.get('userId') as string
   try {
-    const parsed = UpdateSchema.safeParse(await c.req.json())
-    if (!parsed.success)
-      return c.json({ error: 'Validation failed', details: parsed.error.flatten() }, 400)
+    const parsed = safeParseV(UpdateNotificationSchema, await c.req.json())
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const row = await notificationsService.update(
       tenantId,
       userId,
       c.req.param('id')!,
-      parsed.data as UpdateNotificationInput,
+      parsed.data as unknown as UpdateNotificationInput,
     )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {

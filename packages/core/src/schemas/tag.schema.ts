@@ -5,7 +5,7 @@ export const TagSchema = v.looseObject({
   createdAt: v.string(),
   updatedAt: v.string(),
   name: v.pipe(v.string(), v.minLength(1)),
-  color: v.string(),
+  color: v.optional(v.string()),
 })
 
 export type Tag = v.InferOutput<typeof TagSchema>

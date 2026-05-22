@@ -1,5 +1,4 @@
 import { Hono } from 'hono'
-import { z } from 'zod'
 import { usersService } from '../../services/users.service.js'
 import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
@@ -7,6 +6,7 @@ import { LegalHoldService } from '../../kms/legal-hold.js'
 import { AzureKeyVaultKeyService, LegalHoldActiveError } from '../../kms/key-service.js'
 import { writeAuditEvent } from '../../services/base.js'
 import type { HonoEnv } from '../../hono-types.js'
+import { EraseUserSchema, safeParseV } from '../../schemas/index.js'
 
 const legalHoldService = new LegalHoldService()
 
@@ -80,15 +80,9 @@ adminRouter.post('/users/:id/erase', opaMiddleware('erase_user'), async (c) => {
   const requestedBy = c.get('userId') as string
   const targetId = c.req.param('id')!
 
-  const EraseSchema = z.object({
-    destroyAt: z.string().datetime(),
-    reason: z.string().optional(),
-  })
-
   try {
-    const parsed = EraseSchema.safeParse(await c.req.json())
-    if (!parsed.success)
-      return c.json({ error: 'Validation failed', details: parsed.error.flatten() }, 400)
+    const parsed = safeParseV(EraseUserSchema, await c.req.json())
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
 
     const onHold = await legalHoldService.isUserOnHold(targetId)
     if (onHold) {

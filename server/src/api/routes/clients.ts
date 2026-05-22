@@ -1,22 +1,9 @@
 import { Hono } from 'hono'
-import { z } from 'zod'
 import { clientsService, type UpdateClientInput } from '../../services/clients.service.js'
 import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
-
-const CreateClientSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1).max(200),
-  contactName: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  website: z.string().url().optional(),
-  stage: z.enum(['Prospect', 'Active', 'Inactive', 'Churned']).optional(),
-  description: z.string().optional(),
-})
-
-const UpdateClientSchema = CreateClientSchema.partial().omit({ id: true })
+import { CreateClientSchema, UpdateClientSchema, safeParseV } from '../../schemas/index.js'
 
 export const clientsRouter = new Hono<HonoEnv>()
 
@@ -50,9 +37,8 @@ clientsRouter.post('/', opaMiddleware('create'), async (c) => {
   const userId = c.get('userId') as string
   try {
     const body = await c.req.json()
-    const parsed = CreateClientSchema.safeParse(body)
-    if (!parsed.success)
-      return c.json({ error: 'Validation failed', details: parsed.error.flatten() }, 400)
+    const parsed = safeParseV(CreateClientSchema, body)
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const client = await clientsService.create(tenantId, userId, parsed.data)
     return c.json(client, 201)
   } catch (err) {
@@ -96,14 +82,13 @@ clientsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
   const id = c.req.param('id')!
   try {
     const body = await c.req.json()
-    const parsed = UpdateClientSchema.safeParse(body)
-    if (!parsed.success)
-      return c.json({ error: 'Validation failed', details: parsed.error.flatten() }, 400)
+    const parsed = safeParseV(UpdateClientSchema, body)
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const client = await clientsService.update(
       tenantId,
       userId,
       id,
-      parsed.data as UpdateClientInput,
+      parsed.data as unknown as UpdateClientInput,
     )
     if (!client) return c.json({ error: 'Not found' }, 404)
     return c.json(client, 200)

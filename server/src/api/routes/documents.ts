@@ -1,21 +1,9 @@
 import { Hono } from 'hono'
-import { z } from 'zod'
 import { documentsService, type UpdateDocumentInput } from '../../services/documents.service.js'
 import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
-
-const CreateSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().min(1).max(500),
-  body: z.string().optional(),
-  linkedStore: z.string().optional(),
-  linkedId: z.string().optional(),
-  section: z.string().optional(),
-  pinned: z.boolean().optional(),
-  tagIds: z.array(z.string()).optional(),
-})
-const UpdateSchema = CreateSchema.partial().omit({ id: true })
+import { CreateDocumentSchema, UpdateDocumentSchema, safeParseV } from '../../schemas/index.js'
 
 export const documentsRouter = new Hono<HonoEnv>()
 
@@ -50,9 +38,8 @@ documentsRouter.post('/', opaMiddleware('create'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const userId = c.get('userId') as string
   try {
-    const parsed = CreateSchema.safeParse(await c.req.json())
-    if (!parsed.success)
-      return c.json({ error: 'Validation failed', details: parsed.error.flatten() }, 400)
+    const parsed = safeParseV(CreateDocumentSchema, await c.req.json())
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     return c.json(await documentsService.create(tenantId, userId, parsed.data), 201)
   } catch (err) {
     otel.log({
@@ -89,14 +76,13 @@ documentsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const userId = c.get('userId') as string
   try {
-    const parsed = UpdateSchema.safeParse(await c.req.json())
-    if (!parsed.success)
-      return c.json({ error: 'Validation failed', details: parsed.error.flatten() }, 400)
+    const parsed = safeParseV(UpdateDocumentSchema, await c.req.json())
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const row = await documentsService.update(
       tenantId,
       userId,
       c.req.param('id')!,
-      parsed.data as UpdateDocumentInput,
+      parsed.data as unknown as UpdateDocumentInput,
     )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {

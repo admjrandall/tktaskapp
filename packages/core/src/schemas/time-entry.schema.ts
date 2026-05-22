@@ -5,6 +5,7 @@ export const TimeEntrySchema = v.looseObject({
   createdAt: v.string(),
   updatedAt: v.string(),
   taskId: v.optional(v.string()),
+  userId: v.optional(v.string()),
   description: v.optional(v.string()),
   startedAt: v.string(),
   endedAt: v.optional(v.nullable(v.string())),
