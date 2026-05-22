@@ -68,6 +68,10 @@ export interface AuditEntry {
   event: AuditEventType
   details: Record<string, string> // no sensitive values
   ua: string // truncated user-agent
+  // C.6 hash-chain fields — computed by _appendToLog; absent in buffered drafts
+  chainPosition?: number // 1-indexed position in the log
+  prevHash?: string | null // SHA-256 hex of the previous entry's canonical form
+  signedDigest?: string // SHA-256 hex of this entry (excluding signedDigest)
 }
 
 // ── Hook injection ─────────────────────────────────────────────────────────────
@@ -84,6 +88,26 @@ export function setAuditHooks(hooks: {
   _getKey = hooks.getKey
   _putRecord = hooks.putRecord
   _loadStore = hooks.loadStore
+}
+
+// ── Hash-chain helpers (C.6) ───────────────────────────────────────────────────
+async function _sha256hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+function _entryCanonical(entry: Omit<AuditEntry, 'signedDigest'>): string {
+  return JSON.stringify({
+    id: entry.id,
+    ts: entry.ts,
+    event: entry.event,
+    details: entry.details,
+    ua: entry.ua,
+    chainPosition: entry.chainPosition ?? null,
+    prevHash: entry.prevHash ?? null,
+  })
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -149,7 +173,16 @@ async function _appendToLog(entry: AuditEntry): Promise<void> {
   const key = _getKey()
   if (!key) return
   const existing = await _loadRaw()
-  existing.push(entry)
+
+  // Compute hash-chain fields (C.6)
+  const last = existing.length > 0 ? existing[existing.length - 1] : undefined
+  const chainPosition = existing.length + 1
+  const prevHash = last ? await _sha256hex(_entryCanonical(last)) : null
+  const draft: Omit<AuditEntry, 'signedDigest'> = { ...entry, chainPosition, prevHash }
+  const signedDigest = await _sha256hex(_entryCanonical(draft))
+  const full: AuditEntry = { ...draft, signedDigest }
+
+  existing.push(full)
   // Apply auto-purge
   const purged = _applyAutoPurge(existing)
   await _putRecord('documents', {
@@ -177,7 +210,8 @@ async function _loadRaw(): Promise<AuditEntry[]> {
 function _applyAutoPurge(entries: AuditEntry[]): AuditEntry[] {
   const daysStr =
     typeof localStorage !== 'undefined' ? localStorage.getItem('taskapp_audit_purge_days') : null
-  const days = daysStr !== null ? parseInt(daysStr, 10) : 90
+  // Default 2190 days = 6 years (HIPAA minimum; C.6 configurable retention)
+  const days = daysStr !== null ? parseInt(daysStr, 10) : 2190
   if (!days || days <= 0) return entries
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - days)
@@ -218,6 +252,33 @@ export async function exportAuditCSV(): Promise<string> {
 export async function exportAuditJSON(): Promise<string> {
   const entries = await loadAuditLog()
   return entries.map((e) => JSON.stringify(e)).join('\n')
+}
+
+/**
+ * Verify the integrity of the local hash chain.
+ * Returns { valid: true } if every entry's prevHash + signedDigest checks out,
+ * or { valid: false, firstBrokenAt: chainPosition } on the first mismatch.
+ * Entries without chain fields (written before Phase 4) are skipped.
+ */
+export async function verifyAuditChain(): Promise<{
+  valid: boolean
+  firstBrokenAt: number | null
+}> {
+  const entries = await _loadRaw()
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i]!
+    if (e.signedDigest === undefined) continue // pre-Phase-4 entry; skip
+    const prev = i > 0 ? entries[i - 1] : undefined
+    const expectedPrevHash =
+      prev?.signedDigest !== undefined ? await _sha256hex(_entryCanonical(prev)) : null
+    if (e.prevHash !== expectedPrevHash)
+      return { valid: false, firstBrokenAt: e.chainPosition ?? i + 1 }
+    const { signedDigest: _sd, ...withoutDigest } = e
+    const recomputed = await _sha256hex(_entryCanonical(withoutDigest))
+    if (recomputed !== e.signedDigest)
+      return { valid: false, firstBrokenAt: e.chainPosition ?? i + 1 }
+  }
+  return { valid: true, firstBrokenAt: null }
 }
 
 /**

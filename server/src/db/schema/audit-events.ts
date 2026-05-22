@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, jsonb, bigserial } from 'drizzle-orm/pg-core'
 
 export const auditEvents = pgTable('audit_events', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -10,6 +10,10 @@ export const auditEvents = pgTable('audit_events', {
   metadata: jsonb('metadata'),
   traceId: text('trace_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  // C.6 hash-chain fields — nullable for backward compat with pre-Phase-4 rows
+  chainPosition: bigserial('chain_position', { mode: 'number' }),
+  prevHash: text('prev_hash'),
+  signedDigest: text('signed_digest'),
 })
 
 // Append-only: application role must NOT have UPDATE or DELETE on this table.
