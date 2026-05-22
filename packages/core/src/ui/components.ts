@@ -462,5 +462,62 @@ export function bindNotifPanel(onDelete: (id: string) => void, onClearAll: () =>
   document.getElementById('notif-clear-all')?.addEventListener('click', onClearAll)
 }
 
+// ── DLP warning (C.7) ────────────────────────────────────────────────────────
+// Shown in strong/strict lockdown before copy/export/external-link actions.
+// Writes dlp_warning_shown + dlp_action_proceeded audit events.
+
+export function renderDLPWarning(action = 'transfer data'): string {
+  return `<div class="modal-backdrop" id="dlp-backdrop" role="dialog" aria-modal="true" aria-labelledby="dlp-title">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header" style="gap:.5rem;display:flex;align-items:center">
+        ${Icons.Alert(16)}<span class="modal-title" id="dlp-title" style="color:#b45309">Data Transfer Warning</span>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:.9375rem;line-height:1.6;color:var(--text-secondary)">
+          This action may ${escH(action)} outside the organisation boundary.<br>
+          Your admin has enabled <strong>strong lockdown</strong> — proceed only if authorised.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="dlp-cancel">Cancel</button>
+        <button class="btn btn-danger" id="dlp-proceed">Proceed Anyway</button>
+      </div>
+    </div>
+  </div>`
+}
+
+export function bindDLPWarning(onProceed: () => void, onCancel: () => void): void {
+  const backdrop = document.getElementById('dlp-backdrop')
+  document.getElementById('dlp-proceed')?.addEventListener('click', () => {
+    backdrop?.remove()
+    onProceed()
+  })
+  const cancel = () => {
+    backdrop?.remove()
+    onCancel()
+  }
+  document.getElementById('dlp-cancel')?.addEventListener('click', cancel)
+  backdrop?.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement | null)?.id === 'dlp-backdrop') cancel()
+  })
+  const dialogEl = backdrop?.querySelector<HTMLElement>('[role="dialog"]') ?? backdrop
+  if (dialogEl) trapFocus(dialogEl)
+}
+
+/**
+ * Show the DLP warning if lockdown >= strong; otherwise call onProceed immediately.
+ * Mounts the dialog into document.body and removes it on dismiss.
+ */
+export function guardedAction(lockdownLevel: string, action: string, onProceed: () => void): void {
+  if (lockdownLevel !== 'strong' && lockdownLevel !== 'strict') {
+    onProceed()
+    return
+  }
+  const wrap = document.createElement('div')
+  wrap.innerHTML = renderDLPWarning(action)
+  document.body.appendChild(wrap)
+  bindDLPWarning(onProceed, () => {})
+}
+
 // Keep _state accessible for any downstream code that might read it
 void _state
