@@ -1,8 +1,14 @@
 export type AITier = 'browser' | 'ollama' | 'cloud'
 
+// C.7 — mirror of state.ts LockdownLevel; defined here (no deps) so deployment-policy
+// can be imported before state.ts without a circular dependency.
+export type PolicyLockdownLevel = 'off' | 'standard' | 'strong' | 'strict'
+
 export interface DeploymentPolicy {
   id: string
   label: string
+  lockdownLevel?: PolicyLockdownLevel
+  auditRetentionDays?: number
   ai: {
     allowedTiers: AITier[]
     allowOllamaModelPull: boolean
@@ -38,12 +44,45 @@ export const deploymentPolicy: DeploymentPolicy = structuredClone(DEFAULT_DEPLOY
 export function setDeploymentPolicy(policy: DeploymentPolicy): void {
   deploymentPolicy.id = policy.id
   deploymentPolicy.label = policy.label
+  if (policy.lockdownLevel !== undefined) deploymentPolicy.lockdownLevel = policy.lockdownLevel
+  if (policy.auditRetentionDays !== undefined)
+    deploymentPolicy.auditRetentionDays = policy.auditRetentionDays
   deploymentPolicy.ai = {
     ...deploymentPolicy.ai,
     ...policy.ai,
     allowedTiers: [...policy.ai.allowedTiers],
     allowedConnectSrc: [...policy.ai.allowedConnectSrc],
   }
+}
+
+export function getDeploymentLockdownLevel(): PolicyLockdownLevel {
+  return deploymentPolicy.lockdownLevel ?? 'off'
+}
+
+export const ENTERPRISE_DEPLOYMENT_POLICY: DeploymentPolicy = {
+  id: 'enterprise',
+  label: 'Enterprise',
+  lockdownLevel: 'standard',
+  auditRetentionDays: 2190, // 6 years — HIPAA default
+  ai: {
+    allowedTiers: ['browser', 'ollama', 'cloud'],
+    allowOllamaModelPull: true,
+    allowPublicAIEndpoints: true,
+    allowedConnectSrc: [],
+  },
+}
+
+export const DATAVERSE_DEPLOYMENT_POLICY: DeploymentPolicy = {
+  id: 'dataverse',
+  label: 'Dataverse',
+  lockdownLevel: 'standard',
+  auditRetentionDays: 2190,
+  ai: {
+    allowedTiers: ['browser', 'cloud'],
+    allowOllamaModelPull: false,
+    allowPublicAIEndpoints: false,
+    allowedConnectSrc: [],
+  },
 }
 
 export function isAITierAllowed(tier: string | null | undefined): tier is AITier {
