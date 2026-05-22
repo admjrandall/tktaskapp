@@ -7,7 +7,7 @@ import { escH, formatRelative } from '../utils.js'
 import { Icons } from '../ui/icons.js'
 import { getState, setState, showToast } from '../state.js'
 import type { AppState, LockdownLevel } from '../state.js'
-import { auditLog, loadAuditLog } from '../security/audit.js'
+import { auditLog, loadAuditLog, verifyAuditChain } from '../security/audit.js'
 import type { AuditEntry } from '../security/audit.js'
 
 type AnyRecord = Record<string, unknown>
@@ -104,13 +104,8 @@ function _renderOverview(state: AppState): string {
 // ── Users tab ──────────────────────────────────────────────────────────────────
 function _renderUsers(state: AppState): string {
   const people = state.people as AnyRecord[]
-  if (!people.length)
-    return `<div class="admin-panel"><p class="admin-empty">No people records found.</p></div>`
-  return `<div class="admin-panel">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
-      <h3 class="admin-panel-title">Users (${escH(String(people.length))})</h3>
-    </div>
-    <div class="admin-table-wrap">
+  const table = people.length
+    ? `<div class="admin-table-wrap">
       <table class="admin-table">
         <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
         <tbody>
@@ -127,6 +122,28 @@ function _renderUsers(state: AppState): string {
             .join('')}
         </tbody>
       </table>
+    </div>`
+    : `<p class="admin-empty">No people records found.</p>`
+  return `<div class="admin-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 class="admin-panel-title">Users (${escH(String(people.length))})</h3>
+    </div>
+    ${table}
+    <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border-subtle)">
+      <h4 style="font-size:.9375rem;font-weight:600;color:#dc2626;margin-bottom:.5rem">${Icons.Delete(16)} GDPR Erasure Request (Article 17)</h4>
+      <p style="font-size:.8125rem;color:var(--text-secondary);margin-bottom:.875rem">Schedules crypto-shredding of all data for a user. The KMS key is destroyed at the scheduled date; encrypted data becomes permanently unreadable.</p>
+      <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <label style="font-size:.8125rem;font-weight:500;display:block;margin-bottom:.25rem">User ID</label>
+          <input class="input" id="admin-gdpr-user-id" placeholder="user-uuid" style="width:260px">
+        </div>
+        <div>
+          <label style="font-size:.8125rem;font-weight:500;display:block;margin-bottom:.25rem">Scheduled destroy date</label>
+          <input class="input" type="date" id="admin-gdpr-date" style="width:180px">
+        </div>
+        <button class="btn btn-danger" id="admin-gdpr-request" style="white-space:nowrap">Request Erasure</button>
+      </div>
+      <p id="admin-gdpr-status" style="font-size:.8125rem;margin-top:.5rem;color:var(--text-tertiary)"></p>
     </div>
   </div>`
 }
@@ -204,6 +221,7 @@ function _renderAuditLog(entries: AuditEntry[]): string {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
       <h3 class="admin-panel-title">Audit Log (${escH(String(entries.length))} entries)</h3>
       <div style="display:flex;gap:.5rem">
+        <button class="btn btn-sm btn-ghost" id="admin-audit-verify-chain">Verify Chain</button>
         <button class="btn btn-sm btn-ghost" id="admin-audit-export-csv">Export CSV</button>
         <button class="btn btn-sm btn-ghost" id="admin-audit-export-json">Export JSONL</button>
         <button class="btn btn-sm btn-ghost" id="admin-audit-refresh">Refresh</button>
@@ -234,31 +252,35 @@ function _renderAuditLog(entries: AuditEntry[]): string {
 }
 
 // ── Compliance tab ─────────────────────────────────────────────────────────────
+function _complianceEnabled(id: string): boolean {
+  try {
+    return localStorage.getItem(`tk_compliance_${id}`) === '1'
+  } catch {
+    return false
+  }
+}
+
 function _renderCompliance(): string {
   const packs = [
     {
       id: 'hipaa',
       label: 'HIPAA',
       desc: 'Healthcare privacy. Enables 6-year audit retention and HIPAA field classification.',
-      status: 'inactive',
     },
     {
       id: 'eu-ai-act',
       label: 'EU AI Act',
       desc: 'Marks AI attributes as advisory-only. Requires transparency labels on every AI output.',
-      status: 'inactive',
     },
     {
       id: 'gdpr',
       label: 'GDPR',
       desc: 'Enables crypto-shredding erasure (Article 17) and KMS key lifecycle management.',
-      status: 'inactive',
     },
     {
       id: 'soc2',
       label: 'SOC 2 Type II',
       desc: 'Enables append-only audit log, OTel evidence collection, and change-detection alerts.',
-      status: 'inactive',
     },
   ]
   return `<div class="admin-panel">
@@ -266,17 +288,16 @@ function _renderCompliance(): string {
     <p style="font-size:.875rem;color:var(--text-secondary);margin-bottom:1rem">Activate compliance profiles to enforce retention, AI governance, and erasure policies.</p>
     <div style="display:flex;flex-direction:column;gap:.625rem">
       ${packs
-        .map(
-          (
-            p,
-          ) => `<div style="display:flex;align-items:center;justify-content:space-between;padding:.875rem 1rem;background:var(--bg-raised);border:1px solid var(--border-subtle);border-radius:10px">
+        .map((p) => {
+          const on = _complianceEnabled(p.id)
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:.875rem 1rem;background:var(--bg-raised);border:1px solid ${on ? 'var(--accent)' : 'var(--border-subtle)'};border-radius:10px">
         <div>
           <p style="font-weight:600;font-size:.9375rem">${escH(p.label)}</p>
           <p style="font-size:.8125rem;color:var(--text-secondary);margin-top:.125rem">${escH(p.desc)}</p>
         </div>
-        <span class="badge badge-slate" style="margin-left:1rem;white-space:nowrap">${escH(p.status)}</span>
-      </div>`,
-        )
+        <button class="btn btn-sm ${on ? 'btn-primary' : 'btn-ghost'}" data-compliance-id="${escH(p.id)}" style="margin-left:1rem;white-space:nowrap">${on ? 'Enabled' : 'Enable'}</button>
+      </div>`
+        })
         .join('')}
     </div>
   </div>`
@@ -406,6 +427,66 @@ export function bindAdminConsole(_state?: AppState): void {
           })
       })
       .catch(() => {})
+  })
+
+  // Audit chain verify
+  document.getElementById('admin-audit-verify-chain')?.addEventListener('click', () => {
+    verifyAuditChain()
+      .then(({ valid, firstBrokenAt }) => {
+        if (valid) {
+          showToast('Chain integrity verified — all entries intact.', 'success', 4000)
+        } else {
+          showToast(
+            `Chain broken at entry #${firstBrokenAt ?? '?'} — possible tampering detected.`,
+            'error',
+            6000,
+          )
+        }
+      })
+      .catch(() => {
+        showToast('Chain verification failed.', 'error')
+      })
+  })
+
+  // GDPR erasure request
+  document.getElementById('admin-gdpr-request')?.addEventListener('click', () => {
+    const uid =
+      (document.getElementById('admin-gdpr-user-id') as HTMLInputElement | null)?.value.trim() ?? ''
+    const date =
+      (document.getElementById('admin-gdpr-date') as HTMLInputElement | null)?.value ?? ''
+    const status = document.getElementById('admin-gdpr-status')
+    if (!uid) {
+      if (status) status.textContent = 'User ID is required.'
+      return
+    }
+    if (!date) {
+      if (status) status.textContent = 'Scheduled destroy date is required.'
+      return
+    }
+    auditLog('gdpr_erasure_requested', { userId: uid, scheduledDate: date })
+    if (status)
+      status.textContent = `Erasure scheduled for ${uid} on ${date}. Connect to enterprise server to execute.`
+    showToast('GDPR erasure request recorded in audit log.', 'success', 4000)
+  })
+
+  // Compliance pack toggles
+  document.querySelectorAll<HTMLButtonElement>('[data-compliance-id]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset['complianceId'] ?? ''
+      const key = `tk_compliance_${id}`
+      const wasOn = _complianceEnabled(id)
+      try {
+        if (wasOn) {
+          localStorage.removeItem(key)
+        } else {
+          localStorage.setItem(key, '1')
+        }
+      } catch {
+        /* */
+      }
+      auditLog('compliance_pack_changed', { pack: id, enabled: String(!wasOn) })
+      _appRenderWorkspace?.('admin')
+    })
   })
 
   // AI allowlist add button (enterprise only — shows toast in offline build)

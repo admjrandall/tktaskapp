@@ -61,6 +61,9 @@ export type AuditEventType =
   | 'workspace_layout_changed'
   | 'persona_selected'
   | 'persona_changed'
+  // Compliance / GDPR (C.7)
+  | 'gdpr_erasure_requested'
+  | 'compliance_pack_changed'
 
 export interface AuditEntry {
   id: string
