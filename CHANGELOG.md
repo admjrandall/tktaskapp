@@ -5,6 +5,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 
 ---
 
+## [2026-05-22] — Phase 2 + 3: AI attributes, sync protocol, admin console
+
+### Added — `packages/core/src/ai/`
+
+**AI Attribute engine (C.2)**
+
+- `ai/attributes-engine.ts` (new): compute scheduler with `requestIdleCallback` background queue, in-memory cache, SHA-256 provenance hashing for input data and prompt, HIPAA field gate (returns error state without calling AI), lockdown gate (blocks cloud tier in `strong`/`strict`), writes `ai_attribute_computed`/`ai_attribute_failed` audit events
+- `ai/adaptive-engine.ts` (new): usage observation tracking (nav history, record-open history, max 50 entries each), pattern analysis after each event, `pin_view` suggestion when a view appears ≥4/10 recent navigations, full suggestion lifecycle audit trail (`adaptive_suggestion_proposed/accepted/dismissed`), `acceptSuggestion()` persists to `localStorage('tk_pinned_views')`
+
+**AI Runtime refactor (C.5, C.6, C.7)**
+
+- `ai/ai-runtime.ts`: added `LockdownViolationError` class; `callBackend()` now checks lockdown before dispatch (blocks cloud tier in `strong`/`strict`, writes `lockdown_violation_blocked` audit event), records `lastProvenance` slot (`provider`, `modelId`, `computedAt`, `computeDurationMs`, `confidence`) after every call, and adds `lastCommandIntent` slot to `aiRuntime`
+
+**AI Tools extension**
+
+- `ai/ai-tools.ts`: 8 new tools — `compute_attribute`, `refresh_attribute`, `list_attribute_defs`, `explain_attribute`, `run_command_intent`, `propose_layout_change`, `accept_adaptive_suggestion`, `dismiss_adaptive_suggestion`; lazy-loads `attributes-engine` on first AI Attribute call
+
+**Voice input (C.9)**
+
+- `voice-input.ts` (new): Web Speech API wrapper with fully typed custom interfaces (no `any`); all state on `voiceRuntime` object (ESM binding rule); HIPAA field skip set (`HIPAA_FIELD_IDS`); lockdown gate; `startVoiceInput(fieldId, onResult)` / `stopVoiceInput()`
+
+### Added — `server/src/api/routes/`
+
+**Sync protocol (C.3)**
+
+- `sync.ts` (new): `POST /api/v1/sync/pull` (checkpoint + limit, returns `DocWithRev[]`), `POST /api/v1/sync/push` (conflict detection via `updatedAt` comparison, UPSERT, returns conflicts), `GET /api/v1/sync/stream` (SSE via `streamSSE()`, polls every 30 s); all endpoints wrapped in `withTenant()` and write `sync_pull`/`sync_push` audit events; Valibot validation via `safeParseV()`
+
+**AI Attributes compute (C.2)**
+
+- `ai-attributes.ts` (new): `POST /api/v1/ai/attributes/:id/compute` — HIPAA check → cache check → AI gateway call → persist to `ai_attribute_values` table → `ai_attribute_computed` audit event
+
+**Admin console routes (C.7)**
+
+- `admin.ts` (extended): GET/PATCH `/org-settings` (lockdown level, retention days, compliance packs), GET/POST/DELETE `/ai-allowlist`, GET/POST/DELETE `/integrations`; all routes role-guarded (admin/owner), wrapped in `withTenant()`, use Valibot `safeParseV()`, write audit events
+
+### Added — adapters
+
+- `packages/adapter-rxdb-couchdb/src/index.ts` (new): original CouchDB/PouchDB replication protocol preserved as `CouchDBAdapter`; document ID convention `{store}/{recordId}`
+- `packages/adapter-rxdb/src/index.ts` (rewritten): Hono-native 3-endpoint protocol — POST /pull, POST /push, GET /stream (SSE); wire shape `DocWithRev { id, store, rev, data, _deleted?, updatedAt }`; conflict resolution: `customFields` union, `tags` union, newer `updatedAt` wins for all other fields; one retry for resolved conflicts without `assumedMasterState`
+
+### Added — views
+
+- `views/admin-console.ts` (rebuilt): Linear-quality multi-tab admin console with 7 tabs (overview, users, lockdown, ai-allowlist, audit, compliance, integrations); tab state persisted to `localStorage('tk_admin_tab')`; lockdown radio cards with EU AI Act transparency note; audit log table with CSV/JSONL export; compliance pack cards (HIPAA, EU AI Act, GDPR, SOC 2); integration manager stub; all strings through `escH()`
+
+### Changed
+
+- `apps/enterprise-web/src/entry.ts` (rebuilt): full bootstrap function — resolves OIDC token from `tk_access_token` HttpOnly cookie (or `VITE_AUTH_TOKEN` env in dev), server liveness check (`/healthz`), `ENTERPRISE_POLICY` (`allowedTiers: ['browser','ollama','cloud']`), `RxDBAdapter` wiring, `await init()`
+- `apps/pwa-sync/src/entry.ts`: switched from CouchDB URL to Hono-native `RxDBAdapter` with `VITE_SERVER_URL` + optional `VITE_AUTH_HEADER`
+
+---
+
 ## [2026-05-22] — Phase 1: UI foundation + data model
 
 ### Added — `packages/core/src/`
