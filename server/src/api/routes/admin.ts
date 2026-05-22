@@ -1,12 +1,34 @@
 import { Hono } from 'hono'
+import * as v from 'valibot'
 import { usersService } from '../../services/users.service.js'
 import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import { LegalHoldService } from '../../kms/legal-hold.js'
 import { AzureKeyVaultKeyService, LegalHoldActiveError } from '../../kms/key-service.js'
-import { writeAuditEvent } from '../../services/base.js'
+import { withTenant, writeAuditEvent } from '../../services/base.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { EraseUserSchema, safeParseV } from '../../schemas/index.js'
+import { db } from '../../db/index.js'
+import { sql } from 'drizzle-orm'
+
+// ── Admin-only Valibot schemas ─────────────────────────────────────────────────
+const OrgSettingsUpdateSchema = v.object({
+  lockdownLevel: v.optional(v.picklist(['off', 'standard', 'strong', 'strict'])),
+  retentionDays: v.optional(v.pipe(v.number(), v.integer(), v.minValue(365))),
+  compliancePacks: v.optional(v.array(v.picklist(['hipaa', 'eu-ai-act', 'gdpr', 'soc2']))),
+})
+
+const AIAllowlistAddSchema = v.object({
+  provider: v.pipe(v.string(), v.minLength(1)),
+  modelId: v.optional(v.string()),
+  reason: v.pipe(v.string(), v.minLength(1)),
+})
+
+const IntegrationAddSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1)),
+  type: v.pipe(v.string(), v.minLength(1)),
+  config: v.record(v.string(), v.unknown()),
+})
 
 const legalHoldService = new LegalHoldService()
 
@@ -118,6 +140,266 @@ adminRouter.post('/users/:id/erase', opaMiddleware('erase_user'), async (c) => {
       service: 'tktaskapp-server',
       tenantId,
       requestId: 'admin-erase',
+      message: String(err),
+    })
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+// ── Org settings ───────────────────────────────────────────────────────────────
+adminRouter.get('/org-settings', opaMiddleware('manage_users'), async (c) => {
+  const tenantId = c.get('tenantId') as string
+  const role = c.get('role') as string
+  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+  try {
+    const rows = await withTenant(tenantId, async (tx) => {
+      return tx.execute(sql`SELECT * FROM org_settings WHERE org_id = ${tenantId}::uuid LIMIT 1`)
+    })
+    return c.json(
+      rows.rows[0] ?? { lockdownLevel: 'off', retentionDays: 2190, compliancePacks: [] },
+      200,
+    )
+  } catch (err) {
+    otel.log({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'tktaskapp-server',
+      tenantId,
+      requestId: 'admin-org-settings-get',
+      message: String(err),
+    })
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+adminRouter.patch('/org-settings', opaMiddleware('manage_users'), async (c) => {
+  const tenantId = c.get('tenantId') as string
+  const userId = c.get('userId') as string
+  const role = c.get('role') as string
+  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+  try {
+    const parsed = safeParseV(OrgSettingsUpdateSchema, await c.req.json())
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+    const { lockdownLevel, retentionDays, compliancePacks } = parsed.data
+    await withTenant(tenantId, async (tx) => {
+      await tx.execute(sql`
+        INSERT INTO org_settings (org_id, lockdown_level, retention_days, compliance_packs)
+        VALUES (${tenantId}::uuid, ${lockdownLevel ?? 'off'}, ${retentionDays ?? 2190}, ${JSON.stringify(compliancePacks ?? [])}::jsonb)
+        ON CONFLICT (org_id) DO UPDATE
+          SET lockdown_level   = COALESCE(EXCLUDED.lockdown_level, org_settings.lockdown_level),
+              retention_days   = COALESCE(EXCLUDED.retention_days, org_settings.retention_days),
+              compliance_packs = COALESCE(EXCLUDED.compliance_packs, org_settings.compliance_packs),
+              updated_at       = NOW()
+      `)
+    })
+    await writeAuditEvent({
+      tenantId,
+      userId,
+      eventType: 'org_settings_updated',
+      details: {
+        lockdownLevel,
+        retentionDays: String(retentionDays),
+        compliancePacks: JSON.stringify(compliancePacks),
+      },
+    })
+    return c.body(null, 204)
+  } catch (err) {
+    otel.log({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'tktaskapp-server',
+      tenantId,
+      requestId: 'admin-org-settings-patch',
+      message: String(err),
+    })
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+// ── AI endpoint allowlist ──────────────────────────────────────────────────────
+adminRouter.get('/ai-allowlist', opaMiddleware('manage_users'), async (c) => {
+  const tenantId = c.get('tenantId') as string
+  const role = c.get('role') as string
+  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+  try {
+    const rows = await withTenant(tenantId, async (tx) => {
+      return tx.execute(
+        sql`SELECT * FROM ai_endpoint_allowlist WHERE org_id = ${tenantId}::uuid ORDER BY created_at DESC`,
+      )
+    })
+    return c.json(rows.rows, 200)
+  } catch (err) {
+    otel.log({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'tktaskapp-server',
+      tenantId,
+      requestId: 'admin-ai-allowlist-get',
+      message: String(err),
+    })
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+adminRouter.post('/ai-allowlist', opaMiddleware('manage_users'), async (c) => {
+  const tenantId = c.get('tenantId') as string
+  const userId = c.get('userId') as string
+  const role = c.get('role') as string
+  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+  try {
+    const parsed = safeParseV(AIAllowlistAddSchema, await c.req.json())
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+    const id = crypto.randomUUID()
+    await withTenant(tenantId, async (tx) => {
+      await tx.execute(sql`
+        INSERT INTO ai_endpoint_allowlist (id, org_id, provider, model_id, reason, created_by)
+        VALUES (${id}::uuid, ${tenantId}::uuid, ${parsed.data.provider}, ${parsed.data.modelId ?? null}, ${parsed.data.reason}, ${userId}::uuid)
+      `)
+    })
+    await writeAuditEvent({
+      tenantId,
+      userId,
+      eventType: 'ai_allowlist_entry_added',
+      resourceType: 'ai_endpoint_allowlist',
+      resourceId: id,
+      details: { provider: parsed.data.provider, modelId: parsed.data.modelId ?? '' },
+    })
+    return c.json({ id }, 201)
+  } catch (err) {
+    otel.log({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'tktaskapp-server',
+      tenantId,
+      requestId: 'admin-ai-allowlist-add',
+      message: String(err),
+    })
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+adminRouter.delete('/ai-allowlist/:id', opaMiddleware('manage_users'), async (c) => {
+  const tenantId = c.get('tenantId') as string
+  const userId = c.get('userId') as string
+  const role = c.get('role') as string
+  const entryId = c.req.param('id')!
+  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+  try {
+    await withTenant(tenantId, async (tx) => {
+      await tx.execute(
+        sql`DELETE FROM ai_endpoint_allowlist WHERE id = ${entryId}::uuid AND org_id = ${tenantId}::uuid`,
+      )
+    })
+    await writeAuditEvent({
+      tenantId,
+      userId,
+      eventType: 'ai_allowlist_entry_removed',
+      resourceType: 'ai_endpoint_allowlist',
+      resourceId: entryId,
+    })
+    return c.body(null, 204)
+  } catch (err) {
+    otel.log({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'tktaskapp-server',
+      tenantId,
+      requestId: 'admin-ai-allowlist-del',
+      message: String(err),
+    })
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+// ── Integration manager ────────────────────────────────────────────────────────
+adminRouter.get('/integrations', opaMiddleware('manage_users'), async (c) => {
+  const tenantId = c.get('tenantId') as string
+  const role = c.get('role') as string
+  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+  try {
+    const rows = await withTenant(tenantId, async (tx) => {
+      return tx.execute(
+        sql`SELECT id, name, type, created_at FROM integrations WHERE org_id = ${tenantId}::uuid ORDER BY created_at DESC`,
+      )
+    })
+    return c.json(rows.rows, 200)
+  } catch (err) {
+    otel.log({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'tktaskapp-server',
+      tenantId,
+      requestId: 'admin-integrations-list',
+      message: String(err),
+    })
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+adminRouter.post('/integrations', opaMiddleware('manage_users'), async (c) => {
+  const tenantId = c.get('tenantId') as string
+  const userId = c.get('userId') as string
+  const role = c.get('role') as string
+  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+  try {
+    const parsed = safeParseV(IntegrationAddSchema, await c.req.json())
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+    const id = crypto.randomUUID()
+    await withTenant(tenantId, async (tx) => {
+      await tx.execute(sql`
+        INSERT INTO integrations (id, org_id, name, type, config, created_by)
+        VALUES (${id}::uuid, ${tenantId}::uuid, ${parsed.data.name}, ${parsed.data.type}, ${JSON.stringify(parsed.data.config)}::jsonb, ${userId}::uuid)
+      `)
+    })
+    await writeAuditEvent({
+      tenantId,
+      userId,
+      eventType: 'integration_registered',
+      resourceType: 'integrations',
+      resourceId: id,
+      details: { name: parsed.data.name, type: parsed.data.type },
+    })
+    return c.json({ id }, 201)
+  } catch (err) {
+    otel.log({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'tktaskapp-server',
+      tenantId,
+      requestId: 'admin-integrations-add',
+      message: String(err),
+    })
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+adminRouter.delete('/integrations/:id', opaMiddleware('manage_users'), async (c) => {
+  const tenantId = c.get('tenantId') as string
+  const userId = c.get('userId') as string
+  const role = c.get('role') as string
+  const integrationId = c.req.param('id')!
+  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+  try {
+    await withTenant(tenantId, async (tx) => {
+      await tx.execute(
+        sql`DELETE FROM integrations WHERE id = ${integrationId}::uuid AND org_id = ${tenantId}::uuid`,
+      )
+    })
+    await writeAuditEvent({
+      tenantId,
+      userId,
+      eventType: 'integration_removed',
+      resourceType: 'integrations',
+      resourceId: integrationId,
+    })
+    return c.body(null, 204)
+  } catch (err) {
+    otel.log({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'tktaskapp-server',
+      tenantId,
+      requestId: 'admin-integrations-del',
       message: String(err),
     })
     return c.json({ error: 'Internal server error' }, 500)
