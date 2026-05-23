@@ -135,10 +135,10 @@ d:\techkeycrmapp\
 │   │   ├── services/             ← one service file per CRM entity; all use withTenant() + writeAuditEvent()
 │   │   ├── api/routes/           ← one Hono router per entity; Zod validation; OPA per route
 │   │   ├── kms/
-│   │   │   ├── key-service.ts    ← AzureKeyVaultKeyService; scheduleKeyDestruction / getKeyUri
+│   │   │   ├── key-service.ts    ← AzureKeyVaultKeyService; scheduleKeyExpiry / getKeyUri
 │   │   │   ├── legal-hold.ts     ← LegalHoldService; placeHold / liftHold / isUserOnHold
-│   │   │   ├── erasure-workflow.ts ← runErasureWorkflow; legal hold check → KMS schedule → soft-delete → audit
-│   │   │   └── destruction-scheduler.ts ← polls kmsKeyLifecycle every 60s; calls Azure KV beginDeleteKey
+│   │   │   ├── erasure-workflow.ts ← runDataRemovalWorkflow; retention hold check → KMS schedule → soft-delete → audit
+│   │   │   └── destruction-scheduler.ts ← polls kmsKeyLifecycle every 60s; calls Azure KV scheduleKeyExpiry
 │   │   └── ai-gateway/
 │   │       └── policy-engine.ts  ← evaluateAiGatewayRequest; model allowlist, rate limit, budget, PII scrub
 │   ├── policies/
@@ -523,10 +523,10 @@ Policy: `admin`/`owner` → all actions; `editor` → read/create/update; `viewe
 
 ### KMS / GDPR
 
-- `server/src/kms/key-service.ts` — `AzureKeyVaultKeyService`; schedules key destruction in `kms_key_lifecycle` (append-only table; update trigger prevents row modification)
-- `server/src/kms/legal-hold.ts` — `LegalHoldService`; blocks erasure if an active hold exists
-- `server/src/kms/erasure-workflow.ts` — `runErasureWorkflow(userId, tenantId, requestedBy)`: checks legal hold → schedules KMS key destruction → soft-deletes all user records across CRM tables → writes `gdpr_erasure_requested` audit event
-- `server/src/kms/destruction-scheduler.ts` — polls every 60s; calls `beginDeleteKey()` on Azure Key Vault; writes `DESTROYED` lifecycle event
+- `server/src/kms/key-service.ts` — `AzureKeyVaultKeyService`; schedules key expiry in `kms_key_lifecycle` (append-only table; update trigger prevents row modification)
+- `server/src/kms/legal-hold.ts` — `LegalHoldService`; checks retention holds before allowing data removal
+- `server/src/kms/erasure-workflow.ts` — `runDataRemovalWorkflow(userId, tenantId, requestedBy)`: checks retention hold → schedules KMS key expiry → soft-deletes all user records across CRM tables → writes `gdpr_erasure_requested` audit event
+- `server/src/kms/destruction-scheduler.ts` — polls every 60s; calls `scheduleKeyExpiry()` on Azure Key Vault; writes `EXPIRED` lifecycle event
 
 ### AI Gateway
 

@@ -45,6 +45,9 @@ pnpm run format
 
 # Build all targets
 pnpm run build:all
+
+# Build mobile PWA
+pnpm run build:mobile
 ```
 
 ---
@@ -86,6 +89,29 @@ feat!: rename apps/offline to apps/offline-web
 
 BREAKING CHANGE: Build output path changed. Update any CI scripts that reference apps/offline.
 ```
+
+---
+
+## Branch strategy
+
+| Branch                      | Purpose                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `main`                      | Stable; always deployable                                                     |
+| `integration`               | Weekly merge target — Agent F runs full verification before merge is accepted |
+| `agent-{a-f}/{phase-name}`  | Agent workstreams (e.g. `agent-e/phase-6-mobile`)                             |
+| `feat/<short-description>`  | Human feature branches                                                        |
+| `fix/<short-description>`   | Bug fixes                                                                     |
+| `chore/<short-description>` | Tooling, deps, docs                                                           |
+
+Branch from `main`. Open PRs against `main` (or `integration` for agent work). Never push directly to `main`.
+
+---
+
+## Commit discipline
+
+- **≤200 lines changed per commit** — keeps reviews focused and bisects fast
+- Reference phase contracts in the footer where applicable: `[C.3]`, `[C.7]`
+- Summary in imperative mood, lowercase, no trailing period
 
 ---
 

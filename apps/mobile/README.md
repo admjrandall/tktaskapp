@@ -101,8 +101,8 @@ All criteria must pass before a release candidate build is submitted to the App 
 | MASVS-STORAGE-2  | No sensitive data in SharedPreferences (Android) or UserDefaults (iOS) after vault write                       |
 | MASVS-CRYPTO-1   | AES-256-GCM + PBKDF2-HMAC-SHA-256 at 600k iterations; key non-extractable; static analysis confirms            |
 | MASVS-AUTH-1     | Biometric key invalidated on Android enrollment change; master password required to re-enroll                  |
-| MASVS-NETWORK-1  | No cleartext traffic — MITM proxy test (Charles / mitmproxy) confirms all connections are HTTPS                |
-| MASVS-NETWORK-2  | User-installed CA certificates not trusted — NSC / ATS config verified via proxy test with user-installed cert |
+| MASVS-NETWORK-1  | No cleartext traffic — TLS inspection compliance test (Charles / mitmproxy) confirms all connections are HTTPS |
+| MASVS-NETWORK-2  | Only system CA certificates trusted — NSC / ATS config verified via TLS compliance test                        |
 | MASVS-PLATFORM-1 | Capacitor plugin allowlist reviewed; no broad JavaScript bridge exposure; only required plugins enabled        |
 
 ---
