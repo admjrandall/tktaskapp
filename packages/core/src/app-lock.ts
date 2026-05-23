@@ -8,6 +8,7 @@ import { renderAuth, bindAuth } from './security/auth.js'
 import { disconnectAI as resetAIConnection } from './ai/ai-runtime.js'
 import { aiSecretsWipe } from './ai/ai-settings.js'
 import { LS_LOCK_TIMEOUT_KEY } from './constants.js'
+import { patchInnerHTML } from './render-utils.js'
 
 let _lockTimeoutMs = (() => {
   const raw = localStorage.getItem(LS_LOCK_TIMEOUT_KEY)
@@ -65,7 +66,7 @@ export async function lockApp(reason = 'manual'): Promise<void> {
   setState({ authed: false, cryptoKey: null })
   const el = document.getElementById('app')
   if (!el) return
-  el.innerHTML = await renderAuth()
+  el.innerHTML = patchInnerHTML(await renderAuth())
   const handler = _onAuthSuccess
   bindAuth(el, async (key) => {
     await cacheSessionKey(key)

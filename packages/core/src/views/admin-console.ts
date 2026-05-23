@@ -6,7 +6,7 @@
 import { escH, formatRelative } from '../utils.js'
 import { LS_ADMIN_TAB_KEY, LS_COMPLIANCE_KEY_PREFIX } from '../constants.js'
 import { Icons } from '../ui/icons.js'
-import { getState, setState, showToast } from '../state.js'
+import { getState as _getState, setState, showToast } from '../state.js'
 import type { AppState, LockdownLevel } from '../state.js'
 import { auditLog, loadAuditLog, verifyAuditChain } from '../security/audit.js'
 import type { AuditEntry } from '../security/audit.js'

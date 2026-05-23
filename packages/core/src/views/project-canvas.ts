@@ -8,6 +8,7 @@ import { Icons } from '../ui/icons.js'
 import { renderPriorityBadge } from '../ui/components.js'
 import { stageBadge } from './list-grid-kanban-spatial.js'
 import { PRIORITIES, PROJECT_STAGES } from '../constants.js'
+import { patchInnerHTML } from '../render-utils.js'
 
 // forward-declared — set by main.ts wiring after bootstrap loads
 let _appRenderWorkspace: (view: string) => void = () => {}
@@ -43,7 +44,7 @@ export function openProjectCanvas(projectId: string): void {
   overlay.id = 'proj-canvas-overlay'
   overlay.className = 'proj-canvas-overlay'
   document.body.appendChild(overlay)
-  overlay.innerHTML = renderProjectCanvas()
+  overlay.innerHTML = patchInnerHTML(renderProjectCanvas())
   bindProjectCanvas()
 }
 
@@ -80,20 +81,20 @@ export function pcRefreshPanel(panelId: string): void {
   if (!body) return
   if (panelId === 'tasks') {
     const tasks = (dbGetAll('tasks') as AnyRecord[]).filter((t) => t.projectId === _pcProjectId)
-    body.innerHTML = pcTasksBody(tasks)
+    body.innerHTML = patchInnerHTML(pcTasksBody(tasks))
     pcBindTasks()
   } else if (panelId === 'notes') {
-    body.innerHTML = pcNotesBody(project)
+    body.innerHTML = patchInnerHTML(pcNotesBody(project))
     pcBindNotes(project)
   } else if (panelId === 'details') {
-    body.innerHTML = pcDetailsBody(project)
+    body.innerHTML = patchInnerHTML(pcDetailsBody(project))
     pcBindDetails(project)
   } else if (panelId === 'narrative') {
-    body.innerHTML = pcNarrativeBody(project)
+    body.innerHTML = patchInnerHTML(pcNarrativeBody(project))
     pcBindNarrative(project)
   } else if (panelId === 'people') {
     const tasks = (dbGetAll('tasks') as AnyRecord[]).filter((t) => t.projectId === _pcProjectId)
-    body.innerHTML = pcPeopleBody(project, tasks)
+    body.innerHTML = patchInnerHTML(pcPeopleBody(project, tasks))
     pcBindPeople(project)
   }
 }
@@ -155,7 +156,7 @@ export function pcDetailsBody(project: AnyRecord): string {
     </div>`
 }
 
-export function pcBindDetails(project: AnyRecord): void {
+export function pcBindDetails(_project: AnyRecord): void {
   document
     .querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-pc-field]')
     .forEach((el) => {
@@ -466,7 +467,7 @@ export function bindProjectCanvas(): void {
   })
 
   const project = dbGetById('projects', _pcProjectId!) as AnyRecord
-  const tasks = (dbGetAll('tasks') as AnyRecord[]).filter((t) => t.projectId === _pcProjectId)
+  const _tasks = (dbGetAll('tasks') as AnyRecord[]).filter((t) => t.projectId === _pcProjectId)
 
   pcBindDetails(project)
   pcBindNarrative(project)

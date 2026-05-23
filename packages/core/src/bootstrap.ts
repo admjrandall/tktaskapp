@@ -33,6 +33,7 @@ import { aiSecretsRefresh, closeAIWizard } from './ai/ai-settings.js'
 import { aiPrefs, saveAIPrefs } from './ai/ai-prefs.js'
 import { isAITierAllowed } from './deployment-policy.js'
 import { wireHooks } from './hooks-wiring.js'
+import { patchInnerHTML } from './render-utils.js'
 import { appEl, appRenderWorkspace, fullRender } from './render-pipeline.js'
 import { lockApp, setOnAuthSuccess, _resetIdleTimer } from './app-lock.js'
 import { renderToast } from './ui/components.js'
@@ -336,7 +337,7 @@ export async function init(): Promise<void> {
     return
   }
 
-  appEl.innerHTML = await renderAuth()
+  appEl.innerHTML = patchInnerHTML(await renderAuth())
   bindAuth(appEl, async (key) => {
     await cacheSessionKey(key)
     await afterUnlock(key)

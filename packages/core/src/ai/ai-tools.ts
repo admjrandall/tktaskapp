@@ -703,7 +703,7 @@ export async function speakResult(
   tool: string,
   args: AnyRecord,
   result: unknown,
-  ctx: string,
+  _ctx: string,
 ): Promise<string> {
   // Simple deterministic cases
   if (tool === 'create_record')

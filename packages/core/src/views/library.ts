@@ -4,7 +4,14 @@
 import { escH, formatRelative, formatFileSize } from '../utils.js'
 import { sanitizeDataUrl } from '../security/sanitize.js'
 import { Icons } from '../ui/icons.js'
-import { dbGetAll, dbGetById, dbCreate, dbUpdate, dbDelete, nowISO } from '../storage/db.js'
+import {
+  dbGetAll as _dbGetAll,
+  dbGetById,
+  dbCreate,
+  dbUpdate,
+  dbDelete as _dbDelete,
+  nowISO,
+} from '../storage/db.js'
 import { setState, reloadData, showToast } from '../state.js'
 import type { AppState } from '../state.js'
 

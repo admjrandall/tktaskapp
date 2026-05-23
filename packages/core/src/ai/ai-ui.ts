@@ -6,8 +6,9 @@
 
 import { escH, formatRelative } from '../utils.js'
 import { Icons } from '../ui/icons.js'
-import { getState, setState, navigate, showConfirm, showToast } from '../state.js'
-import type { AppState } from '../state.js'
+import { getState, setState, navigate, showConfirm, showToast as _showToast } from '../state.js'
+import type { AppState as _AppState } from '../state.js'
+import { patchInnerHTML } from '../render-utils.js'
 import { isAITierAllowed, isOTOnlyMode } from '../deployment-policy.js'
 import {
   aiRuntime,
@@ -32,9 +33,13 @@ import {
   setAIToolsHooks,
   extractToolCall,
 } from './ai-tools.js'
-import { aiNeedsOnboarding, openNanoDownloadModal, isNanoModalOpen } from './ai-settings.js'
+import {
+  aiNeedsOnboarding as _aiNeedsOnboarding,
+  openNanoDownloadModal,
+  isNanoModalOpen,
+} from './ai-settings.js'
 
-type AnyRecord = Record<string, unknown>
+type _AnyRecord = Record<string, unknown>
 
 // ── Hook injection ─────────────────────────────────────────────────────────────
 let _appRenderWorkspace: (view: string) => void = () => {}
@@ -102,7 +107,7 @@ export function streamToBubble(text: string): void {
     displayHtml +
     '<span class="spinner" style="width:10px;height:10px;margin-left:4px;vertical-align:middle"></span>'
   document.querySelectorAll('[id^="streaming-bubble"]').forEach((el) => {
-    el.innerHTML = html
+    el.innerHTML = patchInnerHTML(html)
   })
 }
 
@@ -624,7 +629,7 @@ function rerenderChatInputArea(ctx: string): void {
     if (pb) {
       const oldInput = ctxId('chat-input', 'panel') as HTMLTextAreaElement | null
       const val = oldInput?.value || ''
-      pb.innerHTML = renderChatBody(true)
+      pb.innerHTML = patchInnerHTML(renderChatBody(true))
       bindAIPanel()
       const newInput = ctxId('chat-input', 'panel') as HTMLTextAreaElement | null
       if (newInput) {
@@ -649,7 +654,7 @@ function finalRender(ctx: string): void {
   if (ctx === 'panel') {
     const pb = document.querySelector('#ai-panel .panel-body')
     if (pb) {
-      pb.innerHTML = renderChatBody(true)
+      pb.innerHTML = patchInnerHTML(renderChatBody(true))
       bindAIPanel()
     }
   } else {
@@ -661,7 +666,7 @@ function refreshChat(ctx: string): void {
   if (ctx === 'panel') {
     const pb = document.querySelector('#ai-panel .panel-body')
     if (pb) {
-      pb.innerHTML = renderChatBody(true)
+      pb.innerHTML = patchInnerHTML(renderChatBody(true))
       bindAIPanel()
     }
   } else {
@@ -671,8 +676,11 @@ function refreshChat(ctx: string): void {
     } else if (msgs && aiRuntime.streaming) {
       const userMsg = aiRuntime.history[aiRuntime.history.length - 1]
       if (userMsg?.role === 'user') {
-        msgs.innerHTML += `<div class="chat-message user"><div class="chat-bubble">${escH(userMsg.content)}</div></div>
-        <div class="chat-message assistant"><div class="avatar avatar-sm" style="background:var(--indigo-600);color:#fff;flex-shrink:0">N</div><div class="chat-bubble" id="streaming-bubble-ws"><span class="thinking"><span class="thinking-dots"><span></span><span></span><span></span></span>Thinking…</span></div></div>`
+        msgs.innerHTML = patchInnerHTML(
+          msgs.innerHTML +
+            `<div class="chat-message user"><div class="chat-bubble">${escH(userMsg.content)}</div></div>
+        <div class="chat-message assistant"><div class="avatar avatar-sm" style="background:var(--indigo-600);color:#fff;flex-shrink:0">N</div><div class="chat-bubble" id="streaming-bubble-ws"><span class="thinking"><span class="thinking-dots"><span></span><span></span><span></span></span>Thinking…</span></div></div>`,
+        )
         msgs.scrollTop = msgs.scrollHeight
       }
     }

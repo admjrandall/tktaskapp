@@ -15,6 +15,7 @@ import {
 } from '../storage/db.js'
 import { getState, setState, showToast, showConfirm, reloadData } from '../state.js'
 import type { AppState } from '../state.js'
+import { patchInnerHTML } from '../render-utils.js'
 
 type AnyRecord = Record<string, unknown>
 
@@ -182,7 +183,7 @@ export function openDocumentEditor(docId: string | null): void {
   _appRenderWorkspace('documents')
 }
 
-export function renderDocumentEditor(state: AppState): string {
+export function renderDocumentEditor(_state: AppState): string {
   const doc = _docOpenId ? (dbGetById('documents', _docOpenId) as AnyRecord | null) : null
   const title = String(doc?.title || '')
   const content = String(doc?.content || '')
@@ -324,7 +325,7 @@ function _renderAIEditModal(): string {
 function _bindAIEditModal(
   editor: HTMLElement | null,
   titleInput: HTMLInputElement | null,
-  markDirty: () => void,
+  _markDirty: () => void,
 ): void {
   const close = () => {
     _aiEditModalOpen = false
@@ -430,7 +431,7 @@ function _bindAIEditModal(
         signal: _aiEditAbort.signal,
         onToken: (full: string) => {
           accumulated = full
-          streamDiv.innerHTML = sanitizeDocHtml(_mdToHtml(full))
+          streamDiv.innerHTML = patchInnerHTML(sanitizeDocHtml(_mdToHtml(full)))
           streamDiv.scrollIntoView({ block: 'nearest' })
         },
       })
@@ -521,7 +522,7 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
   toolbar.id = 'doc-inline-ai-toolbar'
   toolbar.className = 'doc-inline-ai-toolbar'
 
-  toolbar.innerHTML = `
+  toolbar.innerHTML = patchInnerHTML(`
     <div class="doc-inline-ai-actions" id="doc-inline-ai-actions">
       ${_INLINE_ACTIONS.map((a) => `<button class="doc-inline-ai-btn" data-action="${a.id}" title="${a.label}">${a.label}</button>`).join('')}
     </div>
@@ -539,7 +540,7 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
         <button class="btn btn-ghost btn-sm" id="doc-inline-discard">Discard</button>
       </div>
     </div>
-  `
+  `)
 
   // Attach to the content area wrapper so position is relative to it
   const wrap = editor.closest<HTMLElement>('.doc-content-area')
@@ -582,8 +583,9 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
       previewEl.style.display = 'flex'
     }
     if (previewContent)
-      previewContent.innerHTML =
-        '<span style="color:var(--text-tertiary);font-size:.8rem">Writing…</span>'
+      previewContent.innerHTML = patchInnerHTML(
+        '<span style="color:var(--text-tertiary);font-size:.8rem">Writing…</span>',
+      )
 
     _inlineAIAbort = new AbortController()
     const { system, prompt } = _inlinePrompt(actionId, selectedText, instruction)
@@ -597,15 +599,18 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
         onToken: (full: string) => {
           accumulated = full
           _lastPreview = full
-          if (previewContent) previewContent.innerHTML = sanitizeDocHtml(_mdToHtml(full))
+          if (previewContent)
+            previewContent.innerHTML = patchInnerHTML(sanitizeDocHtml(_mdToHtml(full)))
         },
       })
       _lastPreview = accumulated
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') {
         if (previewContent)
-          previewContent.innerHTML +=
-            '<br><em style="font-size:.75rem;color:var(--text-tertiary)">Stopped</em>'
+          previewContent.innerHTML = patchInnerHTML(
+            previewContent.innerHTML +
+              '<br><em style="font-size:.75rem;color:var(--text-tertiary)">Stopped</em>',
+          )
       } else {
         showToast('AI failed — check AI settings', 'error')
         _removeInlineToolbar()
@@ -876,7 +881,7 @@ export function bindDocumentEditor(): void {
       showConfirm(
         `Restore this version from ${formatRelative(String(ver.savedAt || ''))}?`,
         async () => {
-          if (editor) editor.innerHTML = sanitizeDocHtml(String(ver.content || ''))
+          if (editor) editor.innerHTML = patchInnerHTML(sanitizeDocHtml(String(ver.content || '')))
           markDirty()
           showToast('Version loaded — click Save to apply', 'info')
         },
@@ -1009,7 +1014,7 @@ export function bindDocumentEditor(): void {
     printRoot.appendChild(h1El)
 
     const contentEl = document.createElement('div')
-    contentEl.innerHTML = safeContent // DOMPurify-sanitized; rawPolicy routes via patchInnerHTML
+    contentEl.innerHTML = patchInnerHTML(safeContent)
     printRoot.appendChild(contentEl)
 
     document.head.appendChild(styleEl)
@@ -1141,7 +1146,7 @@ function _reRenderDocModal(): void {
   if (!backdrop) return
   const newHtml = renderDocModal(getState())
   const tmp = document.createElement('div')
-  tmp.innerHTML = newHtml
+  tmp.innerHTML = patchInnerHTML(newHtml)
   const newEl = tmp.firstElementChild
   if (newEl) {
     backdrop.replaceWith(newEl)
@@ -1347,7 +1352,7 @@ function _mdToHtml(md: string): string {
 // without calling Range.createContextualFragment, which is not patched.
 function _safeHtmlFragment(md: string): DocumentFragment {
   const div = document.createElement('div')
-  div.innerHTML = sanitizeDocHtml(_mdToHtml(md)) // patched setter handles TrustedHTML
+  div.innerHTML = patchInnerHTML(sanitizeDocHtml(_mdToHtml(md)))
   const frag = document.createDocumentFragment()
   while (div.firstChild) frag.appendChild(div.firstChild)
   return frag

@@ -1,6 +1,6 @@
 // ── TIME TRACKER ──────────────────────────────────────────────────────────────
 
-import { escH, formatDuration, formatRelative, formatDate } from '../utils.js'
+import { escH, formatDuration, formatRelative, formatDate as _formatDate } from '../utils.js'
 import { Icons } from '../ui/icons.js'
 import { renderEmpty } from '../ui/components.js'
 import {
@@ -10,7 +10,7 @@ import {
   dbCreate,
   dbUpdate,
   dbDelete,
-  nowISO,
+  nowISO as _nowISO,
 } from '../storage/db.js'
 import { reloadData, showConfirm, showToast } from '../state.js'
 import type { AppState } from '../state.js'

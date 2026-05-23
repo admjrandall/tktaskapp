@@ -16,7 +16,7 @@ import {
   isOTOnlyMode,
 } from '../deployment-policy.js'
 import { aiPrefs, saveAIPrefs, syncAIPrefsLegacy } from './ai-prefs.js'
-import type { AIPrefs } from './ai-prefs.js'
+import type { AIPrefs as _AIPrefs } from './ai-prefs.js'
 import {
   aiRuntime,
   startAILoad,

@@ -38,6 +38,7 @@ import {
   bindNanoDownloadModal,
 } from './ai/ai-settings.js'
 import { aiRuntime } from './ai/ai-runtime.js'
+import { patchInnerHTML } from './render-utils.js'
 import type { AppState } from './state.js'
 
 export const appEl = document.getElementById('app')!
@@ -98,7 +99,7 @@ export function appRenderWorkspace(view: string): void {
     default:
       return
   }
-  container.innerHTML = html
+  container.innerHTML = patchInnerHTML(html)
 
   switch (view) {
     case 'dashboard':
@@ -199,35 +200,39 @@ export function fullRender(state: AppState): void {
     : ''
 
   try {
-    appEl.innerHTML = [
-      renderSidebar(state),
-      `<div class="main-content">`,
-      renderTopbar(state),
-      notifHTML,
-      `<div style="flex:1;overflow:hidden;display:flex;flex-direction:column" id="workspace-container">`,
-      wsHtml,
-      `</div></div>`,
-      renderBottomTabs(state),
-      renderAIPanel(aiPanelOpen),
-      commandOpen ? renderCommandPalette(commandOpen) : '',
-      confirmDialog
-        ? renderConfirmDialog(
-            confirmDialog as unknown as {
-              message: string
-              onConfirm: () => void
-              onCancel?: () => void
-            },
-          )
-        : '',
-      recordModal ? renderRecordModal(recordModal) : '',
-      aiRuntime._aiWizard?.['open'] ? renderAIWizard() : renderNanoDownloadModal(),
-      docModal ? renderDocModal(state) : '',
-      fileViewer ? renderFileViewer(fileViewer as string | null) : '',
-      toast ? renderToast(toast) : '',
-    ].join('')
+    appEl.innerHTML = patchInnerHTML(
+      [
+        renderSidebar(state),
+        `<div class="main-content">`,
+        renderTopbar(state),
+        notifHTML,
+        `<div style="flex:1;overflow:hidden;display:flex;flex-direction:column" id="workspace-container">`,
+        wsHtml,
+        `</div></div>`,
+        renderBottomTabs(state),
+        renderAIPanel(aiPanelOpen),
+        commandOpen ? renderCommandPalette(commandOpen) : '',
+        confirmDialog
+          ? renderConfirmDialog(
+              confirmDialog as unknown as {
+                message: string
+                onConfirm: () => void
+                onCancel?: () => void
+              },
+            )
+          : '',
+        recordModal ? renderRecordModal(recordModal) : '',
+        aiRuntime._aiWizard?.['open'] ? renderAIWizard() : renderNanoDownloadModal(),
+        docModal ? renderDocModal(state) : '',
+        fileViewer ? renderFileViewer(fileViewer as string | null) : '',
+        toast ? renderToast(toast) : '',
+      ].join(''),
+    )
   } catch (err) {
     console.error('[render error]', err)
-    appEl.innerHTML = '<div style="padding:2rem;color:red">Render error — please reload.</div>'
+    appEl.innerHTML = patchInnerHTML(
+      '<div style="padding:2rem;color:red">Render error — please reload.</div>',
+    )
   }
 
   try {

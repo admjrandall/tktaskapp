@@ -3,11 +3,19 @@
 // and hooks-wiring depend on these names.
 
 import { Icons } from './icons.js'
-import { escH, formatDate, formatRelative, daysUntil, initials, avatarColor } from '../utils.js'
+import {
+  escH,
+  formatDate,
+  formatRelative,
+  daysUntil,
+  initials as _initials,
+  avatarColor as _avatarColor,
+} from '../utils.js'
 import { getState, setState, navigate, openRecordModal, closeConfirm } from '../state.js'
 import { globalSearch } from '../storage/db.js'
 import { renderBadge } from './primitives/badge.js'
 import { renderAvatar as _renderAvatarPrim } from './primitives/avatar.js'
+import { patchInnerHTML } from '../render-utils.js'
 
 type AnyRecord = Record<string, unknown>
 type Toast = { type?: string; message?: unknown } | null | undefined
@@ -363,14 +371,16 @@ export function bindCommandPalette(): void {
     const results = document.querySelector('.command-results')
     if (!results) return
     const items = getCmdItems()
-    results.innerHTML = items.length
-      ? items
-          .map(
-            (item, i) =>
-              `<button class="command-item ${i === _cmdSel ? 'selected' : ''}" id="cmd-item-${i}" role="option" aria-selected="${i === _cmdSel}" data-cmd="${i}"><span style="opacity:.6">${item.icon}</span><span>${escH(item.label)}</span></button>`,
-          )
-          .join('')
-      : '<p style="padding:1.5rem;text-align:center;color:var(--text-tertiary);font-size:.875rem">No results</p>'
+    results.innerHTML = patchInnerHTML(
+      items.length
+        ? items
+            .map(
+              (item, i) =>
+                `<button class="command-item ${i === _cmdSel ? 'selected' : ''}" id="cmd-item-${i}" role="option" aria-selected="${i === _cmdSel}" data-cmd="${i}"><span style="opacity:.6">${item.icon}</span><span>${escH(item.label)}</span></button>`,
+            )
+            .join('')
+        : '<p style="padding:1.5rem;text-align:center;color:var(--text-tertiary);font-size:.875rem">No results</p>',
+    )
     results.querySelectorAll<HTMLElement>('[data-cmd]').forEach((btn) => {
       btn.addEventListener('click', () => {
         getCmdItems()[parseInt(btn.dataset.cmd || '0')]?.action()
@@ -514,7 +524,7 @@ export function guardedAction(lockdownLevel: string, action: string, onProceed: 
     return
   }
   const wrap = document.createElement('div')
-  wrap.innerHTML = renderDLPWarning(action)
+  wrap.innerHTML = patchInnerHTML(renderDLPWarning(action))
   document.body.appendChild(wrap)
   bindDLPWarning(onProceed, () => {})
 }

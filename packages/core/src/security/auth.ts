@@ -4,14 +4,18 @@
 
 import { initCrypto, verifyPassword, writeVerifyToken } from './vault.js'
 import { _migrateLocalStorageToIDB, isFirstRun } from './vault.js'
-import { cacheSessionKey, loadSessionKey } from './session.js'
-import { setState, getState, showToast } from '../state.js'
-import { escH } from '../utils.js'
+import {
+  cacheSessionKey as _cacheSessionKey,
+  loadSessionKey as _loadSessionKey,
+} from './session.js'
+import { setState as _setState, getState as _getState, showToast as _showToast } from '../state.js'
+import { escH as _escH } from '../utils.js'
 import { Icons } from '../ui/icons.js'
-import { fsInit, fsSetHandle } from '../storage/fs.js'
+import { fsInit as _fsInit, fsSetHandle } from '../storage/fs.js'
 import { SALT_KEY, VERIFY_KEY, VAULT_KEY } from '../constants.js'
 import { _vaultMetaSet } from './vault.js'
 import { totpSecondsRemaining, verifyTOTPCode } from './totp.js'
+import { patchInnerHTML } from '../render-utils.js'
 
 // ── MFA IDB hooks — injected from main.ts after dbInit wires up ───────────────
 type IdbLoadFn = (store: string, key: CryptoKey) => Promise<Record<string, unknown>[]>
@@ -183,7 +187,7 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
 
       // Vault loaded — re-render auth screen (switches from first-run to unlock mode,
       // because IDB now has SALT_KEY so isFirstRun() returns false on the re-render).
-      appEl.innerHTML = await renderAuth()
+      appEl.innerHTML = patchInnerHTML(await renderAuth())
       bindAuth(appEl, onSuccess)
       const sub = document.querySelector('.auth-subtitle')
       if (sub) sub.textContent = 'Vault loaded — enter your password to unlock'
@@ -220,7 +224,7 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
       if (el) el.type = showPw ? 'text' : 'password'
     })
     const toggleBtn = document.getElementById('toggle-pw')
-    if (toggleBtn) toggleBtn.innerHTML = showPw ? Icons.EyeOff(16) : Icons.Eye(16)
+    if (toggleBtn) toggleBtn.innerHTML = patchInnerHTML(showPw ? Icons.EyeOff(16) : Icons.Eye(16))
   })
 
   setTimeout(
@@ -345,7 +349,7 @@ function _showTOTPStep(
     return
   }
 
-  card.innerHTML = `
+  card.innerHTML = patchInnerHTML(`
     <div class="auth-logo">Task App <span>CRM</span></div>
     <div class="auth-subtitle">Enter your 6-digit authenticator code</div>
     <form id="totp-form" autocomplete="off" style="display:flex;flex-direction:column;gap:1rem">
@@ -365,7 +369,7 @@ function _showTOTPStep(
     </form>
     <div style="margin-top:.875rem;text-align:center">
       <button type="button" id="totp-back" style="background:none;border:none;color:#64748b;font-size:.8rem;cursor:pointer">← Back to password</button>
-    </div>`
+    </div>`)
 
   // Countdown timer
   let _timerInterval: ReturnType<typeof setInterval> | null = null
@@ -384,7 +388,7 @@ function _showTOTPStep(
 
   document.getElementById('totp-back')?.addEventListener('click', async () => {
     cleanup()
-    appEl.innerHTML = await renderAuth()
+    appEl.innerHTML = patchInnerHTML(await renderAuth())
     bindAuth(appEl, onSuccess)
   })
 

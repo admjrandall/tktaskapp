@@ -8,6 +8,7 @@ import { Icons } from '../ui/icons.js'
 import { renderViewTabs, renderSearchInput } from '../ui/components.js'
 import { PRIORITIES, PROJECT_STAGES, TASK_STATUSES } from '../constants.js'
 import { openProjectCanvas } from './project-canvas.js'
+import { patchInnerHTML } from '../render-utils.js'
 import {
   renderListView,
   bindListView,
@@ -89,7 +90,7 @@ export function renderWorkspaceView(store: string): string {
     if (store === 'projects') openProjectCanvas(id)
     else openRecordModal(store, id)
   }
-  const onRefresh = () => {
+  const _onRefresh = () => {
     _appRenderWorkspace(store)
   }
 
@@ -179,16 +180,18 @@ export function bindWorkspaceView(store: string): void {
         _appRenderWorkspace(store)
       }
       if (s.view === 'list') {
-        body.innerHTML = renderListView(store, r, oOpen, s.sortField, s.sortDir, oSort)
+        body.innerHTML = patchInnerHTML(
+          renderListView(store, r, oOpen, s.sortField, s.sortDir, oSort),
+        )
         bindListView(oOpen, oSort)
       } else if (s.view === 'grid') {
-        body.innerHTML = renderGridView(store, r, oOpen)
+        body.innerHTML = patchInnerHTML(renderGridView(store, r, oOpen))
         bindGridView(oOpen)
       } else if (s.view === 'kanban') {
-        body.innerHTML = renderKanbanView(store, r, oOpen)
+        body.innerHTML = patchInnerHTML(renderKanbanView(store, r, oOpen))
         bindKanbanView(store, r, oOpen, oRefresh)
       } else if (s.view === 'spatial') {
-        body.innerHTML = renderSpatialCanvas(store, r, oOpen)
+        body.innerHTML = patchInnerHTML(renderSpatialCanvas(store, r, oOpen))
         bindSpatialCanvas(store, r, oOpen, oRefresh)
       }
     })

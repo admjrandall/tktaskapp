@@ -820,7 +820,7 @@ async function requireReauth(): Promise<boolean> {
   })
 }
 
-export function bindSettings(state: AppState): void {
+export function bindSettings(_s: AppState): void {
   const _state = getState()
   document.querySelectorAll<HTMLElement>('[data-section]').forEach((btn) => {
     btn.addEventListener('click', () => {

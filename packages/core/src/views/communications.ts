@@ -1,11 +1,17 @@
 // ── COMMUNICATIONS ──────────────────────────────────────────────────────────────
 // Activity log view: calls, emails, meetings, notes linked to clients/people/projects.
 
-import { escH, formatRelative, formatDate } from '../utils.js'
+import { escH, formatRelative as _formatRelative, formatDate } from '../utils.js'
 import { Icons } from '../ui/icons.js'
 import { renderEmpty } from '../ui/components.js'
 import { dbGetAll, dbDelete } from '../storage/db.js'
-import { getState, showConfirm, showToast, openRecordModal, reloadData } from '../state.js'
+import {
+  getState as _getState,
+  showConfirm,
+  showToast,
+  openRecordModal,
+  reloadData,
+} from '../state.js'
 import type { AppState } from '../state.js'
 
 type AnyRecord = Record<string, unknown>

@@ -8,10 +8,10 @@ import {
   initials,
   avatarColor,
   plural,
-  formatDuration,
+  formatDuration as _formatDuration,
 } from '../utils.js'
 import { Icons } from '../ui/icons.js'
-import { openRecordModal, setState, showToast } from '../state.js'
+import { openRecordModal, setState, showToast as _showToast } from '../state.js'
 import type { AppState } from '../state.js'
 
 type AnyRecord = Record<string, unknown>

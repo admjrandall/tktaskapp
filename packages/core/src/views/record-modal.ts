@@ -2,6 +2,7 @@
 // Extracted from taskapp.html lines 4119–4224.
 
 import { escH, sanitize, formatRelative, formatFileSize, readFileAsBase64 } from '../utils.js'
+import { patchInnerHTML } from '../render-utils.js'
 import { sanitizeDataUrl } from '../security/sanitize.js'
 import {
   dbGetAll,
@@ -14,7 +15,7 @@ import {
 } from '../storage/db.js'
 import { getState, showToast, showConfirm, closeRecordModal, reloadData } from '../state.js'
 import { Icons } from '../ui/icons.js'
-import { renderPriorityBadge, trapFocus } from '../ui/components.js'
+import { renderPriorityBadge as _renderPriorityBadge, trapFocus } from '../ui/components.js'
 import { PRIORITIES, PROJECT_STAGES, TASK_STATUSES, TAG_COLORS, COMM_TYPES } from '../constants.js'
 import { openProjectCanvas, _pcFromCanvas, setPcFromCanvas } from './project-canvas.js'
 
@@ -245,7 +246,7 @@ export function bindRecordModal(config: {
   id: string | null
   defaults?: AnyRecord
 }): void {
-  const { store, id, defaults = {} } = config
+  const { store, id, defaults: _defaults = {} } = config
   const schema = SCHEMAS[store]
   if (!schema) return
   const record = id ? (dbGetById(store, id) as AnyRecord | null) : null
@@ -281,7 +282,10 @@ export function bindRecordModal(config: {
     _pendingNotes.push(note)
     const list = document.getElementById('notes-list')
     if (list)
-      list.innerHTML += `<div style="padding:.625rem;background:var(--bg-base);border-radius:var(--radius-md);margin-bottom:.5rem"><div style="font-size:.8rem;line-height:1.5">${escH(text)}</div><div style="font-size:.7rem;color:var(--text-tertiary);margin-top:.2rem">just now</div></div>`
+      list.innerHTML = patchInnerHTML(
+        list.innerHTML +
+          `<div style="padding:.625rem;background:var(--bg-base);border-radius:var(--radius-md);margin-bottom:.5rem"><div style="font-size:.8rem;line-height:1.5">${escH(text)}</div><div style="font-size:.7rem;color:var(--text-tertiary);margin-top:.2rem">just now</div></div>`,
+      )
     if (ta) ta.value = ''
   })
 
@@ -321,9 +325,11 @@ export function bindRecordModal(config: {
           )
           const listEl = document.getElementById('modal-files-list')
           if (listEl)
-            listEl.innerHTML = recFiles.length
-              ? recFiles.map(renderModalFileRow).join('')
-              : '<p style="font-size:.8rem;color:var(--text-tertiary)">No files attached</p>'
+            listEl.innerHTML = patchInnerHTML(
+              recFiles.length
+                ? recFiles.map(renderModalFileRow).join('')
+                : '<p style="font-size:.8rem;color:var(--text-tertiary)">No files attached</p>',
+            )
           document.querySelectorAll<HTMLElement>('[data-modal-del-file]').forEach((btn) => {
             btn.addEventListener('click', () => {
               showConfirm('Remove this file?', async () => {

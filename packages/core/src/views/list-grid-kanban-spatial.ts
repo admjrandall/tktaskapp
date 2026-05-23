@@ -35,7 +35,7 @@ export function renderListView(
   onOpen: (id: string) => void,
   sortField: string,
   sortDir: string,
-  onSort: (f: string) => void,
+  _onSort: (f: string) => void,
 ): string {
   const colMap: Record<string, [string, string][]> = {
     clients: [
@@ -129,7 +129,7 @@ export function bindListView(onOpen: (id: string) => void, onSort: (f: string) =
 export function renderGridView(
   store: string,
   records: AnyRecord[],
-  onOpen: (id: string) => void,
+  _onOpen: (id: string) => void,
 ): string {
   if (!records.length)
     return renderEmpty(Icons.Grid(48), 'No records yet', 'Create one to get started.')
@@ -179,7 +179,7 @@ const KANBAN_COLS: Record<string, string[]> = {
 export function renderKanbanView(
   store: string,
   records: AnyRecord[],
-  onOpen: (id: string) => void,
+  _onOpen: (id: string) => void,
 ): string {
   let cols: string[], sf: string
   if (store === 'standaloneNotes') {
@@ -272,7 +272,7 @@ export function bindKanbanView(
 export function renderSpatialCanvas(
   store: string,
   records: AnyRecord[],
-  onOpen: (id: string) => void,
+  _onOpen: (id: string) => void,
 ): string {
   if (!records.length)
     return renderEmpty(Icons.Spatial(48), 'No records yet', 'Create one to place it on the canvas.')
