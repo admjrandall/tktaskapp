@@ -3,7 +3,7 @@
 // the first render, after all modules are loaded.
 import { appRenderWorkspace, fullRender } from './render-pipeline.js'
 import { lockApp, setLockTimeout, _lastActivityAt } from './app-lock.js'
-import { setTheme, showConfirm } from './state.js'
+import { setTheme, showConfirm, setState } from './state.js'
 import { setDbAuditHook, _getDbKey, softDelete } from './storage/db.js'
 import { _idbLoadStore, _idbPutRecord, _idbDeleteRecord } from './storage/idb-data.js'
 import { isFsReady, getFsLastSave, fsPickFile, fsWriteVault, fsUnlink } from './storage/fs.js'
@@ -40,6 +40,9 @@ import {
 } from './ai/ai-settings.js'
 import { aiPrefs, saveAIPrefs } from './ai/ai-prefs.js'
 import { setAIHooks } from './state.js'
+import { setOnboardingHooks } from './views/onboarding.js'
+import { setAdminConsoleHooks } from './views/admin-console.js'
+import { setCanvasHooks } from './views/workspace-canvas.js'
 import { setTopbarHooks } from './views/topbar.js'
 import { setSidebarFsHooks } from './views/sidebar.js'
 import {
@@ -91,6 +94,17 @@ export function wireHooks(): void {
     idbDeleteRecord: (store: string, id: string) => _idbDeleteRecord(store, id),
     dbKeyGetter: () => _getDbKey(),
   })
+
+  setOnboardingHooks((id) => {
+    setState({ currentPersona: id })
+  })
+  setAdminConsoleHooks({
+    setLockdown: (level) => {
+      setState({ lockdownLevel: level })
+    },
+    appRenderWorkspace,
+  })
+  setCanvasHooks(appRenderWorkspace)
 
   setTopbarHooks({ aiNeedsOnboarding, openAIWizard, setTheme, lockApp })
   setSidebarFsHooks({ getFsReady: isFsReady, getFsLastSave })

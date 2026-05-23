@@ -26,10 +26,13 @@ export const AuditEventTypeSchema = v.picklist([
   'data_exported',
   'data_imported',
   'app_reset',
+  'record_permanent_delete',
+  'adapter_clear',
   // AI (base)
   'ai_key_added',
   'ai_key_removed',
   'ai_query',
+  'ai_tool_rejected',
   // AI extended (C.6)
   'ai_attribute_computed',
   'ai_attribute_failed',

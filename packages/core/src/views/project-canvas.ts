@@ -43,7 +43,8 @@ export function openProjectCanvas(projectId: string): void {
   overlay.id = 'proj-canvas-overlay'
   overlay.className = 'proj-canvas-overlay'
   document.body.appendChild(overlay)
-  renderProjectCanvas()
+  overlay.innerHTML = renderProjectCanvas()
+  bindProjectCanvas()
 }
 
 export function closeProjectCanvas(): void {
@@ -396,13 +397,12 @@ export function pcBindPeople(_project: AnyRecord): void {
 
 // ── Main render ──────────────────────────────────────────────────────────────
 
-export function renderProjectCanvas(): void {
-  const overlay = document.getElementById('proj-canvas-overlay')
-  if (!overlay || !_pcProjectId) return
+export function renderProjectCanvas(): string {
+  if (!_pcProjectId) return ''
   const project = dbGetById('projects', _pcProjectId) as AnyRecord | null
   if (!project) {
     closeProjectCanvas()
-    return
+    return ''
   }
   const saved = (project._canvasLayout || {}) as Record<
     string,
@@ -429,7 +429,7 @@ export function renderProjectCanvas(): void {
     </div>`
   }
 
-  overlay.innerHTML = `
+  return `
     <div class="proj-canvas-topbar">
       <button class="btn btn-ghost btn-sm" id="pc-close">${Icons.ChevronLeft(14)} Back</button>
       <div style="width:1px;height:20px;background:var(--border-default);flex-shrink:0"></div>
@@ -453,8 +453,6 @@ export function renderProjectCanvas(): void {
       ${mkPanel('notes', '🗒 Notes', pcNotesBody(project))}
       ${mkPanel('people', '👥 Team', pcPeopleBody(project, tasks))}
     </div>`
-
-  bindProjectCanvas()
 }
 
 export function bindProjectCanvas(): void {

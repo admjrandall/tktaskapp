@@ -7,15 +7,35 @@
 import { DATA_DB_NAME } from '../constants.js'
 import { aesEncrypt, aesDecrypt } from '../security/crypto.js'
 
+const _IDB_STORES_V1 = ['documents', 'conversations'] as const
+const _IDB_STORES_V2 = [
+  'customFieldDefs',
+  'aiAttributeDefs',
+  'aiAttributeValues',
+  'extensionObjectDefs',
+  'extensionObjectInstances',
+  'workspaceLayouts',
+  'personaProfiles',
+  'automationRules',
+  'agentInsights',
+] as const
+
 function _dataDbOpen(): Promise<IDBDatabase> {
   return new Promise((res, rej) => {
-    const req = indexedDB.open(DATA_DB_NAME, 1)
+    const req = indexedDB.open(DATA_DB_NAME, 2)
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result
-      if (!db.objectStoreNames.contains('documents'))
-        db.createObjectStore('documents', { keyPath: 'id' })
-      if (!db.objectStoreNames.contains('conversations'))
-        db.createObjectStore('conversations', { keyPath: 'id' })
+      const oldVersion = e.oldVersion
+      if (oldVersion < 1) {
+        for (const name of _IDB_STORES_V1) {
+          if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' })
+        }
+      }
+      if (oldVersion < 2) {
+        for (const name of _IDB_STORES_V2) {
+          if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' })
+        }
+      }
     }
     req.onsuccess = (e) => {
       res((e.target as IDBOpenDBRequest).result)
