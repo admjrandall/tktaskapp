@@ -29,6 +29,7 @@ export default tseslint.config(
       },
     },
     rules: {
+      // GLOBAL DEFAULT: Strict ban on all raw DOM insertion.
       'no-restricted-syntax': [
         'error',
         {
@@ -70,11 +71,9 @@ export default tseslint.config(
     },
   },
   {
-    // innerHTML assignments in core views are safe: patchInnerHTML() routes all
-    // string assignments through the nexus-crm-raw Trusted Types policy (IIFE in
-    // trusted-types.ts). auth.ts and ai-ui.ts re-render full sub-sections of the
-    // DOM the same way views do. render-pipeline.ts and app-lock.ts are Phase 0.5
-    // extractions from main.ts with identical safety guarantees.
+    // CORE VIEWS OVERRIDE: 
+    // innerHTML is permitted ONLY if wrapped in patchInnerHTML(), which routes 
+    // the assignment through the nexus-crm-raw Trusted Types policy.
     files: [
       'packages/core/src/views/**/*.ts',
       'packages/core/src/main.ts',
@@ -86,7 +85,19 @@ export default tseslint.config(
       'packages/core/src/bootstrap.ts',
     ],
     rules: {
-      'no-restricted-syntax': 'off',
+      'no-restricted-syntax': [
+        'error',
+        {
+          // AST Magic: Flags innerHTML assignment if the right-hand side is NOT a call to patchInnerHTML.
+          selector: "AssignmentExpression[left.property.name='innerHTML'][right.callee.name!='patchInnerHTML']",
+          message: 'Raw DOM insertion detected. You must wrap the HTML string in patchInnerHTML().',
+        },
+        {
+          // Maintain the outerHTML ban even in core views
+          selector: "AssignmentExpression[left.property.name='outerHTML']",
+          message: 'Use safe render helpers instead of raw outerHTML.',
+        },
+      ],
     },
   },
   {
