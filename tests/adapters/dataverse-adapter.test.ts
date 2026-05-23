@@ -9,7 +9,7 @@ import { runAdapterContractSuite } from './adapter-contract.js'
 
 const config = {
   environmentUrl: 'https://test.crm.dynamics.com',
-  accessToken: 'test-bearer-token',
+  getAccessToken: () => 'test-bearer-token',
   entityMap: {
     tasks: 'tktaskapp_tasks',
     clients: 'tktaskapp_clients',
@@ -66,7 +66,8 @@ describe('DataverseAdapter constructor', () => {
 
   it('accepts empty environmentUrl without throwing at construction', () => {
     expect(
-      () => new DataverseAdapter({ environmentUrl: '', accessToken: 'tok', entityMap: {} }),
+      () =>
+        new DataverseAdapter({ environmentUrl: '', getAccessToken: () => 'tok', entityMap: {} }),
     ).not.toThrow()
   })
 })
