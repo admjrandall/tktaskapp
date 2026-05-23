@@ -45,19 +45,21 @@ function _closeSidebar(): void {
   })
 }
 
+// Named reference so destroyMobileGestures can remove it.
+function _onScrimClick(e: MouseEvent): void {
+  if ((e.target as HTMLElement | null)?.classList.contains('sidebar-scrim')) {
+    _closeSidebar()
+  }
+}
+
 export function initMobileGestures(): void {
   document.addEventListener('touchstart', _onTouchStart, { passive: true })
   document.addEventListener('touchend', _onTouchEnd, { passive: true })
-
-  // Close sidebar when scrim is tapped
-  document.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement | null)?.classList.contains('sidebar-scrim')) {
-      _closeSidebar()
-    }
-  })
+  document.addEventListener('click', _onScrimClick)
 }
 
 export function destroyMobileGestures(): void {
   document.removeEventListener('touchstart', _onTouchStart)
   document.removeEventListener('touchend', _onTouchEnd)
+  document.removeEventListener('click', _onScrimClick)
 }

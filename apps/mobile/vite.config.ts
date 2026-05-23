@@ -14,6 +14,7 @@ export default defineConfig({
   publicDir: 'public',
   define: {
     __OT_ONLY_BUILD__: 'false',
+    __OFFLINE_FS__: 'false', // File System Access API not used in the PWA build
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '1.0.0'),
   },
   build: {

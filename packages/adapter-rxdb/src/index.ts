@@ -10,8 +10,19 @@ import { SyncAdapter } from '../../core/src/adapter-interface.js'
 export interface RxDBAdapterConfig {
   /** Base URL of the Hono API server. e.g. 'https://app.example.com' */
   serverUrl: string
-  /** Authorization header value. e.g. 'Bearer <jwt>' */
+  /**
+   * Static Authorization header value. Use for dev/test only (tokens expire).
+   * e.g. 'Bearer <jwt>'
+   */
   authHeader?: string
+  /**
+   * Async function that returns the current Authorization header value.
+   * Takes priority over `authHeader`. Use this in production — it is called
+   * on every request so the in-memory access token can be transparently
+   * refreshed without recreating the adapter.
+   * e.g. () => authClient.getAuthHeader()
+   */
+  getAuthHeader?: () => Promise<string>
   /** Max documents per pull request (default 100, max 500). */
   pullLimit?: number
 }
@@ -71,18 +82,24 @@ function _resolveConflict(
 export class RxDBAdapter extends SyncAdapter {
   private readonly _base: string
   private readonly _authHeader: string | undefined
+  private readonly _getAuthHeader: (() => Promise<string>) | undefined
   private readonly _pullLimit: number
 
   constructor(config: RxDBAdapterConfig) {
     super()
     this._base = config.serverUrl.replace(/\/$/, '')
     this._authHeader = config.authHeader
+    this._getAuthHeader = config.getAuthHeader
     this._pullLimit = Math.min(500, Math.max(1, config.pullLimit ?? 100))
   }
 
-  private _headers(): Record<string, string> {
+  private async _headers(): Promise<Record<string, string>> {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (this._authHeader) h['Authorization'] = this._authHeader
+    if (this._getAuthHeader) {
+      h['Authorization'] = await this._getAuthHeader()
+    } else if (this._authHeader) {
+      h['Authorization'] = this._authHeader
+    }
     return h
   }
 
@@ -91,7 +108,7 @@ export class RxDBAdapter extends SyncAdapter {
   ): Promise<{ records: Record<string, unknown[]>; checkpoint: unknown }> {
     const res = await fetch(`${this._base}/api/v1/sync/pull`, {
       method: 'POST',
-      headers: this._headers(),
+      headers: await this._headers(),
       body: JSON.stringify({ checkpoint: checkpoint ?? null, limit: this._pullLimit }),
     })
     if (!res.ok) throw new Error(`Sync pull failed: ${String(res.status)} ${res.statusText}`)
@@ -137,7 +154,7 @@ export class RxDBAdapter extends SyncAdapter {
 
     const res = await fetch(`${this._base}/api/v1/sync/push`, {
       method: 'POST',
-      headers: this._headers(),
+      headers: await this._headers(),
       body: JSON.stringify({ changeRows }),
     })
     if (!res.ok) throw new Error(`Sync push failed: ${String(res.status)} ${res.statusText}`)
@@ -166,7 +183,7 @@ export class RxDBAdapter extends SyncAdapter {
       )
       await fetch(`${this._base}/api/v1/sync/push`, {
         method: 'POST',
-        headers: this._headers(),
+        headers: await this._headers(),
         body: JSON.stringify({ changeRows: retryRows }),
       })
     }
@@ -175,13 +192,14 @@ export class RxDBAdapter extends SyncAdapter {
   }
 
   override stream(onRemoteChange: (changes: Record<string, unknown[]>) => void): () => void {
-    // SSE stream from GET /api/v1/sync/stream
-    // EventSource does not support custom headers in all browsers.
-    // For authenticated endpoints, wire auth via cookie or URL token.
-    const url = `${this._base}/api/v1/sync/stream`
-    let es: EventSource | null = new EventSource(url)
+    // EventSource does not support custom Authorization headers.
+    // Resolved access token is appended as ?token=<jwt> so the server can
+    // authenticate the SSE connection. withCredentials sends the session cookie
+    // for same-origin deployments as a fallback.
+    // The server's sync/stream route must accept ?token as an alternative to
+    // the Authorization header.
 
-    const onMessage = (event: MessageEvent) => {
+    const onMessage = (event: MessageEvent): void => {
       try {
         const payload = JSON.parse(event.data as string) as {
           documents: DocWithRev[]
@@ -189,9 +207,9 @@ export class RxDBAdapter extends SyncAdapter {
         }
         const records: Record<string, unknown[]> = {}
         for (const doc of payload.documents) {
-          const sk2 = doc.store
-          if (!records[sk2]) records[sk2] = []
-          records[sk2].push({
+          const storeKey = doc.store
+          const bucket = records[storeKey] ?? (records[storeKey] = [])
+          bucket.push({
             ...doc.data,
             id: doc.id,
             _rev: doc.rev,
@@ -205,7 +223,32 @@ export class RxDBAdapter extends SyncAdapter {
       }
     }
 
-    es.addEventListener('sync', onMessage as EventListener)
+    const _openEventSource = (authToken?: string): EventSource => {
+      const url = authToken
+        ? `${this._base}/api/v1/sync/stream?token=${encodeURIComponent(authToken)}`
+        : `${this._base}/api/v1/sync/stream`
+      const source = new EventSource(url, { withCredentials: true })
+      source.addEventListener('sync', onMessage as EventListener)
+      return source
+    }
+
+    let es: EventSource | null = null
+
+    if (this._getAuthHeader) {
+      this._getAuthHeader()
+        .then((header) => {
+          const token = header.startsWith('Bearer ') ? header.slice(7) : header
+          es = _openEventSource(token)
+        })
+        .catch(() => {
+          es = _openEventSource()
+        })
+    } else {
+      const staticToken = this._authHeader?.startsWith('Bearer ')
+        ? this._authHeader.slice(7)
+        : this._authHeader
+      es = _openEventSource(staticToken)
+    }
 
     return () => {
       es?.close()

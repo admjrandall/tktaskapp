@@ -12,7 +12,7 @@ import { renderTimeTracker, bindTimeTracker } from './views/time-tracker.js'
 import { renderCommunications, bindCommunications } from './views/communications.js'
 import { renderReports, bindReports } from './views/reports.js'
 import { renderTrash, bindTrash } from './views/trash.js'
-import { renderSettings, bindSettings } from './views/settings.js'
+import { renderSettings, bindSettings, resetSecurityState } from './views/settings.js'
 import { renderLibrary, bindLibrary, renderFileViewer, bindFileViewer } from './views/library.js'
 import { renderRecordModal, bindRecordModal } from './views/record-modal.js'
 import { renderDocModal, bindDocModal } from './views/documents.js'
@@ -42,6 +42,8 @@ import { patchInnerHTML } from './render-utils.js'
 import type { AppState } from './state.js'
 
 export const appEl = document.getElementById('app')!
+
+let _prevView = ''
 
 // Phase 1 stub — rail navigation (not yet implemented)
 export function appRenderRail(): void {}
@@ -142,6 +144,9 @@ export function appRenderWorkspace(view: string): void {
 
 // ── fullRender ────────────────────────────────────────────────────────────────
 export function fullRender(state: AppState): void {
+  if (_prevView === 'settings' && state.currentView !== 'settings') resetSecurityState()
+  _prevView = state.currentView
+
   const {
     currentView,
     aiPanelOpen,

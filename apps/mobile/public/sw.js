@@ -1,5 +1,9 @@
 // Service worker — TechKey CRM Mobile PWA
 // Cache-first for the app shell; network-first with stale-while-revalidate for API.
+//
+// Security: the API cache is cleared on logout and on user change to prevent
+// stale authenticated responses being served to a different user on the same device.
+// The app sends a 'CLEAR_API_CACHE' message via postMessage on logout.
 
 const SHELL_CACHE = 'tkcrm-shell-v1'
 const API_CACHE = 'tkcrm-api-v1'
@@ -29,6 +33,15 @@ self.addEventListener('activate', (event) => {
       )
       .then(() => self.clients.claim()),
   )
+})
+
+// ── Message handler ────────────────────────────────────────────────────────────
+// The app sends 'CLEAR_API_CACHE' on logout so authenticated API responses
+// from the previous session are not served to the next user on this device.
+self.addEventListener('message', (event) => {
+  if (event.data === 'CLEAR_API_CACHE') {
+    event.waitUntil(caches.delete(API_CACHE))
+  }
 })
 
 self.addEventListener('fetch', (event) => {

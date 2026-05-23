@@ -9,8 +9,13 @@ import { SyncAdapter } from '../../core/src/adapter-interface.js'
 export interface DataverseAdapterConfig {
   /** Dataverse environment URL. e.g. 'https://org.crm.dynamics.com' */
   environmentUrl: string
-  /** Bearer token for the Dataverse Web API (from Entra ID MSAL flow). */
-  accessToken: string
+  /**
+   * Function that returns the current MSAL bearer token.
+   * Called on every request so the auto-refreshed `window.__msalToken`
+   * value is always used — never a stale snapshot from construction time.
+   * Returns null when no token is available (requests will fail with 401).
+   */
+  getAccessToken: () => string | null
   /** Maps internal store name → Dataverse entity set name.
    *  e.g. { tasks: 'tktaskapp_tasks', clients: 'tktaskapp_clients' }
    */
@@ -32,8 +37,10 @@ export class DataverseAdapter extends SyncAdapter {
   }
 
   private _headers(): Record<string, string> {
+    const token = this._config.getAccessToken()
+    if (!token) throw new Error('Dataverse: no access token available')
     return {
-      Authorization: `Bearer ${this._config.accessToken}`,
+      Authorization: `Bearer ${token}`,
       Accept: 'application/json',
       'OData-MaxVersion': '4.0',
       'OData-Version': '4.0',

@@ -260,6 +260,10 @@ export function resetSecurityState(): void {
   _totpSetupSecret = ''
   _totpSetupStep = 'idle'
   _secAuditPage = 0
+  if (_totpSetupTimerInterval) {
+    clearInterval(_totpSetupTimerInterval)
+    _totpSetupTimerInterval = null
+  }
 }
 
 export function renderSettings(state: AppState): string {
@@ -978,14 +982,12 @@ export function bindSettings(_s: AppState): void {
     await dbCreate('tags', { name, color: _tc })
     reloadData()
     showToast('Tag created', 'success')
-    _appRenderWorkspace('settings')
   })
   document.querySelectorAll<HTMLElement>('[data-del-tag]').forEach((btn) => {
     btn.addEventListener('click', () => {
       showConfirm('Delete tag?', async () => {
         await softDelete('tags', (btn.dataset as DOMStringMap & { delTag: string }).delTag)
         reloadData()
-        _appRenderWorkspace('settings')
       })
     })
   })
@@ -1049,7 +1051,6 @@ export function bindSettings(_s: AppState): void {
     reloadData()
     _editingTagId = null
     showToast('Tag updated', 'success')
-    _appRenderWorkspace('settings')
   })
   document.querySelectorAll<HTMLElement>('.tag-color-btn-edit').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1108,7 +1109,6 @@ export function bindSettings(_s: AppState): void {
         for (const i of dbGetAll('trash') as AnyRecord[]) await permanentDelete(String(i.id))
         reloadData()
         showToast('Recycle Bin emptied', 'success')
-        _appRenderWorkspace('settings')
       },
     )
   })
@@ -1117,7 +1117,6 @@ export function bindSettings(_s: AppState): void {
       await restoreFromTrash((btn.dataset as DOMStringMap & { rbRestore: string }).rbRestore)
       reloadData()
       showToast('Restored', 'success')
-      _appRenderWorkspace('settings')
     })
   })
   document.querySelectorAll<HTMLElement>('[data-rb-perma]').forEach((btn) => {
@@ -1126,7 +1125,6 @@ export function bindSettings(_s: AppState): void {
         await permanentDelete((btn.dataset as DOMStringMap & { rbPerma: string }).rbPerma)
         reloadData()
         showToast('Deleted', 'success')
-        _appRenderWorkspace('settings')
       })
     })
   })

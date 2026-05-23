@@ -231,12 +231,16 @@ export function bindWorkspaceView(store: string): void {
     })
     setTimeout(() => {
       document.addEventListener('pointerdown', function cf(e) {
+        document.removeEventListener('pointerdown', cf)
+        if (!document.getElementById('ws-filter-btn')) {
+          s.filterOpen = false
+          return
+        }
         if (
           !(e.target as HTMLElement).closest('#filter-panel') &&
           !(e.target as HTMLElement).closest('#ws-filter-btn')
         ) {
           s.filterOpen = false
-          document.removeEventListener('pointerdown', cf)
           _appRenderWorkspace(store)
         }
       })

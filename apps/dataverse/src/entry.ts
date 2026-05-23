@@ -58,6 +58,23 @@ const entityMap: Record<string, string> = {
   extensionObjectInstances: 'tktaskapp_extensionobjinstances',
 }
 
+// ── Guard: fail fast if environment URL is missing ────────────────────────────
+// An empty environmentUrl would silently send all OData requests to the page
+// origin instead of the Dataverse environment. Surface this early.
+if (!environmentUrl) {
+  const msg =
+    'Dataverse: __dataverseUrl is not set. ' +
+    'Power Platform must inject this value before the script runs, ' +
+    'or set VITE_DATAVERSE_ENV_URL for local development.'
+  // Display a user-visible error and halt — do not call init().
+  const p = document.createElement('p')
+  p.style.cssText =
+    'display:grid;place-items:center;height:100vh;font-family:system-ui;color:#dc2626'
+  p.textContent = msg
+  document.body.appendChild(p)
+  throw new Error(msg)
+}
+
 // ── Apply Dataverse deployment policy (C.7: standard lockdown, no Ollama) ────
 setDeploymentPolicy(DATAVERSE_DEPLOYMENT_POLICY)
 
@@ -65,6 +82,6 @@ setDeploymentPolicy(DATAVERSE_DEPLOYMENT_POLICY)
 setPowerPlatformHooks(getAccessToken, environmentUrl)
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-const accessToken = getAccessToken() ?? ''
-setAdapter(new DataverseAdapter({ environmentUrl, accessToken, entityMap }))
+// Pass the live getter so long-running sessions use the platform-refreshed token.
+setAdapter(new DataverseAdapter({ environmentUrl, getAccessToken, entityMap }))
 void init()

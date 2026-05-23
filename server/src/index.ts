@@ -16,6 +16,7 @@ import { Hono } from 'hono'
 import type { HonoEnv } from './hono-types.js'
 import { corsHeaders, corsPreflight } from './middleware/cors.js'
 import { authMiddleware } from './auth/middleware.js'
+import { authRouter } from './auth/routes.js'
 import { lockdownMiddleware } from './middleware/lockdown.js'
 import { otelMiddleware } from './observability/middleware.js'
 import { handleHealthz, handleReadyz } from './api/routes/health.js'
@@ -100,6 +101,10 @@ app.get('/readyz', async (c) => {
   })
   return c.json(body, status as never)
 })
+
+// ── BFF auth routes (public — no authMiddleware) ──────────────────────────────
+
+app.route('/auth', authRouter)
 
 // ── Auth middleware (all /api/v1 routes) ─────────────────────────────────────
 
