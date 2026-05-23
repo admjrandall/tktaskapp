@@ -15,7 +15,15 @@ import type { Notification } from './schemas/notification.schema.js'
 import type { StandaloneNote } from './schemas/standalone-note.schema.js'
 
 // ── Persona types ──────────────────────────────────────────────────────────
-export type PersonaId = 'closer' | 'maintainer' | 'investigator' | 'builder' | 'inspector'
+export type PersonaId =
+  | 'closer'
+  | 'maintainer'
+  | 'investigator'
+  | 'builder'
+  | 'inspector'
+  // Phase 5 — OT/ICS vertical pack
+  | 'operator'
+  | 'field-engineer'
 
 // ── Lockdown levels (C.7) ──────────────────────────────────────────────────
 export type LockdownLevel = 'off' | 'standard' | 'strong' | 'strict'

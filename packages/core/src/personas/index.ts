@@ -16,6 +16,29 @@ export interface PersonaPreset {
 }
 
 export const PERSONA_PRESETS: Record<PersonaId, PersonaPreset> = {
+  // Phase 5 — OT/ICS vertical: terminology uses field-ops language
+  operator: {
+    id: 'operator',
+    label: 'Operator',
+    description: 'Monitor assets, work orders, and site compliance in real time.',
+    defaultView: 'dashboard',
+    pinnedViews: ['dashboard', 'tasks', 'clients', 'calendar'],
+    sidebarOrder: ['dashboard', 'tasks', 'clients', 'people', 'communications', 'calendar'],
+    dashboardBlocks: ['overview', 'attention', 'activity'],
+    aiPromptHint:
+      'Focus on asset health, active work orders, overdue maintenance, and site status.',
+  },
+  'field-engineer': {
+    id: 'field-engineer',
+    label: 'Field Engineer',
+    description: 'Field work orders, site visits, compliance audits, and time tracking.',
+    defaultView: 'tasks',
+    pinnedViews: ['tasks', 'calendar', 'time', 'people'],
+    sidebarOrder: ['tasks', 'calendar', 'time', 'clients', 'communications', 'standaloneNotes'],
+    dashboardBlocks: ['overview', 'attention', 'timer'],
+    aiPromptHint:
+      "Focus on my open work orders, today's schedule, parts needed, and compliance checklist.",
+  },
   closer: {
     id: 'closer',
     label: 'Closer',
