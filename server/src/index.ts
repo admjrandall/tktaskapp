@@ -16,6 +16,7 @@ import { Hono } from 'hono'
 import type { HonoEnv } from './hono-types.js'
 import { corsHeaders, corsPreflight } from './middleware/cors.js'
 import { authMiddleware } from './auth/middleware.js'
+import { lockdownMiddleware } from './middleware/lockdown.js'
 import { otelMiddleware } from './observability/middleware.js'
 import { handleHealthz, handleReadyz } from './api/routes/health.js'
 import { clientsRouter } from './api/routes/clients.js'
@@ -102,6 +103,7 @@ app.get('/readyz', async (c) => {
 // ── Auth middleware (all /api/v1 routes) ─────────────────────────────────────
 
 app.use('/api/v1/*', authMiddleware)
+app.use('/api/v1/*', lockdownMiddleware())
 
 // ── CRM routes ────────────────────────────────────────────────────────────────
 
