@@ -1,0 +1,130 @@
+/* Mobile PWA layout extensions for TechKey CRM */
+
+/* ── Safe area insets (notch / home indicator) ───────────────────────────── */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* ── Keyboard avoidance ──────────────────────────────────────────────────── */
+/* dvh shrinks when the virtual keyboard appears; --vvh is set via JS fallback */
+.app-root,
+#app {
+  height: 100dvh;
+  height: var(--vvh, 100dvh);
+  overflow: hidden;
+}
+
+/* ── Touch targets: minimum 44×44px per C.4 comfortable density ──────────── */
+button,
+[role="button"],
+[role="tab"],
+[role="menuitem"],
+[role="option"],
+a,
+label,
+select,
+input[type="checkbox"],
+input[type="radio"],
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Inputs and textareas need reachable hit area but not min-width */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+textarea {
+  min-height: 44px;
+}
+
+/* ── Single-column layout below 640px ───────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Sidebar slides in as an overlay */
+  .sidebar,
+  [data-sidebar] {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(280px, 80vw);
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    padding-top: var(--safe-area-top);
+    padding-bottom: var(--safe-area-bottom);
+    padding-left: var(--safe-area-left);
+  }
+
+  .sidebar.is-open,
+  [data-sidebar].is-open {
+    transform: translateX(0);
+  }
+
+  /* Scrim behind open sidebar */
+  .sidebar-scrim {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 49;
+  }
+
+  .sidebar.is-open ~ .sidebar-scrim,
+  [data-sidebar].is-open ~ .sidebar-scrim {
+    display: block;
+  }
+
+  /* Main content fills full width */
+  .main-layout,
+  [data-main-layout] {
+    grid-template-columns: 1fr !important;
+    padding-bottom: var(--safe-area-bottom);
+  }
+
+  /* Workspace canvas stacks vertically */
+  .workspace-canvas,
+  [data-workspace] {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Toolbar wraps on small screens */
+  .toolbar,
+  [data-toolbar] {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: var(--safe-area-top);
+  }
+
+  /* Tables become scrollable rather than overflowing */
+  .table-wrapper,
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Modal full-screen on mobile */
+  .modal,
+  [role="dialog"] {
+    inset: 0 !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+    padding-top: calc(var(--safe-area-top) + 16px);
+    padding-bottom: calc(var(--safe-area-bottom) + 16px);
+  }
+}
+
+/* ── Prevent tap highlight flash on interactive elements ─────────────────── */
+a,
+button,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
