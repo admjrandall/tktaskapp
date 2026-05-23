@@ -34,6 +34,7 @@ import { standaloneNotesRouter } from './api/routes/standalone-notes.js'
 import { conversationsRouter } from './api/routes/conversations.js'
 import { auditRouter } from './api/routes/audit.js'
 import { adminRouter } from './api/routes/admin.js'
+import { syncRouter } from './api/routes/sync.js'
 import { closeDb } from './db/index.js'
 import { startDestructionScheduler, stopDestructionScheduler } from './kms/destruction-scheduler.js'
 import { otel } from './observability/otel.js'
@@ -122,6 +123,7 @@ app.route('/api/v1/standalone-notes', standaloneNotesRouter)
 app.route('/api/v1/conversations', conversationsRouter)
 app.route('/api/v1/audit', auditRouter)
 app.route('/api/v1/admin', adminRouter)
+app.route('/api/v1/sync', syncRouter)
 
 // ── Global error handler ──────────────────────────────────────────────────────
 
