@@ -6,6 +6,7 @@ import { setState, getState, navigate } from '../state.js'
 import type { AppState } from '../state.js'
 import { BRAND } from '../branding.js'
 import { getPersonaSidebarOrder, PERSONA_PRESETS } from '../personas/index.js'
+import { LS_USER_PROFILE_KEY } from '../constants.js'
 import { escH } from '../utils.js'
 
 type IconName = keyof typeof Icons
@@ -102,7 +103,7 @@ export function renderSidebar(state: AppState): string {
 
   const profile = (() => {
     try {
-      return JSON.parse(localStorage.getItem('taskapp_user_profile_v1') || '{}') as {
+      return JSON.parse(localStorage.getItem(LS_USER_PROFILE_KEY) || '{}') as {
         displayName?: string
         initials?: string
       }

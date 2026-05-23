@@ -2,6 +2,7 @@
 // All setXHooks() calls that wire modules together. Called once from init() before
 // the first render, after all modules are loaded.
 import { appRenderWorkspace, fullRender } from './render-pipeline.js'
+import { LS_LOCK_TIMEOUT_KEY } from './constants.js'
 import { lockApp, setLockTimeout, _lastActivityAt } from './app-lock.js'
 import { setTheme, showConfirm, setState } from './state.js'
 import { setDbAuditHook, _getDbKey, softDelete } from './storage/db.js'
@@ -144,7 +145,7 @@ export function wireHooks(): void {
     },
     setLockTimeout,
     getLockTimeout: () => {
-      const raw = localStorage.getItem('taskapp_lock_timeout')
+      const raw = localStorage.getItem(LS_LOCK_TIMEOUT_KEY)
       return raw !== null ? parseInt(raw, 10) : 15
     },
     loadAuditLog,

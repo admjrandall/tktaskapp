@@ -62,6 +62,20 @@ export const FS_HANDLE_DB = 'nexus_fs_v1'
 export const FS_HANDLE_KEY = 'fileHandle'
 export const FS_FILENAME = 'nexus-data.vault'
 
+// ── localStorage keys (non-sensitive preferences) ─────────────────────
+// Declared here so all keys are auditable in one place.
+export const LS_THEME_KEY = 'taskapp_theme'
+export const LS_DENSITY_KEY = 'taskapp_density'
+export const LS_DASH_KEY = 'taskapp_dash_v1'
+export const LS_LOCK_TIMEOUT_KEY = 'taskapp_lock_timeout'
+export const LS_NOTIF_PREFS_KEY = 'taskapp_notif_prefs_v1'
+export const LS_USER_PROFILE_KEY = 'taskapp_user_profile_v1'
+// Prefixed tk_* keys (UI state, cleared on app reset)
+export const LS_PINNED_VIEWS_KEY = 'tk_pinned_views'
+export const LS_ADMIN_TAB_KEY = 'tk_admin_tab'
+export const LS_CANVAS_KEY_PREFIX = 'tk_canvas_'
+export const LS_COMPLIANCE_KEY_PREFIX = 'tk_compliance_'
+
 // ── Domain constants ───────────────────────────────────────────────────
 export const PRIORITIES = ['Low', 'Medium', 'High', 'Critical']
 export const PROJECT_STAGES = ['Lead', 'Active', 'Review', 'On Hold', 'Done', 'Cancelled']

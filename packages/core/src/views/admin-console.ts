@@ -4,6 +4,7 @@
 // Follows renderX(state) → string / bindX(state?) → void contract.
 
 import { escH, formatRelative } from '../utils.js'
+import { LS_ADMIN_TAB_KEY, LS_COMPLIANCE_KEY_PREFIX } from '../constants.js'
 import { Icons } from '../ui/icons.js'
 import { getState, setState, showToast } from '../state.js'
 import type { AppState, LockdownLevel } from '../state.js'
@@ -23,14 +24,14 @@ type AdminTab =
   | 'integrations'
 function _activeTab(): AdminTab {
   try {
-    return (localStorage.getItem('tk_admin_tab') as AdminTab | null) ?? 'overview'
+    return (localStorage.getItem(LS_ADMIN_TAB_KEY) as AdminTab | null) ?? 'overview'
   } catch {
     return 'overview'
   }
 }
 function _setActiveTab(tab: AdminTab): void {
   try {
-    localStorage.setItem('tk_admin_tab', tab)
+    localStorage.setItem(LS_ADMIN_TAB_KEY, tab)
   } catch {
     /* */
   }
@@ -254,7 +255,7 @@ function _renderAuditLog(entries: AuditEntry[]): string {
 // ── Compliance tab ─────────────────────────────────────────────────────────────
 function _complianceEnabled(id: string): boolean {
   try {
-    return localStorage.getItem(`tk_compliance_${id}`) === '1'
+    return localStorage.getItem(`${LS_COMPLIANCE_KEY_PREFIX}${id}`) === '1'
   } catch {
     return false
   }
@@ -473,7 +474,7 @@ export function bindAdminConsole(_state?: AppState): void {
   document.querySelectorAll<HTMLButtonElement>('[data-compliance-id]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.dataset['complianceId'] ?? ''
-      const key = `tk_compliance_${id}`
+      const key = `${LS_COMPLIANCE_KEY_PREFIX}${id}`
       const wasOn = _complianceEnabled(id)
       try {
         if (wasOn) {

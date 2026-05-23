@@ -7,9 +7,10 @@ import { auditLog } from './security/audit.js'
 import { renderAuth, bindAuth } from './security/auth.js'
 import { disconnectAI as resetAIConnection } from './ai/ai-runtime.js'
 import { aiSecretsWipe } from './ai/ai-settings.js'
+import { LS_LOCK_TIMEOUT_KEY } from './constants.js'
 
 let _lockTimeoutMs = (() => {
-  const raw = localStorage.getItem('taskapp_lock_timeout')
+  const raw = localStorage.getItem(LS_LOCK_TIMEOUT_KEY)
   const mins = raw !== null ? parseInt(raw, 10) : 15
   return mins > 0 ? mins * 60 * 1000 : 0
 })()
@@ -24,7 +25,7 @@ export function setOnAuthSuccess(fn: (key: CryptoKey) => Promise<void>): void {
 }
 
 export function setLockTimeout(minutes: number): void {
-  localStorage.setItem('taskapp_lock_timeout', String(minutes))
+  localStorage.setItem(LS_LOCK_TIMEOUT_KEY, String(minutes))
   _lockTimeoutMs = minutes > 0 ? minutes * 60 * 1000 : 0
   _resetIdleTimer()
 }

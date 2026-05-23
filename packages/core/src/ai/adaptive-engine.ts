@@ -5,6 +5,7 @@
 
 import { getState, setState } from '../state.js'
 import { auditLog } from '../security/audit.js'
+import { LS_PINNED_VIEWS_KEY } from '../constants.js'
 
 type AnyRecord = Record<string, unknown>
 
@@ -115,7 +116,7 @@ export function acceptSuggestion(id: string): void {
     const pinned = _getPinnedViews()
     if (!pinned.includes(String(payload['view']))) {
       try {
-        localStorage.setItem('tk_pinned_views', JSON.stringify([...pinned, payload['view']]))
+        localStorage.setItem(LS_PINNED_VIEWS_KEY, JSON.stringify([...pinned, payload['view']]))
       } catch {
         /* storage may be unavailable */
       }
@@ -142,7 +143,8 @@ export function getPendingSuggestions(): AdaptiveSuggestion[] {
 // ── Pinned views (non-sensitive localStorage preference) ───────────────────────
 function _getPinnedViews(): string[] {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('tk_pinned_views') : null
+    const raw =
+      typeof localStorage !== 'undefined' ? localStorage.getItem(LS_PINNED_VIEWS_KEY) : null
     return raw ? (JSON.parse(raw) as string[]) : []
   } catch {
     return []

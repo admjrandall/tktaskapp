@@ -3,6 +3,7 @@
 // always go through setState. Listeners receive the new state.
 
 import { dbGetAll, getRunningTimer } from './storage/db.js'
+import { LS_DENSITY_KEY } from './constants.js'
 import type { Client } from './schemas/client.schema.js'
 import type { Project } from './schemas/project.schema.js'
 import type { Task } from './schemas/task.schema.js'
@@ -94,7 +95,7 @@ let _state: AppState = {
   currentView: 'dashboard',
   sidebarCollapsed: false,
   theme: localStorage.getItem('taskapp_theme') || 'light',
-  density: (localStorage.getItem('taskapp_density') || 'comfortable') as 'comfortable' | 'compact',
+  density: (localStorage.getItem(LS_DENSITY_KEY) || 'comfortable') as 'comfortable' | 'compact',
   clients: [],
   departments: [],
   projects: [],
@@ -185,7 +186,7 @@ export function setTheme(t: string): void {
 
 export function setDensity(d: 'comfortable' | 'compact'): void {
   document.documentElement.setAttribute('data-density', d)
-  localStorage.setItem('taskapp_density', d)
+  localStorage.setItem(LS_DENSITY_KEY, d)
   setState({ density: d })
 }
 

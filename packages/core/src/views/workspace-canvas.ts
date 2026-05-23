@@ -3,6 +3,7 @@
 // Any view can render canvas blocks. Drag, resize, and persist to a named layout key.
 
 import { escH } from '../utils.js'
+import { LS_CANVAS_KEY_PREFIX } from '../constants.js'
 
 export interface CanvasBlock {
   id: string
@@ -38,7 +39,7 @@ const _canvasZMap: Record<string, number> = {}
 function getLayout(key: string, defaults: CanvasOptions['defaults']): Record<string, CanvasBlock> {
   if (!_canvasLayouts[key]) {
     try {
-      const raw = localStorage.getItem(`tk_canvas_${key}`)
+      const raw = localStorage.getItem(`${LS_CANVAS_KEY_PREFIX}${key}`)
       _canvasLayouts[key] = raw
         ? (JSON.parse(raw) as Record<string, CanvasBlock>)
         : buildDefaults(key, defaults)
@@ -62,7 +63,7 @@ function buildDefaults(
 }
 
 function saveLayout(key: string): void {
-  localStorage.setItem(`tk_canvas_${key}`, JSON.stringify(_canvasLayouts[key]))
+  localStorage.setItem(`${LS_CANVAS_KEY_PREFIX}${key}`, JSON.stringify(_canvasLayouts[key]))
 }
 
 export function renderCanvasBlock(block: CanvasBlock, editable: boolean): string {

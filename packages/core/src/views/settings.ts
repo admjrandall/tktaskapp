@@ -11,6 +11,7 @@ import {
   avatarColor,
 } from '../utils.js'
 import { Icons } from '../ui/icons.js'
+import { LS_DENSITY_KEY, LS_NOTIF_PREFS_KEY, LS_USER_PROFILE_KEY } from '../constants.js'
 import {
   dbCreate,
   dbUpdate,
@@ -232,10 +233,10 @@ let _totpSetupStep: 'idle' | 'setup' | 'verify' = 'idle'
 let _totpSetupTimerInterval: ReturnType<typeof setInterval> | null = null
 
 function _getDensity(): string {
-  return localStorage.getItem('taskapp_density') || 'comfortable'
+  return localStorage.getItem(LS_DENSITY_KEY) || 'comfortable'
 }
 function _setDensity(d: string): void {
-  localStorage.setItem('taskapp_density', d)
+  localStorage.setItem(LS_DENSITY_KEY, d)
   if (d === 'comfortable') {
     document.documentElement.removeAttribute('data-density')
   } else {
@@ -286,7 +287,7 @@ export function renderSettings(state: AppState): string {
   if (_settingsSection === 'profile') {
     const profileRaw = (() => {
       try {
-        return JSON.parse(localStorage.getItem('taskapp_user_profile_v1') || '{}') as {
+        return JSON.parse(localStorage.getItem(LS_USER_PROFILE_KEY) || '{}') as {
           displayName?: string
           initials?: string
         }
@@ -312,7 +313,7 @@ export function renderSettings(state: AppState): string {
   } else if (_settingsSection === 'notifications') {
     const notifRaw = (() => {
       try {
-        return JSON.parse(localStorage.getItem('taskapp_notif_prefs_v1') || '{}') as {
+        return JSON.parse(localStorage.getItem(LS_NOTIF_PREFS_KEY) || '{}') as {
           dueDateReminders?: boolean
           overdueAlerts?: boolean
           mentions?: boolean
@@ -999,7 +1000,7 @@ export function bindSettings(state: AppState): void {
       .toUpperCase()
       .slice(0, 2)
     localStorage.setItem(
-      'taskapp_user_profile_v1',
+      LS_USER_PROFILE_KEY,
       JSON.stringify({ displayName: name, initials: inits }),
     )
     showToast('Profile saved', 'success')
@@ -1015,7 +1016,7 @@ export function bindSettings(state: AppState): void {
     const mentions =
       (document.getElementById('notif-mentions') as HTMLInputElement | null)?.checked ?? true
     localStorage.setItem(
-      'taskapp_notif_prefs_v1',
+      LS_NOTIF_PREFS_KEY,
       JSON.stringify({ dueDateReminders, overdueAlerts, mentions }),
     )
     showToast('Notification preferences saved', 'success')
