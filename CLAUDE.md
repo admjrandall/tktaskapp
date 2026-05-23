@@ -36,6 +36,13 @@ d:\techkeycrmapp\
 │   │   ├── state.ts
 │   │   ├── utils.ts
 │   │   ├── main.ts               ← entry point, exported init()
+│   │   ├── bootstrap.ts          ← app bootstrap / startup sequence
+│   │   ├── branding.ts           ← app name, logo, theme tokens
+│   │   ├── hooks-wiring.ts       ← wires hook-injection calls for all view modules
+│   │   ├── render-pipeline.ts    ← fullRender, appRenderWorkspace, event delegation
+│   │   ├── render-utils.ts       ← patchInnerHTML and low-level DOM helpers
+│   │   ├── voice-input.ts        ← Web Speech API voice input integration
+│   │   ├── app-lock.ts           ← idle-timeout / screen-lock logic
 │   │   ├── styles/main.css
 │   │   ├── security/             ← auth and crypto modules
 │   │   │   ├── trusted-types.ts  ← MUST be first import in main.ts
@@ -54,7 +61,15 @@ d:\techkeycrmapp\
 │   │   │   └── fs.ts
 │   │   ├── ui/                   ← shared UI primitives
 │   │   │   ├── components.ts
-│   │   │   └── icons.ts
+│   │   │   ├── icons.ts
+│   │   │   ├── design-tokens.ts  ← CSS custom-property token definitions
+│   │   │   └── primitives/       ← low-level UI atom components
+│   │   │       ├── index.ts
+│   │   │       ├── avatar.ts
+│   │   │       ├── badge.ts
+│   │   │       ├── button.ts
+│   │   │       ├── input.ts
+│   │   │       └── modal.ts
 │   │   ├── schemas/              ← Valibot / runtime schemas
 │   │   │   ├── index.ts
 │   │   │   ├── client.schema.ts
@@ -80,18 +95,36 @@ d:\techkeycrmapp\
 │   │   │   ├── extension-object.schema.ts
 │   │   │   ├── workspace-layout.schema.ts
 │   │   │   └── persona.schema.ts
-│   │   ├── views/                ← one file per view; onboarding.ts, workspace-canvas.ts, admin-console.ts added in Phase 1
-│   │   ├── personas/             ← personas/index.ts: PERSONA_PRESETS for all 5 persona IDs
+│   │   ├── views/                ← one file per view
+│   │   │   ├── admin-console.ts, calendar.ts, communications.ts, dashboard.ts
+│   │   │   ├── documents.ts, files.ts, library.ts, list-grid-kanban-spatial.ts
+│   │   │   ├── onboarding.ts, project-canvas.ts, record-modal.ts, reports.ts
+│   │   │   ├── settings.ts, settings-user.ts, sidebar.ts, time-tracker.ts
+│   │   │   ├── topbar.ts, trash.ts, workspace-canvas.ts, workspace.ts
+│   │   ├── personas/             ← PERSONA_PRESETS for all 5 persona IDs
+│   │   │   ├── index.ts
+│   │   │   └── ot-ics-extension-objects.ts  ← OT/ICS-specific extension object schemas
 │   │   ├── application/          ← placeholder — application layer (Phase 1)
 │   │   ├── domain/               ← placeholder — domain layer (Phase 1)
 │   │   ├── migrations/           ← placeholder — migrations layer (Phase 1)
 │   │   ├── platform/             ← placeholder — platform layer (Phase 1)
-│   │   └── ai/                   ← ai-prefs.ts, ai-runtime.ts, ai-tools.ts, ai-settings.ts, ai-ui.ts, providers/
-│   ├── adapter-null/src/index.ts       ← NullAdapter (offline-only, no-op)
-│   ├── adapter-rxdb/src/index.ts       ← RxDBAdapter stub
-│   ├── adapter-dataverse/src/index.ts  ← DataverseAdapter stub
-│   ├── adapter-kms/src/index.ts        ← KMS adapter interface (Azure KV / AWS KMS / HashiCorp; GDPR crypto-shredding contract)
-│   └── adapter-mobile-native/src/      ← Mobile native adapters (Capacitor)
+│   │   └── ai/                   ← AI subsystem
+│   │       ├── ai-prefs.ts, ai-runtime.ts, ai-tools.ts, ai-settings.ts, ai-ui.ts
+│   │       ├── attributes-engine.ts   ← AI-driven attribute inference engine
+│   │       ├── adaptive-engine.ts     ← adaptive suggestion / learning engine
+│   │       └── providers/
+│   │           ├── browser-nano.ts            ← Chrome Gemini Nano / Edge Phi-4-mini
+│   │           ├── browser-transformers.ts    ← WebGPU via @huggingface/transformers
+│   │           ├── browser-ai-disabled.ts     ← stub used when browser AI is off
+│   │           ├── browser-transformers-disabled.ts ← stub for non-WebGPU builds
+│   │           ├── cloud-disabled.ts          ← stub when cloud AI is disallowed
+│   │           ├── ollama.ts, anthropic.ts, openai.ts, google.ts, powerplatform.ts
+│   ├── adapter-null/src/index.ts          ← NullAdapter (offline-only, no-op)
+│   ├── adapter-rxdb/src/index.ts          ← RxDBAdapter stub
+│   ├── adapter-rxdb-couchdb/src/index.ts  ← RxDB adapter using CouchDB replication protocol
+│   ├── adapter-dataverse/src/index.ts     ← DataverseAdapter stub
+│   ├── adapter-kms/src/index.ts           ← KMS adapter interface (Azure KV / AWS KMS / HashiCorp; GDPR crypto-shredding contract)
+│   └── adapter-mobile-native/src/         ← Mobile native adapters (Capacitor)
 │       ├── index.ts
 │       ├── mobile-vault-adapter.ts
 │       ├── mobile-backup-adapter.ts
@@ -116,17 +149,21 @@ d:\techkeycrmapp\
 ├── server/                       ← Hono v4 REST API backend (Node.js, TypeScript)
 │   ├── src/
 │   │   ├── index.ts              ← entry point; OTel init, Hono app, graceful shutdown
+│   │   ├── hono-types.ts         ← shared Hono context variable type definitions
 │   │   ├── db/
 │   │   │   ├── index.ts          ← Drizzle ORM pg pool + closeDb()
 │   │   │   ├── migrate.ts        ← run Drizzle migrations
 │   │   │   ├── seed.ts           ← dev seed data (idempotent)
-│   │   │   └── schema/           ← Drizzle table definitions (14 CRM entities + audit + KMS + users)
+│   │   │   └── schema/           ← Drizzle table definitions (CRM entities + audit + KMS + users + org/sync/integrations)
 │   │   ├── auth/
 │   │   │   ├── oidc.ts           ← OidcService interface + validateEntraIdToken
 │   │   │   ├── oidc-service.ts   ← OidcServiceImpl (PKCE, token exchange, JWKS validation via jose)
 │   │   │   └── middleware.ts     ← authMiddleware — sets userId/tenantId/role on context
+│   │   ├── authorization/
+│   │   │   └── policy-engine.ts  ← deny-by-default TypeScript ABAC engine (Phase 9+: replace with OPA/Cedar)
 │   │   ├── middleware/
 │   │   │   ├── cors.ts           ← ALLOW_ORIGINS whitelist; no wildcards
+│   │   │   ├── lockdown.ts       ← lockdown mode middleware (emergency access restriction)
 │   │   │   └── opa.ts            ← opaMiddleware(action) factory; REST → WASM → in-process fallback
 │   │   ├── observability/
 │   │   │   ├── otel.ts           ← OtelServiceImpl; OTLPTraceExporter (HTTP); must init first
@@ -134,6 +171,9 @@ d:\techkeycrmapp\
 │   │   │   └── metrics.ts        ← RED metrics (requests counter, duration histogram, connections gauge)
 │   │   ├── services/             ← one service file per CRM entity; all use withTenant() + writeAuditEvent()
 │   │   ├── api/routes/           ← one Hono router per entity; Zod validation; OPA per route
+│   │   │   └── (includes: sync.ts, ai-attributes.ts, health.ts in addition to all CRM entities)
+│   │   ├── types/
+│   │   │   └── vendor.d.ts       ← ambient type declarations for third-party modules
 │   │   ├── kms/
 │   │   │   ├── key-service.ts    ← AzureKeyVaultKeyService; scheduleKeyExpiry / getKeyUri
 │   │   │   ├── legal-hold.ts     ← LegalHoldService; placeHold / liftHold / isUserOnHold
@@ -160,7 +200,9 @@ d:\techkeycrmapp\
 ```bash
 pnpm run build:offline   # builds dist/offline/index.html + regenerates CSP
 pnpm run build:sync      # builds dist/sync/index.html (PWA)
-pnpm run build:all       # all targets
+pnpm run build:mobile    # builds Capacitor mobile bundle
+pnpm run build:dataverse # builds Power Apps Code App bundle
+pnpm run build:all       # build:offline + build:sync + build:mobile + build:dataverse
 pnpm run typecheck       # TypeScript type check (no emit)
 ```
 
@@ -401,10 +443,16 @@ Cloud API keys stored encrypted in IDB under `__ai_secrets__`. Prefs in `localSt
 **Module layout** (`packages/core/src/ai/`):
 
 - `ai-prefs.ts` — `AIPrefs` type, singleton `aiPrefs`, `loadAIPrefs` / `saveAIPrefs`
+- `attributes-engine.ts` — AI-driven attribute inference; populates `aiAttributeValues` in state
+- `adaptive-engine.ts` — adaptive suggestion / learning engine; populates `adaptiveSuggestions` in state
 - `providers/browser-nano.ts` — Chrome/Edge Prompt API (`window.LanguageModel`); single `create()` call handles download (with `downloadprogress` monitor) + session creation; stateless, sessions owned by ai-runtime
 - `providers/browser-transformers.ts` — WebGPU via bundled `@huggingface/transformers`
+- `providers/browser-ai-disabled.ts` — stub used when browser AI is disabled by the deployment policy
+- `providers/browser-transformers-disabled.ts` — stub aliased in OT builds where WebGPU is disallowed
+- `providers/cloud-disabled.ts` — stub aliased in OT builds where cloud AI is disallowed
 - `providers/ollama.ts` — Ollama daemon; `loadOllama`, `callOllama`, `fetchOllamaModels`, `probeOllama`, `pullOllamaModel`, `deleteOllamaModel`
 - `providers/anthropic.ts` / `openai.ts` / `google.ts` — cloud providers; SSE streaming, token counting
+- `providers/powerplatform.ts` — Power Platform AI connector (Copilot Studio / AI Builder)
 - `ai-runtime.ts` — owns all mutable AI state (`aiRuntime` object: `ready`, `loadStarted`, `backend`, `streaming`, `nanoSession`, `downloadProgress`, `history`, `pendingAction`, etc.); `startAILoad`, `disconnectAI`, `callBackend`, model helpers
 - `ai-tools.ts` — tool catalog, system prompt, `handleModelOutput`, `routeToolCall`, `applyPendingAction`
 - `ai-settings.ts` — wizard, encrypted secrets, cost tracking, model catalogs (`BROWSER_MODELS`, `OLLAMA_CATALOG`, `CLOUD_PROVIDERS`); built-in AI modal (`openNanoDownloadModal`, `closeNanoDownloadModal`, `renderNanoDownloadModal`, `bindNanoDownloadModal`, `isNanoModalOpen`) used in offline/OT builds — shows disclaimer only on first download, real progress bar via `aiRuntime.downloadProgress`, auto-triggers when AI view loads and model isn't running
@@ -417,7 +465,7 @@ Cloud API keys stored encrypted in IDB under `__ai_secrets__`. Prefs in `localSt
 
 ## Views (valid values for `currentView`)
 
-`dashboard` · `clients` · `departments` · `projects` · `tasks` · `people` · `standaloneNotes` · `calendar` · `time` · `reports` · `ai` · `library` · `settings` · `trash`
+`dashboard` · `clients` · `departments` · `projects` · `tasks` · `people` · `standaloneNotes` · `calendar` · `time` · `communications` · `reports` · `ai` · `library` · `settings` · `trash`
 
 ---
 
@@ -493,6 +541,8 @@ All CRM routes are mounted at `/api/v1/<entity>`. Public routes: `GET /healthz`,
 | `/api/v1/conversations`    | Conversations (+ `/messages`)     |
 | `/api/v1/audit`            | Audit log (+ `/export`)           |
 | `/api/v1/admin`            | Admin: users, suspend, GDPR erase |
+| `/api/v1/sync`             | Adapter sync checkpoint/push/pull |
+| `/api/v1/ai-attributes`    | AI-inferred attribute values      |
 
 ### Database (Drizzle ORM + PostgreSQL)
 
