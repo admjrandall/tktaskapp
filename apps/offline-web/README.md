@@ -60,7 +60,7 @@ start dist/offline/index.html    # Windows
 open dist/offline/index.html     # macOS
 ```
 
-For connected deployments, use the sibling app targets instead: `apps/pwa-sync`, `apps/mobile`, `apps/dataverse`, and `apps/enterprise-web`.
+For connected deployments, use the sibling app targets instead: `apps/enterprise-web` (HTTPS PWA + Capacitor) or `apps/dataverse` (Power Platform).
 
 ---
 

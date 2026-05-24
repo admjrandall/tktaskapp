@@ -9,10 +9,10 @@
   },
   "scripts": {
     "build:offline": "vite build --config apps/offline-web/vite.config.ts && node generate-csp.mjs dist/offline/index.html",
-    "build:sync": "vite build --config apps/pwa-sync/vite.config.ts    && node generate-csp.mjs dist/sync/index.html",
+    "build:enterprise": "vite build --config apps/enterprise-web/vite.config.ts",
     "build:dataverse": "vite build --config apps/dataverse/vite.config.ts",
-    "build:mobile": "vite build --config apps/mobile/vite.config.ts",
-    "build:all": "pnpm run build:offline && pnpm run build:sync && pnpm run build:mobile && pnpm run build:dataverse",
+    "build:mobile": "pnpm run build:enterprise",
+    "build:all": "pnpm run build:offline && pnpm run build:enterprise && pnpm run build:mobile && pnpm run build:dataverse",
     "typecheck": "tsc --noEmit",
     "lint": "eslint packages apps config server",
     "lint:server": "eslint server/src",

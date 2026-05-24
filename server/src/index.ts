@@ -19,7 +19,10 @@ otelImpl.init({
   debugMode: process.env['NODE_ENV'] !== 'production',
 })
 
+import { readFile } from 'fs/promises'
+import { resolve as resolvePath } from 'path'
 import { serve } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import type { HonoEnv } from './hono-types.js'
 import { corsHeaders, corsPreflight } from './middleware/cors.js'
@@ -137,6 +140,65 @@ app.route('/api/v1/conversations', conversationsRouter)
 app.route('/api/v1/audit', auditRouter)
 app.route('/api/v1/admin', adminRouter)
 app.route('/api/v1/sync', syncRouter)
+
+// ── Enterprise SPA static serving ────────────────────────────────────────────
+// Enabled when ENTERPRISE_STATIC_DIR is set (production / staging only).
+// In development the Vite dev server serves the frontend separately.
+//
+// Cache policy:
+//   /assets/*               → immutable (content-hashed filenames)
+//   /sw.js, /index.html     → no-store (always re-fetch)
+//   Everything else         → no-cache (revalidate before use)
+//
+// TLS and HSTS are the responsibility of the upstream reverse proxy.
+
+const enterpriseStaticDir = process.env['ENTERPRISE_STATIC_DIR']
+
+if (enterpriseStaticDir) {
+  // Immutable cache headers for content-hashed Vite assets
+  app.use('/assets/*', async (c, next) => {
+    c.header('Cache-Control', 'public, max-age=31536000, immutable')
+    await next()
+  })
+
+  // Service worker must never be cached — browsers enforce this but be explicit
+  app.use('/sw.js', async (c, next) => {
+    c.header('Cache-Control', 'no-cache, no-store, must-revalidate')
+    c.header('Service-Worker-Allowed', '/')
+    await next()
+  })
+
+  // HTML must not be cached so users always get the latest app shell
+  app.use('/index.html', async (c, next) => {
+    c.header('Cache-Control', 'no-cache, no-store, must-revalidate')
+    await next()
+  })
+
+  // Serve actual files from dist/enterprise/
+  app.use('*', serveStatic({ root: enterpriseStaticDir }))
+
+  // SPA fallback: any unmatched browser-navigation route → index.html
+  // API, auth, and health routes that reach here are genuine 404s.
+  const spaIndexPath = resolvePath(enterpriseStaticDir, 'index.html')
+  app.notFound(async (c) => {
+    const { path } = c.req
+    if (
+      path.startsWith('/api/') ||
+      path.startsWith('/auth/') ||
+      path === '/healthz' ||
+      path === '/readyz'
+    ) {
+      return c.json({ error: 'Not found' }, 404)
+    }
+    c.header('Cache-Control', 'no-cache, no-store, must-revalidate')
+    try {
+      const html = await readFile(spaIndexPath, 'utf-8')
+      return c.html(html)
+    } catch {
+      return c.json({ error: 'Not found' }, 404)
+    }
+  })
+}
 
 // ── Global error handler ──────────────────────────────────────────────────────
 

@@ -1,20 +1,47 @@
-# Task App CRM — Mobile (Capacitor)
+# apps/mobile — Capacitor Native Packaging
 
-**Status:** Mobile PWA entry exists; native Capacitor packaging remains scaffolded and is not production-capable yet.
+**Status:** Native Capacitor packaging scaffolded. Web PWA functionality has moved to `apps/enterprise-web`.
 
-This app target delivers the shared Task App CRM core UI in a mobile/PWA shell today, using the server-connected BFF OIDC flow and `RxDBAdapter` from `src/entry.ts`. The intended native iOS/Android Capacitor packaging remains scaffolded until concrete native storage and biometric adapters are implemented.
+This directory contains only the native Capacitor platform configuration. The web build used by Capacitor is `dist/enterprise/`, produced by `pnpm run build:enterprise`.
 
 ---
 
-## What already exists
+## What lives here
 
-| File                                                       | Purpose                                                                                          |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `capacitor.config.ts`                                      | Capacitor configuration stub — `androidScheme: 'https'`, no external navigation                  |
-| `ios/App/Info.plist`                                       | iOS ATS config — `NSAllowsArbitraryLoads: false`                                                 |
-| `ios/App/PrivacyInfo.xcprivacy`                            | iOS 17+ privacy manifest — no tracking, no data collection                                       |
-| `android/app/src/main/res/xml/network_security_config.xml` | Android NSC — `cleartextTrafficPermitted="false"`, system CAs only                               |
-| `src/entry.ts`                                             | Mobile PWA entry — BFF OIDC refresh, service worker registration, gestures, `RxDBAdapter` wiring |
+| File / Directory                                           | Purpose                                                                    |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `capacitor.config.ts`                                      | Capacitor config — `webDir: ../../dist/enterprise`, `androidScheme: https` |
+| `capacitor.config.json`                                    | Generated mirror of `capacitor.config.ts` (used by Capacitor CLI)          |
+| `ios/App/Info.plist`                                       | iOS ATS config — `NSAllowsArbitraryLoads: false`                           |
+| `ios/App/PrivacyInfo.xcprivacy`                            | iOS 17+ privacy manifest — no tracking, no data collection                 |
+| `android/app/src/main/res/xml/network_security_config.xml` | Android NSC — `cleartextTrafficPermitted="false"`, system CAs only         |
+
+---
+
+## Web assets
+
+The Capacitor WebView loads `dist/enterprise/`. Build it first:
+
+```bash
+# From repo root
+pnpm run build:enterprise   # same as pnpm run build:mobile
+```
+
+---
+
+## Native build workflow (once Capacitor is installed)
+
+```bash
+# 1. Build web assets
+pnpm run build:enterprise
+
+# 2. Sync to native platform projects
+cd apps/mobile
+npx cap sync
+
+# 3. Run on device / simulator
+npx cap run ios     # or: npx cap run android
+```
 
 ---
 
@@ -23,7 +50,6 @@ This app target delivers the shared Task App CRM core UI in a mobile/PWA shell t
 ### 1. Capacitor installed and platforms created
 
 ```bash
-# From the repo root — DO NOT run until all prerequisites below are complete
 pnpm add @capacitor/core @capacitor/cli @capacitor/filesystem @capacitor/biometrics
 cd apps/mobile && npx cap add ios && npx cap add android
 ```
@@ -50,20 +76,7 @@ A concrete subclass must:
 - On iOS: use `kSecAccessControlBiometryAny` + `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
   - `kSecAttrSynchronizable: false` (never synced to iCloud).
 
-### 4. Native offline entry point
-
-If a native offline mobile profile is added, it must use a separate entry/profile or explicitly replace the PWA entry. Call in this order:
-
-```ts
-assertNetworkPolicyCompliant(OFFLINE_MOBILE_NETWORK_POLICY) // security gate — must be first
-setDeploymentPolicy(MOBILE_OFFLINE_PROFILE.policy)
-setAdapter(new NullAdapter())
-setStorageAdapter(new MobileNativeVaultAdapter())
-setNativeSecurityAdapter(new NativeBiometricAdapter())
-init()
-```
-
-### 5. `AndroidManifest.xml` reference
+### 4. `AndroidManifest.xml` reference
 
 The Android manifest must reference the NSC file:
 
@@ -73,15 +86,14 @@ The Android manifest must reference the NSC file:
   ...>
 ```
 
-### 6. iOS usage description strings
+### 5. iOS usage description strings
 
 Add to `Info.plist` before the corresponding features ship:
 
 - `NSFaceIDUsageDescription` — required before biometric unlock is enabled.
 - App Store rejects apps with missing usage strings for features present in the binary.
-- Do not add strings for capabilities that are not yet implemented.
 
-### 7. `PrivacyInfo.xcprivacy` update
+### 6. `PrivacyInfo.xcprivacy` update
 
 Before App Store submission, review `NSPrivacyAccessedAPITypes` for:
 
@@ -103,17 +115,6 @@ All criteria must pass before a release candidate build is submitted to the App 
 | MASVS-NETWORK-1  | No cleartext traffic — TLS inspection compliance test (Charles / mitmproxy) confirms all connections are HTTPS |
 | MASVS-NETWORK-2  | Only system CA certificates trusted — NSC / ATS config verified via TLS compliance test                        |
 | MASVS-PLATFORM-1 | Capacitor plugin allowlist reviewed; no broad JavaScript bridge exposure; only required plugins enabled        |
-
----
-
-## Native build target (once Capacitor is installed)
-
-```bash
-pnpm run build:offline          # builds dist/offline/index.html (the WebView bundle)
-cd apps/mobile
-npx cap sync                    # copies dist/ to native platform projects
-npx cap run ios                 # or: npx cap run android
-```
 
 ---
 

@@ -14,7 +14,7 @@ You do NOT write production code. Your only job is to run the verification suite
 1. pnpm run typecheck — report any errors, zero required to pass
 2. pnpm run lint — report any errors, zero required to pass
 3. pnpm test — report all failures
-4. pnpm run build:offline && pnpm run build:sync && pnpm run build:dataverse — all must succeed
+4. pnpm run build:offline && pnpm run build:enterprise && pnpm run build:dataverse — all must succeed
 5. Check new AI event types appear in BOTH security/audit.ts AND schemas/audit.schema.ts
 6. Check new IDB stores appear in BOTH IDB_STORES in constants.ts AND \_dataDbOpen() in storage/idb-data.ts
 7. Check new storage keys appear in BOTH STORES or IDB_STORES AND any code that reads them

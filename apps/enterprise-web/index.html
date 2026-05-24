@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- viewport-fit=cover exposes safe-area-inset-* CSS env() vars for notch/home bar -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!-- PWA / installability meta -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TK CRM">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f172a">
+
+  <!-- Security — CSP is enforced via HTTP headers set by the server.
+       Referrer-Policy and Permissions-Policy are belt-and-suspenders here. -->
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=()">
+
+  <!-- PWA manifest (.webmanifest is the W3C-recommended extension) -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+  <!-- Mobile layout extensions: safe-area insets, touch targets, responsive layout -->
+  <link rel="stylesheet" href="/app.css">
+
+  <title>TechKey CRM</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="./src/entry.ts"></script>
+</body>
+</html>

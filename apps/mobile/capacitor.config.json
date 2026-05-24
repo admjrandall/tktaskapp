@@ -1,7 +1,7 @@
 {
   "appId": "com.taskappcrm.app",
   "appName": "Task App CRM",
-  "webDir": "../../dist/offline",
+  "webDir": "../../dist/enterprise",
   "server": {
     "androidScheme": "https"
   },

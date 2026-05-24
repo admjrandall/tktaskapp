@@ -1,4 +1,4 @@
-/* Mobile PWA layout extensions for TechKey CRM */
+/* Enterprise PWA layout extensions for TechKey CRM */
 
 /* ── Safe area insets (notch / home indicator) ───────────────────────────── */
 :root {
@@ -8,16 +8,18 @@
   --safe-area-right: env(safe-area-inset-right, 0px);
 }
 
-/* ── Keyboard avoidance ──────────────────────────────────────────────────── */
+/* ── Keyboard avoidance — touch devices only ─────────────────────────────── */
 /* dvh shrinks when the virtual keyboard appears; --vvh is set via JS fallback */
-.app-root,
-#app {
-  height: 100dvh;
-  height: var(--vvh, 100dvh);
-  overflow: hidden;
+@media (pointer: coarse) {
+  .app-root,
+  #app {
+    height: 100dvh;
+    height: var(--vvh, 100dvh);
+    overflow: hidden;
+  }
 }
 
-/* ── Touch targets: minimum 44×44px per C.4 comfortable density ──────────── */
+/* ── Touch targets: minimum 44×44px (WCAG 2.5.8 AA, Apple HIG, Material You) */
 button,
 [role="button"],
 [role="tab"],
@@ -105,7 +107,6 @@ textarea {
   table {
     display: block;
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   /* Modal full-screen on mobile */

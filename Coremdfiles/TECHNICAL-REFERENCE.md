@@ -47,21 +47,23 @@ packages/adapter-null/     NullAdapter — offline-only no-op sync
 packages/adapter-rxdb/     RxDBAdapter stub
 packages/adapter-dataverse/ DataverseAdapter stub
 apps/offline-web/          Vite builds → offline single HTML files (three sub-profiles)
-apps/pwa-sync/             PWA build placeholder (NullAdapter; was apps/sync)
+apps/enterprise-web/       HTTPS PWA: browser + mobile browser + Capacitor WebView
 apps/dataverse/            Power Apps Code App build
-apps/mobile/               Capacitor mobile wrapper config stub
+apps/mobile/               Capacitor native-packaging only; webDir → dist/enterprise
 dist/offline/index.html    Built output (browser-ai profile) — open in Chrome/Edge
+dist/enterprise/           Built PWA assets (served over HTTPS by server or reverse proxy)
 generate-csp.mjs           Regenerates CSP hashes post-build
 ```
 
 ### 1.2 Build Scripts
 
-| Script          | Command                                                                                                | Output                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| `build:offline` | `vite build --config apps/offline-web/vite.config.ts && node generate-csp.mjs dist/offline/index.html` | `dist/offline/index.html` (browser-ai profile) + `dist/offline/index.sha256` |
-| `build:sync`    | `vite build --config apps/pwa-sync/vite.config.ts && node generate-csp.mjs dist/sync/index.html`       | `dist/sync/index.html`                                                       |
-| `build:all`     | runs offline + sync + dataverse                                                                        | all targets                                                                  |
-| `typecheck`     | `tsc --noEmit`                                                                                         | type errors only                                                             |
+| Script             | Command                                                                                                | Output                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `build:offline`    | `vite build --config apps/offline-web/vite.config.ts && node generate-csp.mjs dist/offline/index.html` | `dist/offline/index.html` (browser-ai profile) + `dist/offline/index.sha256` |
+| `build:enterprise` | `vite build --config apps/enterprise-web/vite.config.ts`                                               | `dist/enterprise/` (hashed assets + index.html + sw.js + manifest)           |
+| `build:mobile`     | alias for `build:enterprise` (Capacitor uses dist/enterprise)                                          | same as build:enterprise                                                     |
+| `build:all`        | offline + enterprise + mobile + dataverse                                                              | all targets                                                                  |
+| `typecheck`        | `tsc --noEmit`                                                                                         | type errors only                                                             |
 
 ### 1.3 Path Aliases (vite.config.ts)
 

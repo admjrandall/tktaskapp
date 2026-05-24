@@ -1,4 +1,6 @@
-// Enterprise web entry point.
+// Enterprise web entry point — HTTPS-hosted PWA.
+// Serves as both the browser enterprise client and the Capacitor mobile WebView.
+//
 // Auth: BFF OIDC PKCE flow — access token held in memory only, refresh token
 // stored in HttpOnly SameSite=Strict cookie managed by the server.
 // On every page load, bootstrap() calls POST /auth/refresh to obtain a fresh
@@ -12,19 +14,21 @@ import {
   ENTERPRISE_DEPLOYMENT_POLICY,
 } from '../../../packages/core/src/deployment-policy.js'
 import { init } from '../../../packages/core/src/main.js'
+import { initMobileGestures } from './gestures.js'
 
 // ── Server URL ─────────────────────────────────────────────────────────────────
+// Default: same origin as the served page — safe for same-origin deployments.
 const serverUrl: string =
   (import.meta.env['VITE_SERVER_URL'] as string | undefined) ??
   `${window.location.protocol}//${window.location.host}`
 
 // ── AuthClient ─────────────────────────────────────────────────────────────────
-// Holds the access token in memory. On expiry, transparently calls
+// Holds the access token in memory only. On expiry, transparently calls
 // POST /auth/refresh (HttpOnly cookie auto-sent by the browser) to rotate
 // both the access token and the refresh token.
 //
 // Only one refresh request runs at a time — parallel callers share the same
-// Promise to prevent duplicate token requests (token thundering-herd).
+// Promise to prevent token thundering-herd.
 
 class AuthClient {
   private _accessToken: string | null = null
@@ -67,6 +71,45 @@ class AuthClient {
     this._expiresAt = Date.now() + data.expires_in * 1000
     return data.access_token
   }
+
+  async logout(): Promise<void> {
+    this._accessToken = null
+    this._expiresAt = 0
+    await fetch(`${this._baseUrl}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {
+      // Best-effort — clear local state regardless of server response
+    })
+    // Signal the service worker to purge the API cache so stale authenticated
+    // responses from this session are not served to the next user on this device.
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage('CLEAR_API_CACHE')
+    }
+  }
+}
+
+// ── Service worker registration ────────────────────────────────────────────────
+function _registerServiceWorker(): void {
+  if (!('serviceWorker' in navigator)) return
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+      // Non-fatal — app continues without offline shell caching
+    })
+  })
+}
+
+// ── Visual viewport keyboard avoidance ────────────────────────────────────────
+// Sets --vvh CSS custom property to the visual viewport height so layouts can
+// avoid being obscured by the virtual keyboard on mobile browsers.
+function _initKeyboardAvoidance(): void {
+  const vv = window.visualViewport
+  if (!vv) return
+  const update = (): void => {
+    document.documentElement.style.setProperty('--vvh', `${vv.height}px`)
+  }
+  vv.addEventListener('resize', update)
+  update()
 }
 
 // ── Server liveness check ──────────────────────────────────────────────────────
@@ -81,6 +124,9 @@ async function _checkServerReachable(url: string): Promise<boolean> {
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────────
 async function bootstrap(): Promise<void> {
+  // Service worker registration is non-blocking and has no auth dependency.
+  _registerServiceWorker()
+
   const reachable = await _checkServerReachable(serverUrl)
   if (!reachable) {
     const wrap = document.createElement('div')
@@ -106,6 +152,12 @@ async function bootstrap(): Promise<void> {
     return
   }
 
+  // Auth confirmed — wire mobile/touch enhancements before app init.
+  _initKeyboardAvoidance()
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+    initMobileGestures()
+  }
+
   setDeploymentPolicy(ENTERPRISE_DEPLOYMENT_POLICY)
 
   setAdapter(
@@ -115,6 +167,11 @@ async function bootstrap(): Promise<void> {
       pullLimit: 200,
     }),
   )
+
+  // Expose logout callback globally so the core auth module can trigger
+  // session teardown (including the SW cache purge) without importing this entry.
+  // The core module checks for window.__tkLogout before calling it.
+  ;(window as Window & { __tkLogout?: () => Promise<void> }).__tkLogout = () => authClient.logout()
 
   await init()
 }

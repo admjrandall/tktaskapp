@@ -22,7 +22,7 @@ If a control depends on environment-specific values that cannot be discovered fr
 
 ## What this is
 
-**Task App CRM** — an offline-first, AES-256-GCM encrypted CRM with multiple deployment targets. The app is developed as a **TypeScript monorepo** (pnpm workspaces, Vite build) around a shared core UI in `packages/core/src/`. The offline-web target still ships as a **single self-contained HTML file** (`dist/offline/index.html`) that needs no server and can run from `file://`, but the product is **not strictly offline-only**: PWA sync, mobile PWA, Dataverse, and enterprise/server-backed targets are also part of the intended architecture.
+**Task App CRM** — an offline-first, AES-256-GCM encrypted CRM with three delivery types. The app is developed as a **TypeScript monorepo** (pnpm workspaces, Vite build) around a shared core UI in `packages/core/src/`. The product has three delivery types: the **offline-web** artifact (single self-contained HTML file, no server, runs from `file://`), the **enterprise-web** PWA (HTTPS-hosted, server-backed, installable on desktop and mobile), and the **dataverse** Code App (Power Platform, Microsoft Dataverse).
 
 Target-specific behavior belongs in the thin app entry points under `apps/`; shared business logic and UI stay in `packages/core/src/`. Each target sets a deployment policy and injects the appropriate adapter before calling `init()`.
 
@@ -147,13 +147,24 @@ d:\techkeycrmapp\
 │   │   │   └── entry-internal-ai.ts ← browser AI + private Ollama endpoints; OT_AI_CONNECT_SRC at build
 │   │   ├── vite.config.ts        ← builds browser-ai profile → dist/offline/index.html
 │   │   └── README.md             ← documents three sub-profiles
-│   ├── pwa-sync/                 ← Server-connected PWA build using RxDBAdapter
 │   ├── dataverse/                ← Power Apps Code App build using DataverseAdapter
-│   ├── mobile/                   ← Mobile PWA/Capacitor target; native Capacitor packaging remains scaffolded
-│   └── enterprise-web/           ← Server-backed enterprise web entry using RxDBAdapter
-│       └── src/entry.ts          ← OIDC/PKCE bootstrap, server health check, RxDBAdapter wiring
+│   ├── mobile/                   ← Capacitor native packaging only (iOS/Android); web assets come from dist/enterprise
+│   │   ├── capacitor.config.ts   ← webDir: ../../dist/enterprise
+│   │   ├── ios/                  ← iOS ATS config, PrivacyInfo.xcprivacy
+│   │   └── android/              ← Android NSC (cleartextTrafficPermitted=false)
+│   └── enterprise-web/           ← HTTPS PWA: browser + mobile browser + Capacitor WebView
+│       ├── index.html            ← PWA meta, manifest link, app.css
+│       ├── vite.config.ts        ← hashed assets build → dist/enterprise/
+│       ├── src/
+│       │   ├── entry.ts          ← OIDC/PKCE bootstrap, health check, SW registration, gestures
+│       │   └── gestures.ts       ← touch swipe gestures (active on touch devices only)
+│       └── public/
+│           ├── manifest.webmanifest ← W3C PWA manifest; id, display_override, shortcuts
+│           ├── sw.js             ← service worker; cache-first assets, network-first API, SPA fallback
+│           └── app.css           ← safe-area insets, 44px touch targets, responsive layout
 ├── dist/
-│   └── offline/index.html        ← built single-file output (open this in browser)
+│   ├── offline/index.html        ← built single-file output (open this in browser)
+│   └── enterprise/               ← built PWA assets (served over HTTPS by server or reverse proxy)
 ├── server/                       ← Hono v4 REST API backend (Node.js, TypeScript)
 │   ├── src/
 │   │   ├── index.ts              ← entry point; OTel init, Hono app, graceful shutdown
@@ -206,31 +217,31 @@ d:\techkeycrmapp\
 ## Build
 
 ```bash
-pnpm run build:offline   # builds dist/offline/index.html + regenerates CSP
-pnpm run build:sync      # builds dist/sync/index.html (PWA)
-pnpm run build:mobile    # builds Capacitor mobile bundle
-pnpm run build:dataverse # builds Power Apps Code App bundle
-pnpm run build:all       # build:offline + build:sync + build:mobile + build:dataverse
-pnpm run typecheck       # TypeScript type check (no emit)
+pnpm run build:offline    # builds dist/offline/index.html + regenerates CSP
+pnpm run build:enterprise # builds dist/enterprise/ (hashed assets, PWA)
+pnpm run build:mobile     # alias for build:enterprise (Capacitor uses dist/enterprise)
+pnpm run build:dataverse  # builds Power Apps Code App bundle
+pnpm run build:all        # build:offline + build:enterprise + build:mobile + build:dataverse
+pnpm run typecheck        # TypeScript type check (no emit)
 ```
 
-After `build:offline`, open `dist/offline/index.html` in Chrome or Edge. No server needed. Connected targets (`build:sync`, `build:mobile`, `build:dataverse`, and enterprise-web when wired into a Vite config) require their target-specific host, auth, and/or backend services.
+After `build:offline`, open `dist/offline/index.html` in Chrome or Edge. No server needed. The enterprise-web and dataverse targets require their respective backend/platform services. The Hono server serves `dist/enterprise/` as static assets when `ENTERPRISE_STATIC_DIR` is set.
 
 ## Deployment targets
 
-The repo intentionally supports multiple deployment targets with one shared core UI:
+The repo has **three delivery types** sharing one core UI:
 
-| Target         | Entry                                      | Adapter            | Runtime intent                                                                          |
-| -------------- | ------------------------------------------ | ------------------ | --------------------------------------------------------------------------------------- |
-| Offline web    | `apps/offline-web/src/entry-browser-ai.ts` | `NullAdapter`      | Single-file local app; no CRM server required                                           |
-| PWA sync       | `apps/pwa-sync/src/entry.ts`               | `RxDBAdapter`      | Server-connected PWA using the Hono sync API                                            |
-| Mobile PWA     | `apps/mobile/src/entry.ts`                 | `RxDBAdapter`      | Mobile web/PWA shell with BFF OIDC flow; native Capacitor packaging is still scaffolded |
-| Dataverse      | `apps/dataverse/src/entry.ts`              | `DataverseAdapter` | Power Platform Code App backed by Microsoft Dataverse                                   |
-| Enterprise web | `apps/enterprise-web/src/entry.ts`         | `RxDBAdapter`      | Server-backed enterprise web app with OIDC/PKCE, health check, and enterprise policy    |
+| Delivery type  | Entry                                      | Adapter            | Runtime intent                                                                                                           |
+| -------------- | ------------------------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Offline web    | `apps/offline-web/src/entry-browser-ai.ts` | `NullAdapter`      | Single-file portable artifact; no server; runs from `file://`                                                            |
+| Enterprise web | `apps/enterprise-web/src/entry.ts`         | `RxDBAdapter`      | HTTPS PWA: browser desktop, mobile browser (installable), and Capacitor WebView; BFF OIDC/PKCE; service worker; gestures |
+| Dataverse      | `apps/dataverse/src/entry.ts`              | `DataverseAdapter` | Power Platform Code App; auth via `__msalToken`; hosted and governed by Microsoft Power Platform                         |
+
+`apps/mobile/` is now Capacitor native-packaging only — no web entry. It uses `dist/enterprise` as its WebView source. `build:mobile` is an alias for `build:enterprise`.
 
 Do not describe the whole monorepo as "offline-only." Use "offline-first" for the product architecture, and reserve "offline-only" or "local-only" for the offline-web build/profile where `NullAdapter` and offline CSP restrictions apply.
 
-The three offline sub-profiles are built from `apps/offline-web/`:
+The offline-web target has three sub-profiles, all built from `apps/offline-web/`:
 
 | Profile                  | Entry                  | Build command            | AI                                                               |
 | ------------------------ | ---------------------- | ------------------------ | ---------------------------------------------------------------- |
@@ -607,7 +618,7 @@ Policy: `admin`/`owner` → all actions; `editor` → read/create/update; `viewe
 ### Environment variables
 
 All configuration via env vars (see `server/.env.example`):
-`PORT`, `NODE_ENV`, `DATABASE_URL`, `AZURE_KV_URL`, `AZURE_CLIENT_ID/SECRET/TENANT_ID`, `ENTRA_TENANT_ID/CLIENT_ID/CLIENT_SECRET`, `OIDC_REDIRECT_URI`, `ALLOW_ORIGINS`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OPA_URL` (optional), `AI_GATEWAY_MONTHLY_BUDGET_TOKENS`, `AI_GATEWAY_REDIS_URL` (optional).
+`PORT`, `NODE_ENV`, `DATABASE_URL`, `AZURE_KV_URL`, `AZURE_CLIENT_ID/SECRET/TENANT_ID`, `ENTRA_TENANT_ID/CLIENT_ID/CLIENT_SECRET`, `OIDC_REDIRECT_URI`, `ALLOW_ORIGINS`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OPA_URL` (optional), `AI_GATEWAY_MONTHLY_BUDGET_TOKENS`, `AI_GATEWAY_REDIS_URL` (optional), `ENTERPRISE_STATIC_DIR` (optional — path to `dist/enterprise/`; enables static SPA serving).
 
 ### Server development commands
 

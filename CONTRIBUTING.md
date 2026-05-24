@@ -1,6 +1,6 @@
 # Contributing to Task App CRM
 
-Thank you for your interest in contributing to Task App CRM — an offline-first, AES-256-GCM encrypted CRM with offline-web, PWA sync, mobile PWA, Dataverse, and enterprise/server-backed targets sharing one core UI.
+Thank you for your interest in contributing to Task App CRM — an offline-first, AES-256-GCM encrypted CRM with three delivery types (offline-web, enterprise-web PWA, and Dataverse) sharing one core UI.
 
 ---
 
@@ -46,11 +46,10 @@ pnpm run format
 # Build all targets
 pnpm run build:all
 
-# Build mobile PWA
-pnpm run build:mobile
+# Build enterprise-web PWA (also used by Capacitor mobile)
+pnpm run build:enterprise
 
-# Build PWA sync and Dataverse targets
-pnpm run build:sync
+# Build Dataverse target
 pnpm run build:dataverse
 ```
 
@@ -123,7 +122,7 @@ Branch from `main`. Open PRs against `main` (or `integration` for agent work). N
 
 1. **Branch** — create a feature branch from `main` (`feat/short-description`).
 2. **Changeset** — if your change is version-worthy, run `pnpm changeset` and follow the prompts. Include the generated `.changeset/*.md` file in your PR.
-3. **Tests** — `pnpm run typecheck` and the relevant target build must pass. For shared core changes, run `pnpm run build:offline` plus any connected target you affected (`build:sync`, `build:mobile`, or `build:dataverse`).
+3. **Tests** — `pnpm run typecheck` and the relevant target build must pass. For shared core changes, run `pnpm run build:offline` plus any connected target you affected (`build:enterprise`, `build:mobile`, or `build:dataverse`).
 4. **Security rules** — never bypass the rules in `CLAUDE.md`:
    - `trusted-types.ts` must remain the first import in `main.ts`
    - All user-visible strings through `escH()` before `innerHTML` interpolation

@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
-**Task App CRM** — TypeScript monorepo, built to `dist/offline/index.html`
-**Last reviewed:** 2026-05-20 (ADR-037 added)
+**Task App CRM** — TypeScript monorepo; offline-web, enterprise-web PWA, and Dataverse targets
+**Last reviewed:** 2026-05-24 (ADR-038 added)
 
 This document records every significant architectural and technical decision made for the application — what was chosen, what alternatives were considered, and why. Each decision entry answers the question: _"Why does the code look like this?"_
 
@@ -947,3 +947,40 @@ Inline `eslint-disable` comment at the call site — rejected per project constr
 - `packages/core/src/views/documents.ts` has `@typescript-eslint/no-deprecated: 'warn'` via `eslint.config.mjs` narrow override.
 - `execCommand` usage appears in the warning list but not the error list.
 - The `createLink` command already uses the modern API; remaining formatting commands are tracked for a future editor refactor.
+
+---
+
+## ADR-038 — Three delivery types: offline-web, enterprise-web PWA, dataverse
+
+**Status:** Active
+**Date:** 2026-05-24
+
+### Decision
+
+Consolidate five build targets (offline-web, pwa-sync, mobile-web, enterprise-web, dataverse) into three delivery types:
+
+1. **offline-web** — single self-contained HTML artifact, no server, `file://`
+2. **enterprise-web** — HTTPS-hosted PWA; browser desktop, mobile browser (installable), Capacitor WebView
+3. **dataverse** — Power Platform Code App
+
+`apps/pwa-sync/` is deleted. `apps/mobile/` becomes Capacitor native-packaging only, with `webDir` pointing at `dist/enterprise`. `build:mobile` is an alias for `build:enterprise`.
+
+### Alternatives considered
+
+- **Keep five targets**: pwa-sync and enterprise-web were architecturally identical (same AuthClient, same RxDBAdapter, same ENTERPRISE_DEPLOYMENT_POLICY). Maintaining two entries for the same app added confusion with no runtime differentiation.
+- **Merge mobile into enterprise-web completely**: mobile's native Capacitor scaffolding (iOS/Android configs, MASVS test plan) is valuable and should remain. The directory stays; only the web build files move.
+- **Keep a separate mobile PWA build**: PWA capabilities (service worker, manifest, touch gestures) belong in enterprise-web. All platforms install the same app from the same URL. Separate mobile builds are not the 2026 industry standard for responsive SPAs.
+
+### Rationale
+
+Industry standard as of 2026: one responsive HTTPS PWA installable on desktop and mobile, with a service worker for offline shell caching. There is no case for a separate mobile-web target that is identical to the enterprise-web target except for the absence of a health check. The portable offline artifact remains as offline-web because `file://` and HTTPS have fundamentally different security and deployment models.
+
+Dataverse remains separate because Power Platform Code Apps have strict hosting requirements: flat asset naming (no content hash), `__msalToken` token injection by the platform runtime, and a fundamentally different auth and data model. A unified build is not practical.
+
+### Consequence
+
+- `pnpm run build:enterprise` builds `dist/enterprise/` (hashed assets, PWA, not single-file).
+- `pnpm run build:mobile` is `build:enterprise`; `npx cap sync` then copies it to the native platform.
+- The Hono server optionally serves `dist/enterprise/` as static assets via `ENTERPRISE_STATIC_DIR`.
+- CSP is enforced via HTTP response headers for enterprise-web, not a meta tag.
+- `apps/enterprise-web/` is the only target for any browser-based server-connected deployment.

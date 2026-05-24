@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 
 ---
 
+## [2026-05-24] — Build target consolidation: three delivery types
+
+### Changed
+
+- Consolidated five build targets (offline-web, pwa-sync, mobile PWA, enterprise-web, dataverse) into three delivery types: **offline-web** (single HTML), **enterprise-web** (HTTPS PWA), and **dataverse** (Power Platform).
+- `apps/pwa-sync/` retired and deleted — it was architecturally identical to enterprise-web with no differentiation.
+- `apps/mobile/` is now Capacitor native-packaging only; all web functionality moves to `apps/enterprise-web/`.
+- `apps/enterprise-web/` is now a complete buildable PWA target: `vite.config.ts`, `index.html`, `public/manifest.webmanifest`, `public/sw.js`, `public/app.css`, `src/gestures.ts`, and updated `src/entry.ts` absorbing service worker registration, keyboard avoidance, touch gestures, and logout hook.
+- `apps/mobile/capacitor.config.ts` updated: `webDir` now points at `dist/enterprise` instead of `dist/mobile`.
+- `build:enterprise` added to root `package.json`; `build:sync` removed; `build:mobile` is now an alias for `build:enterprise`; `build:all` updated.
+- `server/src/index.ts`: added optional enterprise SPA static file serving when `ENTERPRISE_STATIC_DIR` env var is set, with correct cache headers (`immutable` for `/assets/*`, `no-store` for `index.html` and `sw.js`) and SPA navigation fallback.
+- `server/.env.example`: added `ENTERPRISE_STATIC_DIR` documentation.
+- Updated CLAUDE.md, AGENTS.md, TECHNICAL-REFERENCE.md, CONTRIBUTING.md, and all affected READMEs.
+
+---
+
 ## [2026-05-24] — Multi-target documentation clarification
 
 ### Changed

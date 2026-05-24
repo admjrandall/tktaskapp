@@ -1,5 +1,5 @@
-// Swipe gesture handler for mobile sidebar open/close.
-// Right-swipe from left edge opens the sidebar; left-swipe closes it.
+// Swipe gesture handler for sidebar open/close on touch devices.
+// Right-swipe from the left edge opens the sidebar; left-swipe closes it.
 
 const SWIPE_THRESHOLD_PX = 60
 const EDGE_ZONE_PX = 32 // only trigger open gesture when touch starts in left edge zone
@@ -45,7 +45,6 @@ function _closeSidebar(): void {
   })
 }
 
-// Named reference so destroyMobileGestures can remove it.
 function _onScrimClick(e: MouseEvent): void {
   if ((e.target as HTMLElement | null)?.classList.contains('sidebar-scrim')) {
     _closeSidebar()
