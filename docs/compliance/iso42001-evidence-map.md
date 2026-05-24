@@ -1,7 +1,7 @@
 # ISO/IEC 42001:2023 Gap Assessment — Task App CRM
 
 **Standard:** ISO/IEC 42001:2023 — Information technology — Artificial intelligence — Management system  
-**Assessment date:** 2026-05-20  
+**Assessment date:** 2026-05-23  
 **Assessor:** Task App CRM team (self-assessment)  
 **Scope:** All AI features across all build profiles of Task App CRM  
 **Related:** `docs/compliance/ai-governance-policy.md`
@@ -109,17 +109,17 @@ Status codes: ✅ Conformant · ⚠️ Partial · ❌ Not addressed · 🔵 N/A 
 
 ISO 42001 Annex A provides implementation guidance controls. The following are relevant to Task App CRM:
 
-| Annex A control | Title                                               | Current state                                                                 | Gap                                                                                   | Status |
-| --------------- | --------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------ |
-| A.2.2           | Policies for human oversight of AI systems          | Human approval gate for all mutating AI actions (governance policy §4)        | No documented exception procedure for when human approval is impractical              | ⚠️     |
-| A.2.3           | Documentation of AI systems for users               | This governance policy + CLAUDE.md                                            | No user-facing transparency disclosure (e.g. in-app notice that AI features are used) | ⚠️     |
-| A.2.6           | Responsible use of AI systems                       | Data boundary rules, prompt injection controls (governance policy §3, §5)     | No Acceptable Use Policy for end-users                                                | ❌     |
-| A.3.3           | Allocation of responsibilities for AI system impact | AI-triggered mutations require user confirmation                              | No formal allocation of legal liability for AI errors                                 | ❌     |
-| A.4.2           | Logging and monitoring of AI systems                | Audit log for AI mutations; OTel design for AI gateway                        | AI session history not persisted; no anomaly detection on AI tool call patterns       | ⚠️     |
-| A.5.2           | Data quality for AI systems                         | Field truncation; schema validation of tool args                              | No formal data quality assessment of CRM data that reaches AI context                 | ⚠️     |
-| A.6.1           | Avoiding harmful bias in AI output                  | On-device models with vendor safety training                                  | No bias testing or fairness evaluation for AI responses to CRM data                   | ❌     |
-| A.9.2           | Transparency of AI systems to users                 | Built-in AI modal shows download disclaimer and model info                    | No persistent in-app notice explaining AI data handling to users                      | ⚠️     |
-| A.10.4          | Security of AI systems                              | Prompt injection controls; schema validation; no network access from AI tools | No penetration test of AI layer; prompt injection test suite marked .todo             | ⚠️     |
+| Annex A control | Title                                               | Current state                                                                                                                                       | Gap                                                                                   | Status |
+| --------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------ |
+| A.2.2           | Policies for human oversight of AI systems          | Human approval gate for all mutating AI actions (governance policy §4)                                                                              | No documented exception procedure for when human approval is impractical              | ⚠️     |
+| A.2.3           | Documentation of AI systems for users               | This governance policy + CLAUDE.md                                                                                                                  | No user-facing transparency disclosure (e.g. in-app notice that AI features are used) | ⚠️     |
+| A.2.6           | Responsible use of AI systems                       | Data boundary rules, prompt injection controls (governance policy §3, §5)                                                                           | No Acceptable Use Policy for end-users                                                | ❌     |
+| A.3.3           | Allocation of responsibilities for AI system impact | AI-triggered mutations require user confirmation                                                                                                    | No formal allocation of legal liability for AI errors                                 | ❌     |
+| A.4.2           | Logging and monitoring of AI systems                | AI gateway approvals/rejections write durable audit events through `writeAuditEvent()`; production audit failure fails closed for gateway decisions | AI session history not persisted; no anomaly detection on AI tool call patterns       | ⚠️     |
+| A.5.2           | Data quality for AI systems                         | Field truncation; schema validation of tool args                                                                                                    | No formal data quality assessment of CRM data that reaches AI context                 | ⚠️     |
+| A.6.1           | Avoiding harmful bias in AI output                  | On-device models with vendor safety training                                                                                                        | No bias testing or fairness evaluation for AI responses to CRM data                   | ❌     |
+| A.9.2           | Transparency of AI systems to users                 | Built-in AI modal shows download disclaimer and model info                                                                                          | No persistent in-app notice explaining AI data handling to users                      | ⚠️     |
+| A.10.4          | Security of AI systems                              | Prompt injection controls; schema validation; no network access from AI tools                                                                       | No penetration test of AI layer; prompt injection test suite marked .todo             | ⚠️     |
 
 ---
 

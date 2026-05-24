@@ -21,7 +21,7 @@ async function _getLockdownLevel(tenantId: string): Promise<string> {
         sql`SELECT lockdown_level FROM org_settings WHERE org_id = ${tenantId}::uuid LIMIT 1`,
       ),
     )
-    const row = result.rows[0] as Record<string, unknown> | undefined
+    const row = result.rows[0]
     const level = typeof row?.['lockdown_level'] === 'string' ? row['lockdown_level'] : 'off'
     _cache.set(tenantId, { level, exp: Date.now() + 30_000 })
     return level

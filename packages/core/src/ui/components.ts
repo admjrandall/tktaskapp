@@ -15,7 +15,7 @@ import { getState, setState, navigate, openRecordModal, closeConfirm } from '../
 import { globalSearch } from '../storage/db.js'
 import { renderBadge } from './primitives/badge.js'
 import { renderAvatar as _renderAvatarPrim } from './primitives/avatar.js'
-import { patchInnerHTML } from '../render-utils.js'
+import { auditedStaticHtml } from '../render-utils.js'
 
 type AnyRecord = Record<string, unknown>
 type Toast = { type?: string; message?: unknown } | null | undefined
@@ -371,7 +371,7 @@ export function bindCommandPalette(): void {
     const results = document.querySelector('.command-results')
     if (!results) return
     const items = getCmdItems()
-    results.innerHTML = patchInnerHTML(
+    results.innerHTML = auditedStaticHtml(
       items.length
         ? items
             .map(
@@ -524,7 +524,7 @@ export function guardedAction(lockdownLevel: string, action: string, onProceed: 
     return
   }
   const wrap = document.createElement('div')
-  wrap.innerHTML = patchInnerHTML(renderDLPWarning(action))
+  wrap.innerHTML = auditedStaticHtml(renderDLPWarning(action))
   document.body.appendChild(wrap)
   bindDLPWarning(onProceed, () => {})
 }

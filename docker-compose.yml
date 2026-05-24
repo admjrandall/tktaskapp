@@ -1,3 +1,5 @@
+# Dev-only compose stack. Production deployments must use managed Postgres,
+# pinned runtime images, external secret management, and the Kubernetes manifests.
 name: tktaskapp
 
 services:
@@ -28,8 +30,8 @@ services:
     environment:
       POSTGRES_DB: tktaskapp
       POSTGRES_USER: tktaskapp
-      # Set POSTGRES_PASSWORD in .env.local — never commit a real password here
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      # Set POSTGRES_PASSWORD in .env.local. Compose interpolation fails fast if absent.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.local}
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U tktaskapp -d tktaskapp']
       interval: 10s
@@ -42,7 +44,7 @@ services:
 
   # ── OpenTelemetry Collector ─────────────────────────────────────────────────
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.139.0
     volumes:
       - ./infra/otel/collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
@@ -56,7 +58,7 @@ services:
 
   # ── Jaeger (all-in-one) for local trace visualisation ──────────────────────
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/all-in-one:1.76.0
     ports:
       - '16686:16686' # Jaeger UI
       - '14250:14250' # gRPC model.proto receiver (used by otel-collector)

@@ -59,14 +59,12 @@ spec:
           port: 443
 
     # 3. Identity Provider (IdP / OIDC issuer)
-    #    Replace the CIDR below with the actual IP range of your IdP.
+    #    This manifest intentionally has no 0.0.0.0/0 HTTPS egress. Replace the
+    #    documentation CIDR with your approved IdP egress gateway or IdP IP range,
+    #    or use your CNI's FQDN-aware policy CRD in an environment overlay.
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0 # tighten to your IdP CIDR in production
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
+            cidr: 203.0.113.0/24
       ports:
         - protocol: TCP
           port: 443

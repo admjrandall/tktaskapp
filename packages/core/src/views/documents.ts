@@ -15,7 +15,7 @@ import {
 } from '../storage/db.js'
 import { getState, setState, showToast, showConfirm, reloadData } from '../state.js'
 import type { AppState } from '../state.js'
-import { patchInnerHTML } from '../render-utils.js'
+import { auditedStaticHtml } from '../render-utils.js'
 
 type AnyRecord = Record<string, unknown>
 
@@ -431,7 +431,7 @@ function _bindAIEditModal(
         signal: _aiEditAbort.signal,
         onToken: (full: string) => {
           accumulated = full
-          streamDiv.innerHTML = patchInnerHTML(sanitizeDocHtml(_mdToHtml(full)))
+          streamDiv.innerHTML = auditedStaticHtml(sanitizeDocHtml(_mdToHtml(full)))
           streamDiv.scrollIntoView({ block: 'nearest' })
         },
       })
@@ -522,7 +522,7 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
   toolbar.id = 'doc-inline-ai-toolbar'
   toolbar.className = 'doc-inline-ai-toolbar'
 
-  toolbar.innerHTML = patchInnerHTML(`
+  toolbar.innerHTML = auditedStaticHtml(`
     <div class="doc-inline-ai-actions" id="doc-inline-ai-actions">
       ${_INLINE_ACTIONS.map((a) => `<button class="doc-inline-ai-btn" data-action="${a.id}" title="${a.label}">${a.label}</button>`).join('')}
     </div>
@@ -583,7 +583,7 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
       previewEl.style.display = 'flex'
     }
     if (previewContent)
-      previewContent.innerHTML = patchInnerHTML(
+      previewContent.innerHTML = auditedStaticHtml(
         '<span style="color:var(--text-tertiary);font-size:.8rem">Writing…</span>',
       )
 
@@ -600,14 +600,14 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
           accumulated = full
           _lastPreview = full
           if (previewContent)
-            previewContent.innerHTML = patchInnerHTML(sanitizeDocHtml(_mdToHtml(full)))
+            previewContent.innerHTML = auditedStaticHtml(sanitizeDocHtml(_mdToHtml(full)))
         },
       })
       _lastPreview = accumulated
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') {
         if (previewContent)
-          previewContent.innerHTML = patchInnerHTML(
+          previewContent.innerHTML = auditedStaticHtml(
             previewContent.innerHTML +
               '<br><em style="font-size:.75rem;color:var(--text-tertiary)">Stopped</em>',
           )
@@ -672,7 +672,7 @@ function _showInlineToolbar(editor: HTMLElement, markDirty: () => void): void {
       sel.addRange(_savedRange)
       const range = sel.getRangeAt(0)
       range.deleteContents()
-      // _safeHtmlFragment uses the patched innerHTML setter (→ _rawPolicy → TrustedHTML)
+      // _safeHtmlFragment routes sanitized HTML through auditedStaticHtml.
       // instead of Range.createContextualFragment which is not covered by our TT patch.
       range.insertNode(_safeHtmlFragment(_lastPreview))
       range.collapse(false)
@@ -881,7 +881,8 @@ export function bindDocumentEditor(): void {
       showConfirm(
         `Restore this version from ${formatRelative(String(ver.savedAt || ''))}?`,
         async () => {
-          if (editor) editor.innerHTML = patchInnerHTML(sanitizeDocHtml(String(ver.content || '')))
+          if (editor)
+            editor.innerHTML = auditedStaticHtml(sanitizeDocHtml(String(ver.content || '')))
           markDirty()
           showToast('Version loaded — click Save to apply', 'info')
         },
@@ -1014,7 +1015,7 @@ export function bindDocumentEditor(): void {
     printRoot.appendChild(h1El)
 
     const contentEl = document.createElement('div')
-    contentEl.innerHTML = patchInnerHTML(safeContent)
+    contentEl.innerHTML = auditedStaticHtml(safeContent)
     printRoot.appendChild(contentEl)
 
     document.head.appendChild(styleEl)
@@ -1146,7 +1147,7 @@ function _reRenderDocModal(): void {
   if (!backdrop) return
   const newHtml = renderDocModal(getState())
   const tmp = document.createElement('div')
-  tmp.innerHTML = patchInnerHTML(newHtml)
+  tmp.innerHTML = auditedStaticHtml(newHtml)
   const newEl = tmp.firstElementChild
   if (newEl) {
     backdrop.replaceWith(newEl)
@@ -1347,12 +1348,12 @@ function _mdToHtml(md: string): string {
   return out.join('\n')
 }
 
-// Build a DocumentFragment from sanitized Markdown. Uses the patched innerHTML
-// setter (→ _rawPolicy → TrustedHTML) to satisfy require-trusted-types-for 'script'
+// Build a DocumentFragment from sanitized Markdown via auditedStaticHtml to satisfy
+// require-trusted-types-for 'script'.
 // without calling Range.createContextualFragment, which is not patched.
 function _safeHtmlFragment(md: string): DocumentFragment {
   const div = document.createElement('div')
-  div.innerHTML = patchInnerHTML(sanitizeDocHtml(_mdToHtml(md)))
+  div.innerHTML = auditedStaticHtml(sanitizeDocHtml(_mdToHtml(md)))
   const frag = document.createDocumentFragment()
   while (div.firstChild) frag.appendChild(div.firstChild)
   return frag

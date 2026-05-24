@@ -8,7 +8,7 @@ import { CreateFileSchema, UpdateFileSchema, safeParseV } from '../../schemas/in
 export const filesRouter = new Hono<HonoEnv>()
 
 filesRouter.get('/', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
     const { page, pageSize, relatedStore, relatedId } = c.req.query()
     return c.json(
@@ -34,8 +34,8 @@ filesRouter.get('/', opaMiddleware('read'), async (c) => {
 })
 
 filesRouter.post('/', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
     const parsed = safeParseV(CreateFileSchema, await c.req.json())
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
@@ -54,9 +54,9 @@ filesRouter.post('/', opaMiddleware('create'), async (c) => {
 })
 
 filesRouter.get('/:id', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
-    const row = await filesService.getById(tenantId, c.req.param('id')!)
+    const row = await filesService.getById(tenantId, c.req.param('id'))
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -72,15 +72,15 @@ filesRouter.get('/:id', opaMiddleware('read'), async (c) => {
 })
 
 filesRouter.patch('/:id', opaMiddleware('update'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
     const parsed = safeParseV(UpdateFileSchema, await c.req.json())
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const row = await filesService.update(
       tenantId,
       userId,
-      c.req.param('id')!,
+      c.req.param('id'),
       parsed.data as unknown as UpdateFileInput,
     )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
@@ -98,10 +98,10 @@ filesRouter.patch('/:id', opaMiddleware('update'), async (c) => {
 })
 
 filesRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
-    const ok = await filesService.delete(tenantId, userId, c.req.param('id')!)
+    const ok = await filesService.delete(tenantId, userId, c.req.param('id'))
     return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({

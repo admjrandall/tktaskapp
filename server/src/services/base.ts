@@ -1,8 +1,9 @@
 import { db } from '../db/index.js'
 import { auditEvents } from '../db/schema/audit-events.js'
-import { sql } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import type * as schema from '../db/schema/index.js'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import { createHash } from 'node:crypto'
 
 export type Tx = NodePgDatabase<typeof schema>
 
@@ -10,7 +11,7 @@ export async function withTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>
   return db.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL app.tenant_id = ${tenantId}`)
     await tx.execute(sql`SET LOCAL app.org_id = ${tenantId}::uuid`)
-    return fn(tx as unknown as Tx)
+    return fn(tx)
   })
 }
 
@@ -24,19 +25,114 @@ export interface AuditEventInput {
 }
 
 export async function writeAuditEvent(input: AuditEventInput): Promise<string> {
-  const [event] = await db
-    .insert(auditEvents)
-    .values({
-      orgId: input.tenantId as unknown as string, // orgId maps to tenantId
-      userId: input.userId as unknown as string,
-      action: input.eventType,
-      resource: input.resourceType,
-      outcome: 'success',
-      metadata: input.details ?? null,
-    })
-    .returning({ id: auditEvents.id })
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL app.tenant_id = ${input.tenantId}`)
+    await tx.execute(sql`SET LOCAL app.org_id = ${input.tenantId}::uuid`)
 
-  return event?.id ?? ''
+    const [previous] = await tx
+      .select({
+        chainPosition: auditEvents.chainPosition,
+        signedDigest: auditEvents.signedDigest,
+      })
+      .from(auditEvents)
+      .where(eq(auditEvents.orgId, input.tenantId))
+      .orderBy(desc(auditEvents.chainPosition))
+      .limit(1)
+
+    const chainPosition = (previous?.chainPosition ?? 0) + 1
+    const prevHash = previous?.signedDigest ?? null
+    const metadata = input.details ?? null
+    const storedMetadata: Record<string, unknown> = {
+      ...(metadata ?? {}),
+      resourceId: input.resourceId,
+    }
+    const digestPayload: Record<string, unknown> = {
+      action: input.eventType,
+      chainPosition,
+      metadata: storedMetadata,
+      orgId: input.tenantId,
+      outcome: 'success',
+      prevHash,
+      resource: input.resourceType ?? null,
+      resourceId: input.resourceId ?? null,
+      userId: input.userId,
+    }
+    const signedDigest = createHash('sha256').update(_canonicalJson(digestPayload)).digest('hex')
+
+    const [event] = await tx
+      .insert(auditEvents)
+      .values({
+        orgId: input.tenantId,
+        userId: input.userId,
+        action: input.eventType,
+        resource: input.resourceType,
+        outcome: 'success',
+        metadata: storedMetadata,
+        chainPosition,
+        prevHash,
+        signedDigest,
+      })
+      .returning({ id: auditEvents.id })
+
+    return event?.id ?? ''
+  })
+}
+
+export function verifyAuditChain(
+  events: Array<{
+    orgId: string
+    userId: string | null
+    action: string
+    resource: string | null
+    outcome: string
+    metadata: unknown
+    chainPosition: number
+    prevHash: string | null
+    signedDigest: string | null
+  }>,
+): boolean {
+  let prevHash: string | null = null
+  for (const event of [...events].sort((a, b) => a.chainPosition - b.chainPosition)) {
+    if (event.prevHash !== prevHash || !event.signedDigest) return false
+    const metadata =
+      event.metadata && typeof event.metadata === 'object'
+        ? _withoutUndefined(event.metadata as Record<string, unknown>)
+        : event.metadata
+    const digestPayload: Record<string, unknown> = {
+      action: event.action,
+      chainPosition: event.chainPosition,
+      metadata,
+      orgId: event.orgId,
+      outcome: event.outcome,
+      prevHash,
+      resource: event.resource,
+      resourceId:
+        metadata && typeof metadata === 'object'
+          ? ((metadata as Record<string, unknown>)['resourceId'] ?? null)
+          : null,
+      userId: event.userId,
+    }
+    const expected: string = createHash('sha256')
+      .update(_canonicalJson(digestPayload))
+      .digest('hex')
+    if (expected !== event.signedDigest) return false
+    prevHash = event.signedDigest
+  }
+  return true
+}
+
+function _canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map((v) => _canonicalJson(v)).join(',')}]`
+  const obj = _withoutUndefined(value as Record<string, unknown>)
+  return `{${Object.keys(obj)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${_canonicalJson(obj[key])}`)
+    .join(',')}}`
+}
+
+function _withoutUndefined(obj: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== undefined))
 }
 
 export interface PaginationParams {

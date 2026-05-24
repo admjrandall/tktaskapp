@@ -8,7 +8,7 @@ import { CreateClientSchema, UpdateClientSchema, safeParseV } from '../../schema
 export const clientsRouter = new Hono<HonoEnv>()
 
 clientsRouter.get('/', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
     const { page, pageSize, search, stage } = c.req.query()
     const result = await clientsService.list(tenantId, {
@@ -33,10 +33,10 @@ clientsRouter.get('/', opaMiddleware('read'), async (c) => {
 })
 
 clientsRouter.post('/', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
-    const body = await c.req.json()
+    const body: unknown = await c.req.json()
     const parsed = safeParseV(CreateClientSchema, body)
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const client = await clientsService.create(tenantId, userId, parsed.data)
@@ -56,8 +56,8 @@ clientsRouter.post('/', opaMiddleware('create'), async (c) => {
 })
 
 clientsRouter.get('/:id', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const id = c.req.param('id')!
+  const tenantId = c.get('tenantId')
+  const id = c.req.param('id')
   try {
     const client = await clientsService.getById(tenantId, id)
     if (!client) return c.json({ error: 'Not found' }, 404)
@@ -77,11 +77,11 @@ clientsRouter.get('/:id', opaMiddleware('read'), async (c) => {
 })
 
 clientsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
-  const id = c.req.param('id')!
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
+  const id = c.req.param('id')
   try {
-    const body = await c.req.json()
+    const body: unknown = await c.req.json()
     const parsed = safeParseV(UpdateClientSchema, body)
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const client = await clientsService.update(
@@ -107,9 +107,9 @@ clientsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
 })
 
 clientsRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
-  const id = c.req.param('id')!
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
+  const id = c.req.param('id')
   try {
     const ok = await clientsService.delete(tenantId, userId, id)
     if (!ok) return c.json({ error: 'Not found' }, 404)

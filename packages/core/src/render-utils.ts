@@ -1,8 +1,13 @@
-// patchInnerHTML is the required wrapper for all innerHTML assignments in the app.
-// Element.prototype.innerHTML is already patched by security/trusted-types.ts to route
-// through the nexus-crm-raw Trusted Types policy. This function is an explicit,
-// auditable marker for every HTML insertion point — required by the no-restricted-syntax
-// ESLint rule in the core views override block.
-export function patchInnerHTML(html: string): string {
-  return html
+import { createAuditedStaticHTML } from './security/trusted-types.js'
+
+export function auditedStaticHtml(html: string): string {
+  return createAuditedStaticHTML(html)
+}
+
+export function setAuditedStaticHtml(el: Element, html: string): void {
+  el.innerHTML = createAuditedStaticHTML(html)
+}
+
+export function appendAuditedStaticHtml(el: Element, position: InsertPosition, html: string): void {
+  el.insertAdjacentHTML(position, createAuditedStaticHTML(html))
 }

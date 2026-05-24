@@ -8,8 +8,8 @@ import type {
 } from './oidc.js'
 
 export class OidcServiceImpl implements OidcService {
-  buildAuthorizationUrl(config: OidcConfig, state: string): AuthorizationUrlResult {
-    const { codeVerifier, codeChallenge } = _generatePkce()
+  async buildAuthorizationUrl(config: OidcConfig, state: string): Promise<AuthorizationUrlResult> {
+    const { codeVerifier, codeChallenge } = await generatePkceAsync()
     const tenantId = process.env['ENTRA_TENANT_ID'] ?? 'common'
     const redirectUri = process.env['OIDC_REDIRECT_URI'] ?? 'http://localhost:3000/auth/callback'
 
@@ -23,7 +23,7 @@ export class OidcServiceImpl implements OidcService {
       code_challenge_method: 'S256',
     })
 
-    const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?${params}`
+    const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?${params.toString()}`
     return { url, codeVerifier, codeChallenge }
   }
 
@@ -139,16 +139,25 @@ async function _postTokenEndpoint(tenantId: string, body: URLSearchParams): Prom
     throw new Error(`Token endpoint error ${resp.status}: ${text}`)
   }
 
-  const data = (await resp.json()) as Record<string, unknown>
+  const data = (await resp.json()) as Partial<Record<string, unknown>>
+  const accessToken = data['access_token']
+  const tokenType = data['token_type']
+  const expiresIn = data['expires_in']
+  const refreshToken = data['refresh_token']
+  const idToken = data['id_token']
+  const scope = data['scope']
+
+  if (typeof accessToken !== 'string' || accessToken.length === 0) {
+    throw new Error('Token endpoint response missing access_token')
+  }
+
   return {
-    accessToken: data['access_token'] as string,
-    tokenType: (data['token_type'] as 'Bearer') ?? 'Bearer',
-    expiresIn: (data['expires_in'] as number) ?? 900,
-    ...(data['refresh_token'] !== undefined
-      ? { refreshToken: data['refresh_token'] as string }
-      : {}),
-    idToken: (data['id_token'] as string) ?? '',
-    scope: (data['scope'] as string) ?? '',
+    accessToken,
+    tokenType: tokenType === 'DPoP' ? 'DPoP' : 'Bearer',
+    expiresIn: typeof expiresIn === 'number' ? expiresIn : 900,
+    ...(typeof refreshToken === 'string' ? { refreshToken } : {}),
+    idToken: typeof idToken === 'string' ? idToken : '',
+    scope: typeof scope === 'string' ? scope : '',
   }
 }
 
@@ -162,26 +171,6 @@ function _decodePayloadUnsafe(jwt: string): Record<string, unknown> {
   >
 }
 
-function _generatePkce(): { codeVerifier: string; codeChallenge: string } {
-  const array = new Uint8Array(32)
-  crypto.getRandomValues(array)
-  const codeVerifier = Buffer.from(array).toString('base64url')
-
-  const encoder = new TextEncoder()
-  const data = encoder.encode(codeVerifier)
-  // Synchronous hash not available in Node without subtle — we compute it inline
-  // using the Web Crypto API which is available in Node 22.
-  // Since this function is called synchronously, we return a placeholder and
-  // callers that need the challenge must use generatePkceAsync.
-  const challengeRaw = crypto.subtle.digest('SHA-256', data)
-  // For sync use, derive a deterministic challenge from verifier bytes (simplified)
-  const codeChallenge = Buffer.from(codeVerifier, 'base64url').subarray(0, 32).toString('base64url')
-
-  void challengeRaw // will be used by async variant
-
-  return { codeVerifier, codeChallenge }
-}
-
 export async function generatePkceAsync(): Promise<{
   codeVerifier: string
   codeChallenge: string
@@ -189,8 +178,12 @@ export async function generatePkceAsync(): Promise<{
   const array = new Uint8Array(32)
   crypto.getRandomValues(array)
   const codeVerifier = Buffer.from(array).toString('base64url')
+  const codeChallenge = await createPkceChallengeForVerifier(codeVerifier)
+  return { codeVerifier, codeChallenge }
+}
+
+export async function createPkceChallengeForVerifier(codeVerifier: string): Promise<string> {
   const encoder = new TextEncoder()
   const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier))
-  const codeChallenge = Buffer.from(hashBuffer).toString('base64url')
-  return { codeVerifier, codeChallenge }
+  return Buffer.from(hashBuffer).toString('base64url')
 }

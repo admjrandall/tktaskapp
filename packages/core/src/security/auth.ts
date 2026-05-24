@@ -15,7 +15,8 @@ import { fsInit as _fsInit, fsSetHandle } from '../storage/fs.js'
 import { SALT_KEY, VERIFY_KEY, VAULT_KEY } from '../constants.js'
 import { _vaultMetaSet } from './vault.js'
 import { totpSecondsRemaining, verifyTOTPCode } from './totp.js'
-import { patchInnerHTML } from '../render-utils.js'
+import { auditedStaticHtml } from '../render-utils.js'
+import { MASTER_PASSWORD_MIN_LENGTH, validateMasterPassword } from './master-password-policy.js'
 
 // ── MFA IDB hooks — injected from main.ts after dbInit wires up ───────────────
 type IdbLoadFn = (store: string, key: CryptoKey) => Promise<Record<string, unknown>[]>
@@ -80,7 +81,7 @@ export async function renderAuth(): Promise<string> {
             placeholder="${fr ? 'Choose a strong password' : 'Enter your password'}"
             autocomplete="${fr ? 'new-password' : 'current-password'}"
             style="background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.12);color:#fff;padding-right:2.5rem"
-            required minlength="${fr ? 8 : 1}">
+            required minlength="${fr ? MASTER_PASSWORD_MIN_LENGTH : 1}">
           <button type="button" id="toggle-pw" style="position:absolute;right:.625rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#64748b;padding:.25rem">
             ${Icons.Eye(16)}
           </button>
@@ -187,7 +188,7 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
 
       // Vault loaded — re-render auth screen (switches from first-run to unlock mode,
       // because IDB now has SALT_KEY so isFirstRun() returns false on the re-render).
-      appEl.innerHTML = patchInnerHTML(await renderAuth())
+      appEl.innerHTML = auditedStaticHtml(await renderAuth())
       bindAuth(appEl, onSuccess)
       const sub = document.querySelector('.auth-subtitle')
       if (sub) sub.textContent = 'Vault loaded — enter your password to unlock'
@@ -224,7 +225,8 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
       if (el) el.type = showPw ? 'text' : 'password'
     })
     const toggleBtn = document.getElementById('toggle-pw')
-    if (toggleBtn) toggleBtn.innerHTML = patchInnerHTML(showPw ? Icons.EyeOff(16) : Icons.Eye(16))
+    if (toggleBtn)
+      toggleBtn.innerHTML = auditedStaticHtml(showPw ? Icons.EyeOff(16) : Icons.Eye(16))
   })
 
   setTimeout(
@@ -248,8 +250,9 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
     }
     if (errEl) errEl.style.display = 'none'
     if (fr) {
-      if (pw.length < 8) {
-        showErr('Password must be at least 8 characters.')
+      const passwordError = validateMasterPassword(pw)
+      if (passwordError) {
+        showErr(passwordError)
         return
       }
       if (pw !== cf) {
@@ -349,7 +352,7 @@ function _showTOTPStep(
     return
   }
 
-  card.innerHTML = patchInnerHTML(`
+  card.innerHTML = auditedStaticHtml(`
     <div class="auth-logo">Task App <span>CRM</span></div>
     <div class="auth-subtitle">Enter your 6-digit authenticator code</div>
     <form id="totp-form" autocomplete="off" style="display:flex;flex-direction:column;gap:1rem">
@@ -388,7 +391,7 @@ function _showTOTPStep(
 
   document.getElementById('totp-back')?.addEventListener('click', async () => {
     cleanup()
-    appEl.innerHTML = patchInnerHTML(await renderAuth())
+    appEl.innerHTML = auditedStaticHtml(await renderAuth())
     bindAuth(appEl, onSuccess)
   })
 

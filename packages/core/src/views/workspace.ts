@@ -8,7 +8,7 @@ import { Icons } from '../ui/icons.js'
 import { renderViewTabs, renderSearchInput } from '../ui/components.js'
 import { PRIORITIES, PROJECT_STAGES, TASK_STATUSES } from '../constants.js'
 import { openProjectCanvas } from './project-canvas.js'
-import { patchInnerHTML } from '../render-utils.js'
+import { auditedStaticHtml } from '../render-utils.js'
 import {
   renderListView,
   bindListView,
@@ -180,18 +180,18 @@ export function bindWorkspaceView(store: string): void {
         _appRenderWorkspace(store)
       }
       if (s.view === 'list') {
-        body.innerHTML = patchInnerHTML(
+        body.innerHTML = auditedStaticHtml(
           renderListView(store, r, oOpen, s.sortField, s.sortDir, oSort),
         )
         bindListView(oOpen, oSort)
       } else if (s.view === 'grid') {
-        body.innerHTML = patchInnerHTML(renderGridView(store, r, oOpen))
+        body.innerHTML = auditedStaticHtml(renderGridView(store, r, oOpen))
         bindGridView(oOpen)
       } else if (s.view === 'kanban') {
-        body.innerHTML = patchInnerHTML(renderKanbanView(store, r, oOpen))
+        body.innerHTML = auditedStaticHtml(renderKanbanView(store, r, oOpen))
         bindKanbanView(store, r, oOpen, oRefresh)
       } else if (s.view === 'spatial') {
-        body.innerHTML = patchInnerHTML(renderSpatialCanvas(store, r, oOpen))
+        body.innerHTML = auditedStaticHtml(renderSpatialCanvas(store, r, oOpen))
         bindSpatialCanvas(store, r, oOpen, oRefresh)
       }
     })

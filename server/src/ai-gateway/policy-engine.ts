@@ -2,11 +2,11 @@
 // ISO 42001:2023 alignment: per-tenant budget, rate limiting, PII screening, model allowlist, audit logging.
 
 import type { AuthenticatedContext } from '../auth/oidc.js'
-import { db } from '../db/index.js'
-import { auditEvents } from '../db/schema/audit-events.js'
+import { writeAuditEvent } from '../services/base.js'
 
 export interface AiGatewayRequest {
   context: AuthenticatedContext
+  provider?: string
   model: string
   promptTokenEstimate: number
   systemPrompt?: string
@@ -51,14 +51,22 @@ import { sql } from 'drizzle-orm'
 async function _isTenantAllowedModel(orgId: string, model: string): Promise<boolean> {
   try {
     const result = await withTenant(orgId, async (tx) =>
-      tx.execute(sql`SELECT provider FROM ai_endpoint_allowlist WHERE org_id = ${orgId}::uuid`),
+      tx.execute(sql`SELECT provider FROM ai_endpoint_allowlist WHERE org_id = ${orgId}`),
     )
     const entries = result.rows as Array<{ provider: string }>
     if (entries.length === 0) return false
-    return entries.some((e) => model.startsWith(e['provider'] ?? ''))
+    return entries.some((e) => model === e.provider || model.startsWith(`${e.provider}:`))
   } catch {
     return false
   }
+}
+
+type SensitiveDataMode = 'block' | 'redact' | 'allow-with-approval'
+
+function _sensitiveDataMode(): SensitiveDataMode {
+  const mode = process.env['AI_SENSITIVE_DATA_MODE']
+  if (mode === 'redact' || mode === 'allow-with-approval' || mode === 'block') return mode
+  return process.env['NODE_ENV'] === 'production' ? 'block' : 'redact'
 }
 
 // ── Model allowlist ────────────────────────────────────────────────────────────
@@ -101,8 +109,11 @@ async function _getRedis(): Promise<RedisClient | null> {
   }
 }
 
-async function _isRateLimited(userId: string): Promise<boolean> {
-  const redis = await _getRedis()
+function _requiresDurableGatewayState(): boolean {
+  return process.env['NODE_ENV'] === 'production'
+}
+
+async function _isRateLimited(userId: string, redis: RedisClient | null): Promise<boolean> {
   if (redis) {
     const key = `ratelimit:${userId}:${Math.floor(Date.now() / 60_000)}`
     const current = await redis.incrby(key, 1)
@@ -125,8 +136,11 @@ async function _isRateLimited(userId: string): Promise<boolean> {
 const _MONTHLY_BUDGET = Number(process.env['AI_GATEWAY_MONTHLY_BUDGET_TOKENS'] ?? 1_000_000)
 const _monthlyUsage = new Map<string, number>()
 
-async function _isOverBudget(orgId: string, promptTokenEstimate: number): Promise<boolean> {
-  const redis = await _getRedis()
+async function _isOverBudget(
+  orgId: string,
+  promptTokenEstimate: number,
+  redis: RedisClient | null,
+): Promise<boolean> {
   const key = `budget:${orgId}:${new Date().toISOString().slice(0, 7)}`
   if (redis) {
     const current = await redis.incrby(key, promptTokenEstimate)
@@ -149,10 +163,11 @@ export async function evaluateAiGatewayRequest(
   request: AiGatewayRequest,
 ): Promise<AiGatewayDecision> {
   const { context, model, promptTokenEstimate, userMessage, lockdownLevel } = request
+  const provider = request.provider ?? model.split(':')[0] ?? model
 
   // 0. Lockdown enforcement — strong/strict only permits tenant-allowlisted providers (C.7)
   if (lockdownLevel === 'strong' || lockdownLevel === 'strict') {
-    const tenantAllowed = await _isTenantAllowedModel(context.orgId, model)
+    const tenantAllowed = await _isTenantAllowedModel(context.orgId, provider)
     if (!tenantAllowed) {
       await _auditLog(context, model, 'failure', `lockdown_blocked:${lockdownLevel}`)
       return {
@@ -168,14 +183,23 @@ export async function evaluateAiGatewayRequest(
     return { allowed: false, reason: `Model '${model}' is not on the approved allowlist` }
   }
 
+  const redis = await _getRedis()
+  if (redis === null && _requiresDurableGatewayState()) {
+    await _auditLog(context, model, 'failure', 'durable_gateway_state_required')
+    return {
+      allowed: false,
+      reason: 'AI gateway requires durable Redis-backed rate and budget state in production',
+    }
+  }
+
   // 2. Per-user rate limit
-  if (await _isRateLimited(context.userId)) {
+  if (await _isRateLimited(context.userId, redis)) {
     await _auditLog(context, model, 'failure', 'rate_limited')
     return { allowed: false, reason: 'Rate limit exceeded — maximum 20 requests per minute' }
   }
 
   // 3. Per-tenant budget
-  if (await _isOverBudget(context.orgId, promptTokenEstimate)) {
+  if (await _isOverBudget(context.orgId, promptTokenEstimate, redis)) {
     await _auditLog(context, model, 'failure', 'budget_exceeded')
     return { allowed: false, reason: 'Monthly AI token budget exceeded for this organisation' }
   }
@@ -183,9 +207,15 @@ export async function evaluateAiGatewayRequest(
   // 4. PII screening
   const { clean, detected } = _screenPii(userMessage)
   if (detected.length > 0) {
-    await _auditLog(context, model, 'failure', `pii_detected:${detected.join(',')}`)
-    // Return sanitised message — don't block the request, but scrub the PII
-    await _auditLog(context, model, 'success', 'pii_scrubbed')
+    const mode = _sensitiveDataMode()
+    await _auditLog(context, model, 'failure', `sensitive_data_detected:${detected.join(',')}`)
+    if (mode === 'block') {
+      return { allowed: false, reason: 'Sensitive data detected; external AI call blocked' }
+    }
+    if (mode === 'allow-with-approval') {
+      return { allowed: false, reason: 'Sensitive data requires explicit approval before AI use' }
+    }
+    await _auditLog(context, model, 'success', 'sensitive_data_redacted')
     return { allowed: true, sanitisedMessage: clean }
   }
 
@@ -201,16 +231,17 @@ async function _auditLog(
   reason: string,
 ): Promise<void> {
   try {
-    await db.insert(auditEvents).values({
-      orgId: context.orgId,
+    await writeAuditEvent({
+      tenantId: context.orgId,
       userId: context.userId,
-      action: 'ai.call',
-      resource: model,
-      outcome,
-      metadata: { reason },
+      eventType: 'ai.call',
+      resourceType: model,
+      details: {
+        outcome,
+        reason,
+      },
     })
   } catch (err) {
-    // Fire-and-forget — never let audit failure block the request
     process.stderr.write(
       JSON.stringify({
         level: 'error',
@@ -218,5 +249,6 @@ async function _auditLog(
         error: String(err),
       }) + '\n',
     )
+    if (process.env['NODE_ENV'] === 'production') throw err
   }
 }

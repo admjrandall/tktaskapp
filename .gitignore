@@ -32,3 +32,7 @@ ghp_*.txt
 
 # BMAD installer-managed per-user config
 _bmad/config.user.toml
+
+# Local agent/tooling installs and Codex desktop state
+.agents/
+.codex/

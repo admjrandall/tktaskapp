@@ -2,9 +2,9 @@ import type { Context, Next } from 'hono'
 import { validateEntraIdToken } from './oidc.js'
 import { db } from '../db/index.js'
 import { tenantUsers } from '../db/schema/users.js'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, isNull } from 'drizzle-orm'
 
-export async function authMiddleware(c: Context, next: Next): Promise<Response | void> {
+export async function authMiddleware(c: Context, next: Next): Promise<Response | undefined> {
   const authHeader = c.req.header('Authorization')
   if (!authHeader?.startsWith('Bearer ')) {
     return c.json({ error: 'Unauthorized' }, 401)
@@ -21,18 +21,20 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
       .where(
         and(
           eq(tenantUsers.externalId, claims.externalId),
-          eq(tenantUsers.deletedAt, null as never),
+          eq(tenantUsers.entraTenantId, claims.tenantId),
+          isNull(tenantUsers.deletedAt),
         ),
       )
       .limit(1)
 
     const user = users[0]
-    const role = user?.role ?? 'viewer'
-    const userId = user?.id ?? claims.externalId
+    if (!user) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
 
-    c.set('userId', userId)
-    c.set('tenantId', claims.tenantId)
-    c.set('role', role)
+    c.set('userId', user.id)
+    c.set('tenantId', user.orgId)
+    c.set('role', user.role)
     c.set('externalId', claims.externalId)
     c.set('email', claims.email)
 

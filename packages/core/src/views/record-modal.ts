@@ -2,7 +2,7 @@
 // Extracted from taskapp.html lines 4119–4224.
 
 import { escH, sanitize, formatRelative, formatFileSize, readFileAsBase64 } from '../utils.js'
-import { patchInnerHTML } from '../render-utils.js'
+import { auditedStaticHtml } from '../render-utils.js'
 import { sanitizeDataUrl } from '../security/sanitize.js'
 import {
   dbGetAll,
@@ -282,7 +282,7 @@ export function bindRecordModal(config: {
     _pendingNotes.push(note)
     const list = document.getElementById('notes-list')
     if (list)
-      list.innerHTML = patchInnerHTML(
+      list.innerHTML = auditedStaticHtml(
         list.innerHTML +
           `<div style="padding:.625rem;background:var(--bg-base);border-radius:var(--radius-md);margin-bottom:.5rem"><div style="font-size:.8rem;line-height:1.5">${escH(text)}</div><div style="font-size:.7rem;color:var(--text-tertiary);margin-top:.2rem">just now</div></div>`,
       )
@@ -325,7 +325,7 @@ export function bindRecordModal(config: {
           )
           const listEl = document.getElementById('modal-files-list')
           if (listEl)
-            listEl.innerHTML = patchInnerHTML(
+            listEl.innerHTML = auditedStaticHtml(
               recFiles.length
                 ? recFiles.map(renderModalFileRow).join('')
                 : '<p style="font-size:.8rem;color:var(--text-tertiary)">No files attached</p>',

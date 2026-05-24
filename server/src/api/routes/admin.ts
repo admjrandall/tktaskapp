@@ -8,7 +8,6 @@ import { AzureKeyVaultKeyService, LegalHoldActiveError } from '../../kms/key-ser
 import { withTenant, writeAuditEvent } from '../../services/base.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { EraseUserSchema, safeParseV } from '../../schemas/index.js'
-import { db } from '../../db/index.js'
 import { sql } from 'drizzle-orm'
 
 // ── Admin-only Valibot schemas ─────────────────────────────────────────────────
@@ -35,7 +34,7 @@ const legalHoldService = new LegalHoldService()
 export const adminRouter = new Hono<HonoEnv>()
 
 adminRouter.get('/users', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
     const { page, pageSize, status } = c.req.query()
     return c.json(
@@ -60,9 +59,9 @@ adminRouter.get('/users', opaMiddleware('manage_users'), async (c) => {
 })
 
 adminRouter.get('/users/:id', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
-    const user = await usersService.getById(tenantId, c.req.param('id')!)
+    const user = await usersService.getById(tenantId, c.req.param('id'))
     return user ? c.json(user, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -78,9 +77,9 @@ adminRouter.get('/users/:id', opaMiddleware('manage_users'), async (c) => {
 })
 
 adminRouter.post('/users/:id/suspend', opaMiddleware('suspend_user'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const requestedBy = c.get('userId') as string
-  const targetId = c.req.param('id')!
+  const tenantId = c.get('tenantId')
+  const requestedBy = c.get('userId')
+  const targetId = c.req.param('id')
   try {
     const ok = await usersService.suspend(tenantId, requestedBy, targetId)
     return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
@@ -98,9 +97,9 @@ adminRouter.post('/users/:id/suspend', opaMiddleware('suspend_user'), async (c) 
 })
 
 adminRouter.post('/users/:id/erase', opaMiddleware('erase_user'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const requestedBy = c.get('userId') as string
-  const targetId = c.req.param('id')!
+  const tenantId = c.get('tenantId')
+  const requestedBy = c.get('userId')
+  const targetId = c.req.param('id')
 
   try {
     const parsed = safeParseV(EraseUserSchema, await c.req.json())
@@ -148,8 +147,8 @@ adminRouter.post('/users/:id/erase', opaMiddleware('erase_user'), async (c) => {
 
 // ── Org settings ───────────────────────────────────────────────────────────────
 adminRouter.get('/org-settings', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const role = c.get('role') as string
+  const tenantId = c.get('tenantId')
+  const role = c.get('role')
   if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
   try {
     const rows = await withTenant(tenantId, async (tx) => {
@@ -173,9 +172,9 @@ adminRouter.get('/org-settings', opaMiddleware('manage_users'), async (c) => {
 })
 
 adminRouter.patch('/org-settings', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
-  const role = c.get('role') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
+  const role = c.get('role')
   if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
   try {
     const parsed = safeParseV(OrgSettingsUpdateSchema, await c.req.json())
@@ -218,8 +217,8 @@ adminRouter.patch('/org-settings', opaMiddleware('manage_users'), async (c) => {
 
 // ── AI endpoint allowlist ──────────────────────────────────────────────────────
 adminRouter.get('/ai-allowlist', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const role = c.get('role') as string
+  const tenantId = c.get('tenantId')
+  const role = c.get('role')
   if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
   try {
     const rows = await withTenant(tenantId, async (tx) => {
@@ -242,9 +241,9 @@ adminRouter.get('/ai-allowlist', opaMiddleware('manage_users'), async (c) => {
 })
 
 adminRouter.post('/ai-allowlist', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
-  const role = c.get('role') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
+  const role = c.get('role')
   if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
   try {
     const parsed = safeParseV(AIAllowlistAddSchema, await c.req.json())
@@ -279,10 +278,10 @@ adminRouter.post('/ai-allowlist', opaMiddleware('manage_users'), async (c) => {
 })
 
 adminRouter.delete('/ai-allowlist/:id', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
-  const role = c.get('role') as string
-  const entryId = c.req.param('id')!
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
+  const role = c.get('role')
+  const entryId = c.req.param('id')
   if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
   try {
     await withTenant(tenantId, async (tx) => {
@@ -313,8 +312,8 @@ adminRouter.delete('/ai-allowlist/:id', opaMiddleware('manage_users'), async (c)
 
 // ── Integration manager ────────────────────────────────────────────────────────
 adminRouter.get('/integrations', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const role = c.get('role') as string
+  const tenantId = c.get('tenantId')
+  const role = c.get('role')
   if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
   try {
     const rows = await withTenant(tenantId, async (tx) => {
@@ -337,9 +336,9 @@ adminRouter.get('/integrations', opaMiddleware('manage_users'), async (c) => {
 })
 
 adminRouter.post('/integrations', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
-  const role = c.get('role') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
+  const role = c.get('role')
   if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
   try {
     const parsed = safeParseV(IntegrationAddSchema, await c.req.json())
@@ -374,10 +373,10 @@ adminRouter.post('/integrations', opaMiddleware('manage_users'), async (c) => {
 })
 
 adminRouter.delete('/integrations/:id', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
-  const role = c.get('role') as string
-  const integrationId = c.req.param('id')!
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
+  const role = c.get('role')
+  const integrationId = c.req.param('id')
   if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
   try {
     await withTenant(tenantId, async (tx) => {

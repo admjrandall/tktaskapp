@@ -84,7 +84,7 @@ export interface OidcService {
    * Returns the URL to redirect the user to, plus the code verifier to store
    * in the server-side session (never the client).
    */
-  buildAuthorizationUrl(config: OidcConfig, state: string): AuthorizationUrlResult
+  buildAuthorizationUrl(config: OidcConfig, state: string): Promise<AuthorizationUrlResult>
 
   /**
    * Exchange an authorization code + PKCE code verifier for tokens.

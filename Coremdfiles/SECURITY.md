@@ -1,7 +1,7 @@
 # Security Policy
 
 **Task App CRM** — monorepo, built to `dist/offline/index.html`
-**Last reviewed:** 2026-05-18
+**Last reviewed:** 2026-05-23
 All information in this document is derived from direct inspection of the current codebase.
 
 ---
@@ -84,7 +84,7 @@ The CSP meta tag in the built `dist/offline/index.html` enforces the following:
 - **`object-src 'none'`** — blocks all plugin content
 - **`base-uri 'none'`** — prevents base tag injection
 - **`frame-ancestors 'none'`** — not in the CSP meta tag (browsers ignore `frame-ancestors` in `<meta>` elements per spec — it only works in HTTP response headers). If the app is ever served via HTTPS, add `frame-ancestors 'none'` as a server-side response header.
-- **`trusted-types nexus-crm nexus-crm-raw dompurify`** — only these three policy names may be created. `dompurify` is the name DOMPurify 3.x registers automatically when Trusted Types is enforced; it must be explicitly allowed or DOMPurify's internal DOM parsing fails, producing ~180 runtime errors per page load.
+- **`trusted-types nexus-crm nexus-crm-static-template dompurify`** — only these three policy names may be created. `dompurify` is the name DOMPurify 3.x registers automatically when Trusted Types is enforced; it must be explicitly allowed or DOMPurify's internal DOM parsing succeeds under Trusted Types enforcement.
 - **`require-trusted-types-for 'script'`** — any raw string assigned to `innerHTML` or another DOM sink throws a `TypeError`; all assignments must go through a registered policy
 
 **CSP hashes are regenerated automatically** by `generate-csp.mjs`, which runs as part of every `pnpm run build:offline` command. Never edit the hash manually.
@@ -93,21 +93,21 @@ The CSP meta tag in the built `dist/offline/index.html` enforces the following:
 
 ## Trusted Types
 
-Two Trusted Types policies are registered once in `packages/core/src/trusted-types.ts`, which must be the **first import** in `main.ts`:
+Two Trusted Types policies are registered once in `packages/core/src/security/trusted-types.ts`, which must remain the first side-effect import during bootstrap:
 
 - **`nexus-crm`** (`_ttPolicy`) — sanitises user-visible strings (HTML-escapes `&`, `<`, `>`, `"`, `'`) before `innerHTML`
-- **`nexus-crm-raw`** (`_rawPolicy`) — passes already-safe template HTML through unchanged; used by the `patchInnerHTML` override and the toast `insertAdjacentHTML` path
+- **`nexus-crm-static-template`** — module-private pass-through for audited app-owned templates only, exposed through `auditedStaticHtml()` / render helper functions in `packages/core/src/render-utils.ts`
 
-`Element.prototype.innerHTML` is monkey-patched to automatically route all string assignments through `_rawPolicy`. This means template-string render functions work without a line-by-line rewrite while still satisfying Trusted Types enforcement.
+`Element.prototype.innerHTML` and `outerHTML` are not monkey-patched. Raw string assignment remains blocked by `require-trusted-types-for 'script'` in browsers that support Trusted Types unless the code explicitly uses an approved render helper. Stored or AI-generated rich text must be sanitized by the strict DOMPurify allowlist before it is handed to the static-template policy.
 
-**The rule:** Never call `trustedTypes.createPolicy('nexus-crm-raw', ...)` again. Per the Trusted Types spec, creating a policy with an already-registered name throws a `TypeError` unless the CSP includes `'allow-duplicates'` — which it does not.
+**The rule:** Never call `trustedTypes.createPolicy('nexus-crm-static-template', ...)` outside `trusted-types.ts`. Per the Trusted Types spec, creating a policy with an already-registered name throws a `TypeError` unless the CSP includes `'allow-duplicates'` — which it does not.
 
 ---
 
 ## XSS mitigations
 
 - `escH()` is applied to all user-supplied strings before they are interpolated into HTML template strings
-- The Trusted Types `patchInnerHTML` override provides a second layer — any unescaped string assignment not going through a policy throws at runtime
+- Trusted Types provide a second layer — any unescaped string assignment not going through an approved policy throws at runtime in supported browsers
 - No `eval()` or `new Function()` anywhere in the file
 - Cloud AI responses are treated as untrusted text — they are escaped before rendering in the chat UI (`escH(text)` in `streamToBubble()`)
 
@@ -119,9 +119,9 @@ All AI output rendered into the document editor passes through **three sequentia
 
 2. **DOMPurify allow-list** (`sanitizeDocHtml` in `sanitize.ts`) — runs after the renderer as a belt-and-braces gate. Strips anything not on the explicit tag/attribute allow-list and enforces safe link schemes (`http`, `https`, `mailto` only).
 
-3. **Trusted Types `_rawPolicy`** — the patched `innerHTML` setter wraps the sanitized string in a `TrustedHTML` object, satisfying `require-trusted-types-for 'script'` enforcement in the CSP.
+3. **Trusted Types static-template policy** — the sanitized string is routed through `auditedStaticHtml()`, satisfying `require-trusted-types-for 'script'` enforcement in the CSP.
 
-**Why `Range.createContextualFragment` is not used:** Chrome enforces Trusted Types on this DOM sink and our patch only covers `innerHTML`/`outerHTML`. Instead, AI content is inserted via a temporary `<div>` whose `innerHTML` setter is patched, then moved into a `DocumentFragment` node-by-node. This avoids the unpatched sink entirely.
+**Why `Range.createContextualFragment` is not used:** Chrome enforces Trusted Types on this DOM sink. AI content is inserted via a temporary `<div>` using the approved audited static helper after DOMPurify sanitization, then moved into a `DocumentFragment` node-by-node.
 
 ---
 
@@ -156,8 +156,15 @@ The offline profile allows only browser built-in AI (Gemini Nano on Chrome, Phi-
 ## Auth, MFA, and brute-force protection
 
 - Password is never stored. The PBKDF2-derived key is tested against an encrypted verify token (`'NEXUS_CRM_OK'`); if decryption fails, the password is wrong.
+- New offline vault passwords must be at least 15 Unicode characters, are normalized with NFKC for screening, and are checked against a bundled offline denylist for common/application-specific passwords. There are no arbitrary composition rules.
 - Failed attempts trigger an exponential lockout: attempt 1 = 500ms delay, attempt 2 = 1s, attempt 3 = 2s ... capped at 30 seconds per attempt.
 - Lockout state (`nexus_auth_fail_count`, `nexus_auth_locked_until`) is stored in `localStorage` so it persists across tab closes (NIST AC-7 compliance). This is a UI-level protection, not a cryptographic one. An attacker with access to the raw IDB files can attempt offline dictionary attacks at the speed of their hardware against a PBKDF2-600k key. Password strength is the primary defence.
+
+## Enterprise auth state
+
+Server OIDC uses authorization code + PKCE S256 only. Production auth state requires Redis via `AUTH_STATE_REDIS_URL` (or the shared durable Redis URL only where explicitly configured); in-memory PKCE and refresh replay state is limited to non-production test/development mode. PKCE state is single-use and expires after 10 minutes. Refresh-token use is tracked by SHA-256 token hash so replay is denied without logging raw token material.
+
+The server resolves Entra users through `tenant_users.entra_tenant_id + external_id` and then uses the internal `org_id` as the authorization/RLS tenant id. Authenticated but unprovisioned, suspended, or wrong-tenant users receive `403` rather than fallback viewer access.
 
 ### TOTP MFA (all builds — NIST AAL2)
 

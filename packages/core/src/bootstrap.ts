@@ -1,9 +1,8 @@
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
-// trusted-types.ts MUST be the first import — its IIFE patches innerHTML.
+// trusted-types.ts MUST be the first import so policies exist before render helpers run.
 import './security/trusted-types.js'
 import './styles/main.css'
 
-import { _rawPolicy } from './security/trusted-types.js'
 import {
   initTheme,
   initDensity,
@@ -33,7 +32,7 @@ import { aiSecretsRefresh, closeAIWizard } from './ai/ai-settings.js'
 import { aiPrefs, saveAIPrefs } from './ai/ai-prefs.js'
 import { isAITierAllowed } from './deployment-policy.js'
 import { wireHooks } from './hooks-wiring.js'
-import { patchInnerHTML } from './render-utils.js'
+import { auditedStaticHtml } from './render-utils.js'
 import { appEl, appRenderWorkspace, fullRender } from './render-pipeline.js'
 import { lockApp, setOnAuthSuccess, _resetIdleTimer } from './app-lock.js'
 import { renderToast } from './ui/components.js'
@@ -236,12 +235,12 @@ export async function init(): Promise<void> {
         const toastEl = document.querySelector('.toast-container')
         const newToast = state.toast ? renderToast(state.toast) : ''
         if (toastEl) {
-          if (newToast && _rawPolicy) {
-            toastEl.insertAdjacentHTML('afterend', _rawPolicy.createHTML(newToast))
+          if (newToast) {
+            toastEl.insertAdjacentHTML('afterend', auditedStaticHtml(newToast))
           }
           toastEl.remove()
-        } else if (newToast && _rawPolicy) {
-          appEl.insertAdjacentHTML('beforeend', _rawPolicy.createHTML(newToast))
+        } else if (newToast) {
+          appEl.insertAdjacentHTML('beforeend', auditedStaticHtml(newToast))
         }
         _prevState = state
         return
@@ -337,7 +336,7 @@ export async function init(): Promise<void> {
     return
   }
 
-  appEl.innerHTML = patchInnerHTML(await renderAuth())
+  appEl.innerHTML = auditedStaticHtml(await renderAuth())
   bindAuth(appEl, async (key) => {
     await cacheSessionKey(key)
     await afterUnlock(key)

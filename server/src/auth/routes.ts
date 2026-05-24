@@ -1,7 +1,10 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { OidcServiceImpl, generatePkceAsync } from './oidc-service.js'
 import type { OidcConfig } from './oidc.js'
+import type { HonoEnv } from '../hono-types.js'
+import { getAuthStateStore } from './state-store.js'
 
 // ── OIDC config ────────────────────────────────────────────────────────────────
 // Populated from env vars at module evaluation time. The server refuses /auth/*
@@ -22,27 +25,7 @@ function _oidcConfig(): OidcConfig {
 const REFRESH_COOKIE = 'tk_refresh_token'
 const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 // 30 days in seconds
 
-// ── PKCE state store ────────────────────────────────────────────────────────────
-// Maps random state nonce → { codeVerifier, redirectTo, expiresAt }.
-// TTL: 10 minutes — sufficient for any browser redirect round-trip.
-// Production note: replace with a Redis SET when running multiple server instances.
-
-interface PkceEntry {
-  codeVerifier: string
-  redirectTo: string
-  expiresAt: number
-}
-
-const _pendingStates = new Map<string, PkceEntry>()
-
-function _cleanExpiredStates(): void {
-  const now = Date.now()
-  for (const [k, v] of _pendingStates) {
-    if (v.expiresAt < now) _pendingStates.delete(k)
-  }
-}
-
-setInterval(_cleanExpiredStates, 5 * 60 * 1000).unref()
+const PKCE_TTL_SECONDS = 10 * 60
 
 // ── Redirect allowlist ─────────────────────────────────────────────────────────
 // Validates that the post-login redirect target is same-origin or a configured
@@ -68,8 +51,7 @@ function _isAllowedRedirect(redirectTo: string, requestOrigin: string): boolean 
 
 // ── Cookie helpers ─────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function _setRefreshCookie(c: any, token: string): void {
+function _setRefreshCookie(c: Context<HonoEnv>, token: string): void {
   setCookie(c, REFRESH_COOKIE, token, {
     httpOnly: true,
     secure: process.env['NODE_ENV'] === 'production',
@@ -79,8 +61,7 @@ function _setRefreshCookie(c: any, token: string): void {
   })
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function _clearRefreshCookie(c: any): void {
+function _clearRefreshCookie(c: Context<HonoEnv>): void {
   deleteCookie(c, REFRESH_COOKIE, {
     httpOnly: true,
     secure: process.env['NODE_ENV'] === 'production',
@@ -93,7 +74,7 @@ function _clearRefreshCookie(c: any): void {
 
 const _oidcService = new OidcServiceImpl()
 
-export const authRouter = new Hono()
+export const authRouter = new Hono<HonoEnv>()
 
 // GET /auth/login
 // Initiates PKCE flow: generates code_verifier + state, stores them, redirects to IdP.
@@ -117,11 +98,20 @@ authRouter.get('/login', async (c) => {
   crypto.getRandomValues(stateBytes)
   const state = Buffer.from(stateBytes).toString('base64url')
 
-  _pendingStates.set(state, {
-    codeVerifier,
-    redirectTo: rawRedirect,
-    expiresAt: Date.now() + 10 * 60 * 1000,
-  })
+  try {
+    const store = await getAuthStateStore()
+    await store.savePkceState(
+      state,
+      {
+        codeVerifier,
+        redirectTo: rawRedirect,
+        expiresAt: Date.now() + PKCE_TTL_SECONDS * 1000,
+      },
+      PKCE_TTL_SECONDS,
+    )
+  } catch {
+    return c.json({ error: 'Authentication state store unavailable' }, 503)
+  }
 
   const tenantId = process.env['ENTRA_TENANT_ID'] ?? 'common'
   const redirectUri = process.env['OIDC_REDIRECT_URI'] ?? `${requestOrigin}/auth/callback`
@@ -137,7 +127,7 @@ authRouter.get('/login', async (c) => {
   })
 
   return c.redirect(
-    `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?${params}`,
+    `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?${params.toString()}`,
     302,
   )
 })
@@ -160,12 +150,15 @@ authRouter.get('/callback', async (c) => {
     return c.json({ error: 'Missing code or state parameter' }, 400)
   }
 
-  const pending = _pendingStates.get(state)
-  if (!pending || pending.expiresAt < Date.now()) {
-    _pendingStates.delete(state)
+  let pending
+  try {
+    pending = await (await getAuthStateStore()).consumePkceState(state)
+  } catch {
+    return c.json({ error: 'Authentication state store unavailable' }, 503)
+  }
+  if (!pending) {
     return c.json({ error: 'Invalid or expired PKCE state' }, 400)
   }
-  _pendingStates.delete(state)
 
   let tokens
   try {
@@ -190,6 +183,18 @@ authRouter.post('/refresh', async (c) => {
   const refreshToken = getCookie(c, REFRESH_COOKIE)
   if (!refreshToken) {
     return c.json({ error: 'No refresh token — please log in' }, 401)
+  }
+
+  try {
+    const firstUse = await (
+      await getAuthStateStore()
+    ).rememberRefreshTokenUse(refreshToken, config.refreshTokenTtlSeconds)
+    if (!firstUse) {
+      _clearRefreshCookie(c)
+      return c.json({ error: 'Refresh token replay detected — please log in' }, 401)
+    }
+  } catch {
+    return c.json({ error: 'Authentication state store unavailable' }, 503)
   }
 
   let tokens
@@ -221,9 +226,12 @@ authRouter.post('/logout', async (c) => {
 
   if (refreshToken && config.clientId) {
     try {
+      await (
+        await getAuthStateStore()
+      ).revokeRefreshToken(refreshToken, config.refreshTokenTtlSeconds)
       await _oidcService.revokeToken(refreshToken, config)
     } catch {
-      // Best-effort revocation — cookie is already cleared regardless.
+      return c.json({ error: 'Logout revocation failed' }, 503)
     }
   }
 

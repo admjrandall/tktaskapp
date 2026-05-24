@@ -5,6 +5,7 @@ export const userRoleEnum = pgEnum('user_role', ['owner', 'admin', 'editor', 'vi
 export const tenantUsers = pgTable('tenant_users', {
   id: uuid('id').defaultRandom().primaryKey(),
   orgId: uuid('org_id').notNull(),
+  entraTenantId: text('entra_tenant_id').notNull(),
   externalId: text('external_id').notNull().unique(),
   email: text('email').notNull(),
   displayName: text('display_name'),

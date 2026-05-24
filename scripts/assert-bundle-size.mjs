@@ -1,5 +1,5 @@
 // Last measured bundle sizes — update this comment after each build:offline run.
-// offline-browser-ai:  raw 425,741 B (~416 kB)  gzip 114,478 B (~112 kB)  (as of 2026-05-20)
+// offline-browser-ai:  raw 474,176 B (~463 kB)  gzip 127,271 B (~124 kB)  (as of 2026-05-23)
 // offline-no-ai:       not built                                            (as of 2026-05-20)
 // offline-internal-ai: not built                                            (as of 2026-05-20)
 //
@@ -31,13 +31,13 @@ const PROFILES = [
   {
     name: 'offline-browser-ai',
     path: resolve(root, 'dist/offline/index.html'),
-    // Budget raised from 440 KB / 120 KB to 470 KB / 125 KB (Phase 1).
-    // Phase 1 additions: branding.ts, persona presets, badge+avatar primitives,
-    // rebuilt components.ts (DLP + renderAvatar/Badge), topbar lockdown banner.
+    // Budget raised from 470 KB / 125 KB to 480 KB / 130 KB for the
+    // 2026-05-23 production-readiness remediation: explicit Trusted Types
+    // helpers, offline master-password screening, and security gate evidence.
     // Run perf:analyse before attempting to reduce:
     //   pnpm --filter @tktaskapp/offline-web run perf:analyse
-    maxRaw: 470_000,
-    maxGzip: 125_000,
+    maxRaw: 480_000,
+    maxGzip: 130_000,
   },
   {
     name: 'offline-internal-ai',

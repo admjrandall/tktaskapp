@@ -1,4 +1,5 @@
 import type { Context, Next } from 'hono'
+import { routePath } from 'hono/route'
 import { trace, SpanStatusCode } from '@opentelemetry/api'
 import { otel } from './otel.js'
 
@@ -6,7 +7,7 @@ const _tracer = trace.getTracer('crm-server')
 
 export async function otelMiddleware(c: Context, next: Next): Promise<void> {
   const method = c.req.method
-  const route = c.req.routePath ?? c.req.path
+  const route = routePath(c)
   const tenantId = (c.get('tenantId') as string | undefined) ?? 'unauthenticated'
   const startMs = Date.now()
 

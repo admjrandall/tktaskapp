@@ -8,7 +8,7 @@ import { CreatePersonSchema, UpdatePersonSchema, safeParseV } from '../../schema
 export const peopleRouter = new Hono<HonoEnv>()
 
 peopleRouter.get('/', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
     const { page, pageSize, search, clientId, departmentId } = c.req.query()
     return c.json(
@@ -35,8 +35,8 @@ peopleRouter.get('/', opaMiddleware('read'), async (c) => {
 })
 
 peopleRouter.post('/', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
     const parsed = safeParseV(CreatePersonSchema, await c.req.json())
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
@@ -55,9 +55,9 @@ peopleRouter.post('/', opaMiddleware('create'), async (c) => {
 })
 
 peopleRouter.get('/:id', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
-    const row = await peopleService.getById(tenantId, c.req.param('id')!)
+    const row = await peopleService.getById(tenantId, c.req.param('id'))
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -73,15 +73,15 @@ peopleRouter.get('/:id', opaMiddleware('read'), async (c) => {
 })
 
 peopleRouter.patch('/:id', opaMiddleware('update'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
     const parsed = safeParseV(UpdatePersonSchema, await c.req.json())
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const row = await peopleService.update(
       tenantId,
       userId,
-      c.req.param('id')!,
+      c.req.param('id'),
       parsed.data as unknown as UpdatePersonInput,
     )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
@@ -99,10 +99,10 @@ peopleRouter.patch('/:id', opaMiddleware('update'), async (c) => {
 })
 
 peopleRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
-    const ok = await peopleService.delete(tenantId, userId, c.req.param('id')!)
+    const ok = await peopleService.delete(tenantId, userId, c.req.param('id'))
     return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({

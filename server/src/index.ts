@@ -1,12 +1,20 @@
 // OTel MUST be initialised before any other imports that create spans or metrics.
 import { OtelServiceImpl } from './observability/otel.js'
+import { validateProductionConfig } from './config/production.js'
+
+validateProductionConfig()
+
+const nodeEnv = process.env['NODE_ENV']
+const deploymentEnvironment =
+  nodeEnv === 'production' || nodeEnv === 'staging' || nodeEnv === 'development'
+    ? nodeEnv
+    : 'development'
 
 const otelImpl = new OtelServiceImpl()
 otelImpl.init({
   serviceName: 'tktaskapp-server',
   serviceVersion: process.env['npm_package_version'] ?? '0.1.0',
-  environment:
-    (process.env['NODE_ENV'] as 'development' | 'staging' | 'production') ?? 'development',
+  environment: deploymentEnvironment,
   exporterEndpoint: process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'http://localhost:4318',
   debugMode: process.env['NODE_ENV'] !== 'production',
 })
@@ -175,6 +183,12 @@ async function shutdown(): Promise<void> {
     message: 'SIGTERM received — shutting down',
   })
   stopDestructionScheduler(destructionTimer)
+  await new Promise<void>((resolve, reject) => {
+    server.close((err?: Error) => {
+      if (err) reject(err)
+      else resolve()
+    })
+  })
   await closeDb()
   process.exit(0)
 }

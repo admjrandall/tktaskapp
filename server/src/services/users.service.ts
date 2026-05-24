@@ -12,7 +12,7 @@ export class UsersService {
     filters: { status?: string; page?: number; pageSize?: number },
   ): Promise<PaginatedResult<TenantUser>> {
     const { limit, offset, page, pageSize } = paginationValues(filters)
-    const conditions = [eq(tenantUsers.orgId, tenantId as unknown as string)]
+    const conditions = [eq(tenantUsers.orgId, tenantId)]
 
     if (filters.status === 'active') conditions.push(isNull(tenantUsers.deletedAt))
     else if (filters.status === 'suspended') {
@@ -36,8 +36,8 @@ export class UsersService {
       pagination: {
         page,
         pageSize,
-        total: Number(countRows[0]?.value ?? 0),
-        totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
+        total: countRows[0]?.value ?? 0,
+        totalPages: Math.ceil((countRows[0]?.value ?? 0) / pageSize),
       },
     }
   }
@@ -46,12 +46,7 @@ export class UsersService {
     const rows = await db
       .select()
       .from(tenantUsers)
-      .where(
-        and(
-          eq(tenantUsers.id, id as unknown as string),
-          eq(tenantUsers.orgId, tenantId as unknown as string),
-        ),
-      )
+      .where(and(eq(tenantUsers.id, id), eq(tenantUsers.orgId, tenantId)))
       .limit(1)
     return rows[0] ?? null
   }
@@ -60,12 +55,7 @@ export class UsersService {
     const [row] = await db
       .update(tenantUsers)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(
-        and(
-          eq(tenantUsers.id, userId as unknown as string),
-          eq(tenantUsers.orgId, tenantId as unknown as string),
-        ),
-      )
+      .where(and(eq(tenantUsers.id, userId), eq(tenantUsers.orgId, tenantId)))
       .returning({ id: tenantUsers.id })
     if (!row) return false
     await writeAuditEvent({

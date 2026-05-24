@@ -113,6 +113,7 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 import { trace, context, SpanStatusCode } from '@opentelemetry/api'
 import type { Span } from '@opentelemetry/api'
+import { recordRequest as recordHttpRequest } from './metrics.js'
 
 const _PII_FIELDS = new Set([
   'email',
@@ -219,8 +220,7 @@ export class OtelServiceImpl implements OtelService {
   }
 
   recordRequest(method: string, route: string, status: number, durationMs: number): void {
-    const { recordRequest: record } = require('./metrics.js') as typeof import('./metrics.js')
-    record(method, route, status, durationMs)
+    recordHttpRequest(method, route, status, durationMs)
   }
 
   log(entry: Omit<StructuredLogEntry, 'traceId' | 'spanId'>): void {

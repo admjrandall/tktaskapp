@@ -1,6 +1,6 @@
 // ── Render pipeline ────────────────────────────────────────────────────────────
-// Extracted from main.ts. patchInnerHTML() in trusted-types.ts routes all
-// innerHTML assignments through the nexus-crm-raw Trusted Types policy.
+// Extracted from main.ts. auditedStaticHtml() routes reviewed app templates
+// through the module-private Trusted Types static-template policy.
 import { getState, navigate, setState, reloadData } from './state.js'
 import { dbDelete, markNotificationRead, markAllNotificationsRead } from './storage/db.js'
 import { renderSidebar, renderBottomTabs, bindSidebar } from './views/sidebar.js'
@@ -38,7 +38,7 @@ import {
   bindNanoDownloadModal,
 } from './ai/ai-settings.js'
 import { aiRuntime } from './ai/ai-runtime.js'
-import { patchInnerHTML } from './render-utils.js'
+import { auditedStaticHtml } from './render-utils.js'
 import type { AppState } from './state.js'
 
 export const appEl = document.getElementById('app')!
@@ -101,7 +101,7 @@ export function appRenderWorkspace(view: string): void {
     default:
       return
   }
-  container.innerHTML = patchInnerHTML(html)
+  container.innerHTML = auditedStaticHtml(html)
 
   switch (view) {
     case 'dashboard':
@@ -205,7 +205,7 @@ export function fullRender(state: AppState): void {
     : ''
 
   try {
-    appEl.innerHTML = patchInnerHTML(
+    appEl.innerHTML = auditedStaticHtml(
       [
         renderSidebar(state),
         `<div class="main-content">`,
@@ -235,7 +235,7 @@ export function fullRender(state: AppState): void {
     )
   } catch (err) {
     console.error('[render error]', err)
-    appEl.innerHTML = patchInnerHTML(
+    appEl.innerHTML = auditedStaticHtml(
       '<div style="padding:2rem;color:red">Render error — please reload.</div>',
     )
   }

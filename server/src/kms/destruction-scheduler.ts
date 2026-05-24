@@ -2,7 +2,7 @@ import { db } from '../db/index.js'
 import { kmsKeyLifecycle } from '../db/schema/kms-keys.js'
 import { AzureKeyVaultKeyService } from './key-service.js'
 import { writeAuditEvent } from '../services/base.js'
-import { and, eq, lte, sql } from 'drizzle-orm'
+import { and, eq, lte } from 'drizzle-orm'
 import { otel } from '../observability/otel.js'
 
 const POLL_INTERVAL_MS = 60_000
@@ -65,11 +65,11 @@ async function _runOnce(): Promise<void> {
       })
 
       await writeAuditEvent({
-        tenantId: row.orgId as string,
+        tenantId: row.orgId,
         userId: 'system',
         eventType: 'kms_key.destroyed',
         resourceType: 'kmsKeyLifecycle',
-        resourceId: row.id as string,
+        resourceId: row.id,
         details: { keyVaultUri: row.keyVaultUri, userId: row.userId },
       })
 
@@ -77,7 +77,7 @@ async function _runOnce(): Promise<void> {
         timestamp: new Date().toISOString(),
         level: 'info',
         service: 'tktaskapp-server',
-        tenantId: row.orgId as string,
+        tenantId: row.orgId,
         requestId: 'destruction-scheduler',
         message: `KMS key destroyed for user ${row.userId}`,
       })
@@ -86,7 +86,7 @@ async function _runOnce(): Promise<void> {
         timestamp: new Date().toISOString(),
         level: 'error',
         service: 'tktaskapp-server',
-        tenantId: row.orgId as string,
+        tenantId: row.orgId,
         requestId: 'destruction-scheduler',
         message: `Failed to destroy KMS key for user ${row.userId}`,
         extra: { error: String(err) },

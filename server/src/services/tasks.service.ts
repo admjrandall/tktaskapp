@@ -1,6 +1,5 @@
-import { db } from '../db/index.js'
 import { tasks } from '../db/schema/tasks.js'
-import { eq, and, isNull, ilike, count, lte, lt, ne } from 'drizzle-orm'
+import { eq, and, isNull, ilike, count, lt, ne } from 'drizzle-orm'
 import { withTenant, writeAuditEvent, paginationValues, type PaginatedResult } from './base.js'
 import type { Task, NewTask } from '../db/schema/tasks.js'
 
@@ -54,8 +53,8 @@ export class TasksService {
         pagination: {
           page,
           pageSize,
-          total: Number(countRows[0]?.value ?? 0),
-          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
+          total: countRows[0]?.value ?? 0,
+          totalPages: Math.ceil((countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })

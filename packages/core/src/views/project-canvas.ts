@@ -8,7 +8,7 @@ import { Icons } from '../ui/icons.js'
 import { renderPriorityBadge } from '../ui/components.js'
 import { stageBadge } from './list-grid-kanban-spatial.js'
 import { PRIORITIES, PROJECT_STAGES } from '../constants.js'
-import { patchInnerHTML } from '../render-utils.js'
+import { auditedStaticHtml } from '../render-utils.js'
 
 // forward-declared — set by main.ts wiring after bootstrap loads
 let _appRenderWorkspace: (view: string) => void = () => {}
@@ -44,7 +44,7 @@ export function openProjectCanvas(projectId: string): void {
   overlay.id = 'proj-canvas-overlay'
   overlay.className = 'proj-canvas-overlay'
   document.body.appendChild(overlay)
-  overlay.innerHTML = patchInnerHTML(renderProjectCanvas())
+  overlay.innerHTML = auditedStaticHtml(renderProjectCanvas())
   bindProjectCanvas()
 }
 
@@ -81,20 +81,20 @@ export function pcRefreshPanel(panelId: string): void {
   if (!body) return
   if (panelId === 'tasks') {
     const tasks = (dbGetAll('tasks') as AnyRecord[]).filter((t) => t.projectId === _pcProjectId)
-    body.innerHTML = patchInnerHTML(pcTasksBody(tasks))
+    body.innerHTML = auditedStaticHtml(pcTasksBody(tasks))
     pcBindTasks()
   } else if (panelId === 'notes') {
-    body.innerHTML = patchInnerHTML(pcNotesBody(project))
+    body.innerHTML = auditedStaticHtml(pcNotesBody(project))
     pcBindNotes(project)
   } else if (panelId === 'details') {
-    body.innerHTML = patchInnerHTML(pcDetailsBody(project))
+    body.innerHTML = auditedStaticHtml(pcDetailsBody(project))
     pcBindDetails(project)
   } else if (panelId === 'narrative') {
-    body.innerHTML = patchInnerHTML(pcNarrativeBody(project))
+    body.innerHTML = auditedStaticHtml(pcNarrativeBody(project))
     pcBindNarrative(project)
   } else if (panelId === 'people') {
     const tasks = (dbGetAll('tasks') as AnyRecord[]).filter((t) => t.projectId === _pcProjectId)
-    body.innerHTML = patchInnerHTML(pcPeopleBody(project, tasks))
+    body.innerHTML = auditedStaticHtml(pcPeopleBody(project, tasks))
     pcBindPeople(project)
   }
 }

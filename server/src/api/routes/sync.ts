@@ -13,7 +13,6 @@ import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { safeParseV } from '../../schemas/index.js'
-import { db } from '../../db/index.js'
 import { sql } from 'drizzle-orm'
 
 export const syncRouter = new Hono<HonoEnv>()
@@ -48,19 +47,34 @@ function _makeRev(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+function _recordString(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+  fallback = '',
+): string {
+  const value = record[key]
+  return typeof value === 'string' ? value : fallback
+}
+
+function _timestampString(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString()
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
 // ── POST /pull ────────────────────────────────────────────────────────────────
 syncRouter.post('/pull', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
-    const body = await c.req.json()
+    const body: unknown = await c.req.json()
     const parsed = safeParseV(PullSchema, body)
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
 
     const { checkpoint, limit } = parsed.data
-    const sinceTs = checkpoint
-      ? String((checkpoint as Record<string, unknown>)['ts'] ?? '1970-01-01T00:00:00.000Z')
-      : '1970-01-01T00:00:00.000Z'
+    const sinceTs =
+      checkpoint && typeof checkpoint === 'object' && !Array.isArray(checkpoint)
+        ? _recordString(checkpoint as Record<string, unknown>, 'ts', '1970-01-01T00:00:00.000Z')
+        : '1970-01-01T00:00:00.000Z'
 
     // Pull changed records from all CRM tables since checkpoint
     const documents = await withTenant(tenantId, async (tx) => {
@@ -76,8 +90,8 @@ syncRouter.post('/pull', opaMiddleware('read'), async (c) => {
       return rows.rows as unknown as DocWithRev[]
     })
 
-    const newCheckpoint =
-      documents.length > 0 ? { ts: documents[documents.length - 1]!.updatedAt } : { ts: sinceTs }
+    const lastDocument = documents[documents.length - 1]
+    const newCheckpoint = lastDocument ? { ts: lastDocument.updatedAt } : { ts: sinceTs }
 
     await writeAuditEvent({
       tenantId,
@@ -103,10 +117,10 @@ syncRouter.post('/pull', opaMiddleware('read'), async (c) => {
 
 // ── POST /push ────────────────────────────────────────────────────────────────
 syncRouter.post('/push', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
-    const body = await c.req.json()
+    const body: unknown = await c.req.json()
     const parsed = safeParseV(PushSchema, body)
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
 
@@ -114,23 +128,21 @@ syncRouter.post('/push', opaMiddleware('create'), async (c) => {
 
     await withTenant(tenantId, async (tx) => {
       for (const row of parsed.data.changeRows) {
-        const doc = row.newDocumentState as Record<string, unknown>
-        const id = String(doc['id'] ?? '')
-        const store = String(doc['store'] ?? '')
+        const doc = row.newDocumentState
+        const id = _recordString(doc, 'id')
+        const store = _recordString(doc, 'store')
         if (!id || !store) continue
 
         // Conflict check: if server's updatedAt is newer than assumed master
         if (row.assumedMasterState) {
-          const assumed = row.assumedMasterState as Record<string, unknown>
+          const assumed = row.assumedMasterState
           const serverRow = await tx.execute(sql`
             SELECT updated_at FROM sync_documents
             WHERE id = ${id}::uuid AND store = ${store} AND org_id = ${tenantId}::uuid
           `)
-          const serverTs = (serverRow.rows[0] as Record<string, unknown> | undefined)?.[
-            'updated_at'
-          ]
-          const assumedTs = assumed['updatedAt']
-          if (serverTs && assumedTs && String(serverTs) > String(assumedTs)) {
+          const serverTs = _timestampString(serverRow.rows[0]?.['updated_at'])
+          const assumedTs = _timestampString(assumed['updatedAt'])
+          if (serverTs !== null && assumedTs !== null && serverTs > assumedTs) {
             conflicts.push(doc)
             continue
           }
@@ -181,8 +193,8 @@ syncRouter.post('/push', opaMiddleware('create'), async (c) => {
 })
 
 // ── GET /stream (SSE) ─────────────────────────────────────────────────────────
-syncRouter.get('/stream', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+syncRouter.get('/stream', opaMiddleware('read'), (c) => {
+  const tenantId = c.get('tenantId')
   return streamSSE(c, async (stream) => {
     // Poll every 30s and emit any documents changed since last checkpoint
     let lastTs = new Date().toISOString()
@@ -200,7 +212,9 @@ syncRouter.get('/stream', opaMiddleware('read'), async (c) => {
           return result.rows as unknown as DocWithRev[]
         })
         if (rows.length > 0) {
-          lastTs = rows[rows.length - 1]!.updatedAt
+          const lastRow = rows[rows.length - 1]
+          if (!lastRow) continue
+          lastTs = lastRow.updatedAt
           const checkpoint = { ts: lastTs }
           await stream.writeSSE({
             data: JSON.stringify({ documents: rows, checkpoint }),

@@ -1,4 +1,3 @@
-import { db } from '../db/index.js'
 import { timeEntries } from '../db/schema/time-entries.js'
 import { eq, and, isNull, count } from 'drizzle-orm'
 import { withTenant, writeAuditEvent, paginationValues, type PaginatedResult } from './base.js'
@@ -37,8 +36,8 @@ export class TimeEntriesService {
         pagination: {
           page,
           pageSize,
-          total: Number(countRows[0]?.value ?? 0),
-          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
+          total: countRows[0]?.value ?? 0,
+          totalPages: Math.ceil((countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })

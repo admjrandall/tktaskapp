@@ -8,8 +8,8 @@ import type { HonoEnv } from '../../hono-types.js'
 export const auditRouter = new Hono<HonoEnv>()
 
 auditRouter.get('/', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const role = c.get('role') as string
+  const tenantId = c.get('tenantId')
+  const role = c.get('role')
   if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
   try {
     const q = c.req.query()
@@ -40,9 +40,9 @@ auditRouter.get('/', opaMiddleware('read'), async (c) => {
 })
 
 auditRouter.get('/export', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
-  const role = c.get('role') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
+  const role = c.get('role')
   if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
   try {
     const { format = 'jsonl', from, to } = c.req.query()

@@ -33,8 +33,8 @@ async function _loadWasmPolicy(): Promise<WasmOpaInstance | null> {
     const wasmBytes = await fs.readFile(policyPath)
     const policy = await loadPolicy(wasmBytes)
     _wasmInstance = {
-      async evaluate(input: unknown) {
-        return policy.evaluate(input)
+      evaluate(input: unknown): Promise<unknown> {
+        return Promise.resolve(policy.evaluate(input) as unknown)
       },
     }
     return _wasmInstance
@@ -53,7 +53,7 @@ async function _evaluateViaRest(input: PolicyInput): Promise<boolean> {
   })
   if (!resp.ok) throw new Error(`OPA REST returned ${resp.status}`)
   const body = (await resp.json()) as OpaQueryResult
-  return body.result === true
+  return body.result
 }
 
 function _evaluateInProcess(input: PolicyInput): boolean {

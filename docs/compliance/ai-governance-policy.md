@@ -2,7 +2,7 @@
 
 **Status:** Active  
 **Version:** 1.0.0  
-**Date:** 2026-05-20  
+**Date:** 2026-05-23  
 **Owner:** Task App CRM team  
 **Review cycle:** Annual or on material AI system change  
 **Related:** ISO/IEC 42001:2023, `docs/compliance/iso42001-evidence-map.md`, `docs/architecture/0008-observability.md`
@@ -89,6 +89,9 @@ For enterprise deployments using cloud AI providers:
 - Transmission must be TLS 1.3 minimum.
 - No fields designated as special-category personal data under GDPR Article 9 may be transmitted without explicit consent.
 - Prompt content must be stripped of all identifying personal data before transmission, unless the tenant has consented to unrestricted prompt content (documented in tenant configuration).
+- The server AI gateway requires durable Redis-backed rate and budget state in production. Missing durable state denies AI calls.
+- Sensitive-data handling is explicit via `AI_SENSITIVE_DATA_MODE`: `block`, `redact`, or `allow-with-approval`. Production defaults to `block` when unset. Audit records contain detected category names/reasons only, never raw PII.
+- Strong/strict lockdown requires tenant allowlisting before model/provider use. Missing tenant allowlist means deny all.
 
 ---
 

@@ -16,8 +16,8 @@ import {
 export const conversationsRouter = new Hono<HonoEnv>()
 
 conversationsRouter.get('/', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
     const { page, pageSize } = c.req.query()
     return c.json(
@@ -42,8 +42,8 @@ conversationsRouter.get('/', opaMiddleware('read'), async (c) => {
 })
 
 conversationsRouter.post('/', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
     const parsed = safeParseV(CreateConversationSchema, await c.req.json())
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
@@ -68,9 +68,9 @@ conversationsRouter.post('/', opaMiddleware('create'), async (c) => {
 })
 
 conversationsRouter.get('/:id', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
-    const row = await conversationsService.getById(tenantId, c.req.param('id')!)
+    const row = await conversationsService.getById(tenantId, c.req.param('id'))
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -86,9 +86,9 @@ conversationsRouter.get('/:id', opaMiddleware('read'), async (c) => {
 })
 
 conversationsRouter.get('/:id/messages', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
-    const row = await conversationsService.getById(tenantId, c.req.param('id')!)
+    const row = await conversationsService.getById(tenantId, c.req.param('id'))
     if (!row) return c.json({ error: 'Not found' }, 404)
     return c.json({ messages: row.messages }, 200)
   } catch (err) {
@@ -105,15 +105,15 @@ conversationsRouter.get('/:id/messages', opaMiddleware('read'), async (c) => {
 })
 
 conversationsRouter.post('/:id/messages', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
     const parsed = safeParseV(ConversationMessageSchema, await c.req.json())
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const row = await conversationsService.appendMessage(
       tenantId,
       userId,
-      c.req.param('id')!,
+      c.req.param('id'),
       parsed.data,
     )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
@@ -131,15 +131,15 @@ conversationsRouter.post('/:id/messages', opaMiddleware('create'), async (c) => 
 })
 
 conversationsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
     const parsed = safeParseV(UpdateConversationSchema, await c.req.json())
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const row = await conversationsService.update(
       tenantId,
       userId,
-      c.req.param('id')!,
+      c.req.param('id'),
       parsed.data as unknown as UpdateConversationInput,
     )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
@@ -157,10 +157,10 @@ conversationsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
 })
 
 conversationsRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
-    const ok = await conversationsService.delete(tenantId, userId, c.req.param('id')!)
+    const ok = await conversationsService.delete(tenantId, userId, c.req.param('id'))
     return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({

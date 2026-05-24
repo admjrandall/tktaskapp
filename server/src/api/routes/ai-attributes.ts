@@ -10,11 +10,29 @@ import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { safeParseV } from '../../schemas/index.js'
-import { db } from '../../db/index.js'
 import { sql } from 'drizzle-orm'
 import { evaluateAiGatewayRequest } from '../../ai-gateway/policy-engine.js'
 
 export const aiAttributesRouter = new Hono<HonoEnv>()
+
+function _stringField(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+  fallback = '',
+): string {
+  const value = record[key]
+  return typeof value === 'string' ? value : fallback
+}
+
+function _objectField(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+): Readonly<Record<string, unknown>> {
+  const value = record[key]
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : {}
+}
 
 // ── Request schema ────────────────────────────────────────────────────────────
 const ComputeAttributeSchema = v.object({
@@ -25,12 +43,12 @@ const ComputeAttributeSchema = v.object({
 
 // ── POST /:id/compute ─────────────────────────────────────────────────────────
 aiAttributesRouter.post('/:id/compute', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
-  const defId = c.req.param('id')!
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
+  const defId = c.req.param('id')
 
   try {
-    const body = await c.req.json()
+    const body: unknown = await c.req.json()
     const parsed = safeParseV(ComputeAttributeSchema, body)
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
 
@@ -43,11 +61,11 @@ aiAttributesRouter.post('/:id/compute', opaMiddleware('create'), async (c) => {
         WHERE id = ${defId}::uuid AND org_id = ${tenantId}::uuid
       `)
     })
-    const def = defRows.rows[0] as Record<string, unknown> | undefined
+    const def = defRows.rows[0]
     if (!def) return c.json({ error: 'Attribute definition not found' }, 404)
 
     // Check for HIPAA classification — server never computes HIPAA fields
-    if (def['hipaa_classified']) {
+    if (def['hipaa_classified'] === true) {
       return c.json({ error: 'HIPAA-classified attribute cannot be computed server-side' }, 403)
     }
 
@@ -79,17 +97,14 @@ aiAttributesRouter.post('/:id/compute', opaMiddleware('create'), async (c) => {
           AND org_id = ${tenantId}::uuid
       `)
     })
-    const recordData = recordRows.rows[0] as Record<string, unknown> | undefined
+    const recordData = recordRows.rows[0]
     if (!recordData) return c.json({ error: 'Record not found' }, 404)
 
     // Evaluate AI gateway policy
-    const prompt = String(def['prompt'] ?? '')
-    const modelTier =
-      ((def['model'] as Record<string, unknown>)?.['tier'] as string | undefined) ?? 'browser'
+    const prompt = _stringField(def, 'prompt')
+    const model = _objectField(def, 'model')
     // Map tier to a concrete model ID for gateway allowlist check
-    const modelId =
-      ((def['model'] as Record<string, unknown>)?.['preferredModelId'] as string | undefined) ??
-      'claude-sonnet-4-6'
+    const modelId = _stringField(model, 'preferredModelId', 'claude-sonnet-4-6')
     const gatewayDecision = await evaluateAiGatewayRequest({
       context: {
         userId,
@@ -128,7 +143,7 @@ aiAttributesRouter.post('/:id/compute', opaMiddleware('create'), async (c) => {
           (def_id, record_id, org_id, entity_type, value, provenance, computed_at)
         VALUES (
           ${defId}::uuid, ${recordId}::uuid, ${tenantId}::uuid,
-          ${String(def['entity_type'] ?? store)},
+          ${_stringField(def, 'entity_type', store)},
           ${computedValue},
           ${JSON.stringify({ provider: modelId, computeDurationMs: durationMs, computedAt })}::jsonb,
           ${computedAt}::timestamptz

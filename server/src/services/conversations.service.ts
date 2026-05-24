@@ -1,4 +1,3 @@
-import { db } from '../db/index.js'
 import { conversations } from '../db/schema/conversations.js'
 import { eq, and, isNull, count } from 'drizzle-orm'
 import { withTenant, writeAuditEvent, paginationValues, type PaginatedResult } from './base.js'
@@ -40,8 +39,8 @@ export class ConversationsService {
         pagination: {
           page,
           pageSize,
-          total: Number(countRows[0]?.value ?? 0),
-          totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
+          total: countRows[0]?.value ?? 0,
+          totalPages: Math.ceil((countRows[0]?.value ?? 0) / pageSize),
         },
       }
     })
@@ -136,7 +135,7 @@ export class ConversationsService {
         .limit(1)
       const conv = rows[0]
       if (!conv) return null
-      const updatedMessages = [...(conv.messages ?? []), message]
+      const updatedMessages = [...conv.messages, message]
       const [row] = await tx
         .update(conversations)
         .set({ messages: updatedMessages, updatedAt: new Date() })

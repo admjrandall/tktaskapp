@@ -8,7 +8,7 @@ import { CreateTaskSchema, UpdateTaskSchema, safeParseV } from '../../schemas/in
 export const tasksRouter = new Hono<HonoEnv>()
 
 tasksRouter.get('/', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
     const q = c.req.query()
     return c.json(
@@ -39,8 +39,8 @@ tasksRouter.get('/', opaMiddleware('read'), async (c) => {
 })
 
 tasksRouter.post('/', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
     const parsed = safeParseV(CreateTaskSchema, await c.req.json())
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
@@ -59,9 +59,9 @@ tasksRouter.post('/', opaMiddleware('create'), async (c) => {
 })
 
 tasksRouter.get('/:id', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId') as string
+  const tenantId = c.get('tenantId')
   try {
-    const row = await tasksService.getById(tenantId, c.req.param('id')!)
+    const row = await tasksService.getById(tenantId, c.req.param('id'))
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({
@@ -77,15 +77,15 @@ tasksRouter.get('/:id', opaMiddleware('read'), async (c) => {
 })
 
 tasksRouter.patch('/:id', opaMiddleware('update'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
     const parsed = safeParseV(UpdateTaskSchema, await c.req.json())
     if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
     const row = await tasksService.update(
       tenantId,
       userId,
-      c.req.param('id')!,
+      c.req.param('id'),
       parsed.data as unknown as UpdateTaskInput,
     )
     return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
@@ -103,10 +103,10 @@ tasksRouter.patch('/:id', opaMiddleware('update'), async (c) => {
 })
 
 tasksRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
-  const tenantId = c.get('tenantId') as string
-  const userId = c.get('userId') as string
+  const tenantId = c.get('tenantId')
+  const userId = c.get('userId')
   try {
-    const ok = await tasksService.delete(tenantId, userId, c.req.param('id')!)
+    const ok = await tasksService.delete(tenantId, userId, c.req.param('id'))
     return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
   } catch (err) {
     otel.log({

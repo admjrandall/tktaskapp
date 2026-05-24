@@ -9,14 +9,14 @@ export default tseslint.config(
       'node_modules/**',
       '**/vite.config.ts',
       'apps/*/index.html',
+      'apps/*/public/**/*.js',
+      'server/drizzle.config.ts',
+      'server/dist/**',
       'scripts/**/*.mjs',
       'generate-csp.mjs',
       'taskapp.html',
       'tests/**',
       'vitest.config.ts',
-      // Server is a separate package with its own tsconfig and dep tree.
-      // Excluded from the root frontend ESLint config.
-      'server/**',
     ],
   },
   ...tseslint.configs.strictTypeChecked,
@@ -47,33 +47,35 @@ export default tseslint.config(
       // (e.g. `${width}px`, `${index + 1}`) are always intentional and safe.
       // boolean and nullish are kept strict: `${null}` → "null" in the UI is a
       // real bug this rule catches; callers should use `?? ''` explicitly.
-      '@typescript-eslint/restrict-template-expressions': [
-        'warn',
-        { allowNumber: true },
-      ],
+      '@typescript-eslint/restrict-template-expressions': ['warn', { allowNumber: true }],
       '@typescript-eslint/no-non-null-assertion': 'warn',
       // Standard browser-app config: async callbacks are passed as addEventListener arguments
       // and as hook-registration object properties — both patterns are intentional and correct.
-      '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: { arguments: false, properties: false } }],
+      '@typescript-eslint/no-misused-promises': [
+        'error',
+        { checksVoidReturn: { arguments: false, properties: false } },
+      ],
       // Standard: underscore-prefixed params/vars are intentionally unused (e.g. _s, _e).
-      '@typescript-eslint/no-unused-vars': ['warn', {
-        vars: 'all',
-        args: 'after-used',
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        caughtErrors: 'all',
-        caughtErrorsIgnorePattern: '^_',
-        ignoreRestSiblings: true,
-      }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          vars: 'all',
+          args: 'after-used',
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrors: 'all',
+          caughtErrorsIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
       // TypeScript's type system already prevents object-injection attacks in a
       // typed codebase; bracket notation on Record<K,V> types is legitimate and safe.
       'security/detect-object-injection': 'off',
     },
   },
   {
-    // CORE VIEWS OVERRIDE: 
-    // innerHTML is permitted ONLY if wrapped in patchInnerHTML(), which routes 
-    // the assignment through the nexus-crm-raw Trusted Types policy.
+    // CORE VIEWS OVERRIDE:
+    // HTML sinks are permitted only when routed through explicit render helpers.
     files: [
       'packages/core/src/views/**/*.ts',
       'packages/core/src/main.ts',
@@ -88,9 +90,16 @@ export default tseslint.config(
       'no-restricted-syntax': [
         'error',
         {
-          // AST Magic: Flags innerHTML assignment if the right-hand side is NOT a call to patchInnerHTML.
-          selector: "AssignmentExpression[left.property.name='innerHTML'][right.callee.name!='patchInnerHTML']",
-          message: 'Raw DOM insertion detected. You must wrap the HTML string in patchInnerHTML().',
+          selector:
+            "AssignmentExpression[left.property.name='innerHTML'][right.callee.name!='auditedStaticHtml']",
+          message:
+            'Raw DOM insertion detected. Use auditedStaticHtml(), setAuditedStaticHtml(), or a sanitized rich-text helper.',
+        },
+        {
+          selector:
+            "CallExpression[callee.property.name='insertAdjacentHTML'][arguments.1.callee.name!='auditedStaticHtml']",
+          message:
+            'Raw DOM insertion detected. Use appendAuditedStaticHtml() or pass auditedStaticHtml() explicitly.',
         },
         {
           // Maintain the outerHTML ban even in core views
@@ -98,6 +107,12 @@ export default tseslint.config(
           message: 'Use safe render helpers instead of raw outerHTML.',
         },
       ],
+    },
+  },
+  {
+    files: ['packages/core/src/render-utils.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
     },
   },
   {

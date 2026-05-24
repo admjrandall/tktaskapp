@@ -80,7 +80,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 /**
  * Sanitize arbitrary HTML (AI-generated or stored document content) against a
  * strict allowlist before assigning to innerHTML. Returns a plain string that
- * is then routed through the Trusted Types _rawPolicy by the patchInnerHTML
+ * is then routed through the Trusted Types static-template policy by the auditedStaticHtml
  * override in trusted-types.ts.
  */
 export function sanitizeDocHtml(dirty: string): string {

@@ -21,9 +21,9 @@ export class AuditService {
     },
   ): Promise<PaginatedResult<AuditEvent>> {
     const { limit, offset, page, pageSize } = paginationValues(filters)
-    const conditions = [eq(auditEvents.orgId, tenantId as unknown as string)]
+    const conditions = [eq(auditEvents.orgId, tenantId)]
     if (filters.eventType) conditions.push(eq(auditEvents.action, filters.eventType))
-    if (filters.userId) conditions.push(eq(auditEvents.userId, filters.userId as unknown as string))
+    if (filters.userId) conditions.push(eq(auditEvents.userId, filters.userId))
     if (filters.resourceType) conditions.push(eq(auditEvents.resource, filters.resourceType))
     if (filters.from) conditions.push(gte(auditEvents.createdAt, new Date(filters.from)))
     if (filters.to) conditions.push(lte(auditEvents.createdAt, new Date(filters.to)))
@@ -45,14 +45,14 @@ export class AuditService {
       pagination: {
         page,
         pageSize,
-        total: Number(countRows[0]?.value ?? 0),
-        totalPages: Math.ceil(Number(countRows[0]?.value ?? 0) / pageSize),
+        total: countRows[0]?.value ?? 0,
+        totalPages: Math.ceil((countRows[0]?.value ?? 0) / pageSize),
       },
     }
   }
 
   async exportNdjson(tenantId: string, from?: string, to?: string): Promise<string> {
-    const conditions = [eq(auditEvents.orgId, tenantId as unknown as string)]
+    const conditions = [eq(auditEvents.orgId, tenantId)]
     if (from) conditions.push(gte(auditEvents.createdAt, new Date(from)))
     if (to) conditions.push(lte(auditEvents.createdAt, new Date(to)))
     const rows = await db
@@ -63,7 +63,7 @@ export class AuditService {
   }
 
   async exportCsv(tenantId: string, from?: string, to?: string): Promise<string> {
-    const conditions = [eq(auditEvents.orgId, tenantId as unknown as string)]
+    const conditions = [eq(auditEvents.orgId, tenantId)]
     if (from) conditions.push(gte(auditEvents.createdAt, new Date(from)))
     if (to) conditions.push(lte(auditEvents.createdAt, new Date(to)))
     const rows = await db

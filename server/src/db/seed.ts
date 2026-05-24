@@ -1,5 +1,4 @@
 import { db } from './index.js'
-import { tenantUsers } from './schema/users.js'
 import { clients } from './schema/clients.js'
 import { departments } from './schema/departments.js'
 import { projects } from './schema/projects.js'
@@ -18,10 +17,11 @@ async function seed(): Promise<void> {
 
     // Admin user
     await tx.execute(sql`
-      INSERT INTO tenant_users (id, org_id, external_id, email, display_name, role)
+      INSERT INTO tenant_users (id, org_id, entra_tenant_id, external_id, email, display_name, role)
       VALUES (
         gen_random_uuid(),
         ${TENANT_ID}::uuid,
+        'dev-entra-tenant',
         'dev-admin-oid',
         'admin@dev.local',
         'Dev Admin',
@@ -184,7 +184,7 @@ async function seed(): Promise<void> {
   console.log('[seed] Done.')
 }
 
-seed().catch((err) => {
+seed().catch((err: unknown) => {
   console.error('[seed] Error:', err)
   process.exit(1)
 })
