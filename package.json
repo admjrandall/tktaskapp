@@ -24,6 +24,7 @@
     "prepare": "husky",
     "assert:offline-bundle": "node scripts/assert-offline-bundle.mjs",
     "assert:bundle-size": "node scripts/assert-bundle-size.mjs",
+    "render:k8s:network-policy": "node scripts/render-k8s-network-policy.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version"
   },

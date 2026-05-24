@@ -12,6 +12,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 - Clarified that Task App CRM is offline-first, not strictly offline-only: offline-web, PWA sync, mobile PWA, Dataverse, and enterprise/server-backed targets share one core UI with target-specific adapters.
 - Updated root agent/contributor guidance and target READMEs so offline-only language applies only to the offline-web profile.
 - Made Settings → Data & Privacy and About copy deployment-aware so connected targets no longer display offline-only privacy claims.
+- Codified the production-readiness rule that fixable maturity gaps must be closed rather than reported as "mostly closed".
+- Hardened AI gateway tenant policy to require exact provider + model approval for production and lockdown calls.
+- Converted Kubernetes NetworkPolicy egress CIDRs into a fail-closed render template with required environment inputs and validation.
 
 ---
 

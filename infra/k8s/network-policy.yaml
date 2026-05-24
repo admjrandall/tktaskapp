@@ -1,10 +1,13 @@
-# Kubernetes NetworkPolicy for tktaskapp-server
+# Kubernetes NetworkPolicy template for tktaskapp-server
 #
 # Default posture: deny all ingress and egress.
 # Only the explicitly listed traffic is permitted.
 #
-# Adjust namespace selectors, labels, and CIDR blocks to match your cluster layout
-# before applying to a real environment.
+# Render before applying:
+#   KMS_EGRESS_CIDR=<approved-cidr> IDP_EGRESS_CIDR=<approved-cidr> pnpm run render:k8s:network-policy
+#
+# The render script fails closed on missing values, 0.0.0.0/0, ::/0, and
+# documentation-only CIDRs.
 
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -49,22 +52,18 @@ spec:
           port: 5432
 
     # 2. KMS endpoint
-    #    Replace the CIDR below with the actual IP range of your KMS service,
-    #    or use a namespaceSelector if the KMS is in-cluster.
     - to:
         - ipBlock:
-            cidr: 10.0.1.0/24 # replace with your KMS CIDR
+            cidr: '${KMS_EGRESS_CIDR}'
       ports:
         - protocol: TCP
           port: 443
 
     # 3. Identity Provider (IdP / OIDC issuer)
-    #    This manifest intentionally has no 0.0.0.0/0 HTTPS egress. Replace the
-    #    documentation CIDR with your approved IdP egress gateway or IdP IP range,
-    #    or use your CNI's FQDN-aware policy CRD in an environment overlay.
+    #    This template intentionally has no 0.0.0.0/0 HTTPS egress.
     - to:
         - ipBlock:
-            cidr: 203.0.113.0/24
+            cidr: '${IDP_EGRESS_CIDR}'
       ports:
         - protocol: TCP
           port: 443

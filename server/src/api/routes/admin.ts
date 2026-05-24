@@ -19,7 +19,7 @@ const OrgSettingsUpdateSchema = v.object({
 
 const AIAllowlistAddSchema = v.object({
   provider: v.pipe(v.string(), v.minLength(1)),
-  modelId: v.optional(v.string()),
+  modelId: v.pipe(v.string(), v.minLength(1)),
   reason: v.pipe(v.string(), v.minLength(1)),
 })
 
@@ -277,7 +277,7 @@ adminRouter.post('/ai-allowlist', opaMiddleware('manage_users'), async (c) => {
     await withTenant(tenantId, async (tx) => {
       await tx.execute(sql`
         INSERT INTO ai_endpoint_allowlist (id, org_id, provider, model_id, reason, created_by)
-        VALUES (${id}::uuid, ${tenantId}::uuid, ${parsed.data.provider}, ${parsed.data.modelId ?? null}, ${parsed.data.reason}, ${userId}::uuid)
+        VALUES (${id}::uuid, ${tenantId}::uuid, ${parsed.data.provider}, ${parsed.data.modelId}, ${parsed.data.reason}, ${userId}::uuid)
       `)
     })
     await writeAuditEvent({
@@ -286,7 +286,7 @@ adminRouter.post('/ai-allowlist', opaMiddleware('manage_users'), async (c) => {
       eventType: 'ai_allowlist_entry_added',
       resourceType: 'ai_endpoint_allowlist',
       resourceId: id,
-      details: { provider: parsed.data.provider, modelId: parsed.data.modelId ?? '' },
+      details: { provider: parsed.data.provider, modelId: parsed.data.modelId },
     })
     return c.json({ id }, 201)
   } catch (err) {

@@ -12,6 +12,12 @@ Always use the most recent versions, security and best practices without comprom
 Search the internet to ensure you have the most current information.
 If you get stuck in a loop trying to fix an issue, try twice, then stop and discuss.
 
+## Production readiness standard
+
+When the user asks for production readiness, treat "production ready" as final maturity, not partial remediation. Do not leave fixable items as "mostly closed", "closed for implemented controls", "placeholder", "future work", or "should be revisited" when code, tests, scripts, or documentation can close the gap now. Refactor or rework as needed.
+
+If a control depends on environment-specific values that cannot be discovered from the repo, convert it into a fail-closed required configuration, checked template, validation script, or explicit deployment gate. Ask the user only for real external values that are required to generate a deployable artifact, such as production CIDRs, domains, tenant IDs, or secrets.
+
 ---
 
 ## What this is

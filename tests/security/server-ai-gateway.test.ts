@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const writeAuditEvent = vi.fn(async () => 'audit-1')
+const { writeAuditEvent, withTenant, tenantAllowlistRows } = vi.hoisted(() => ({
+  writeAuditEvent: vi.fn(async () => 'audit-1'),
+  tenantAllowlistRows: [] as Array<{ provider: string; model_id: string }>,
+  withTenant: vi.fn(async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      execute: async () => ({ rows: tenantAllowlistRows }),
+    }),
+  ),
+}))
 
 vi.mock('../../server/src/services/base.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../server/src/services/base.js')>()),
   writeAuditEvent,
+  withTenant,
 }))
 
 vi.mock('ioredis', () => ({
@@ -32,6 +41,7 @@ const { evaluateAiGatewayRequest } = await import('../../server/src/ai-gateway/p
 afterEach(() => {
   vi.clearAllMocks()
   vi.unstubAllEnvs()
+  tenantAllowlistRows.length = 0
 })
 
 describe('server AI gateway policy', () => {
@@ -72,5 +82,40 @@ describe('server AI gateway policy', () => {
 
     expect(decision.allowed).toBe(false)
     expect(decision.reason).toContain('durable Redis-backed')
+  })
+
+  it('requires an exact tenant provider and model allowlist match in lockdown', async () => {
+    vi.stubEnv('NODE_ENV', 'test')
+    vi.stubEnv('AI_GATEWAY_REDIS_URL', '')
+    tenantAllowlistRows.push({ provider: 'openai', model_id: 'gpt-4o-mini' })
+
+    const decision = await evaluateAiGatewayRequest({
+      context,
+      provider: 'openai',
+      model: 'gpt-4o',
+      promptTokenEstimate: 10,
+      userMessage: 'Summarize this account',
+      lockdownLevel: 'strong',
+    })
+
+    expect(decision.allowed).toBe(false)
+    expect(decision.reason).toContain('not approved for this tenant')
+  })
+
+  it('allows an exact tenant provider and model allowlist match in lockdown', async () => {
+    vi.stubEnv('NODE_ENV', 'test')
+    vi.stubEnv('AI_GATEWAY_REDIS_URL', '')
+    tenantAllowlistRows.push({ provider: 'openai', model_id: 'gpt-4o' })
+
+    const decision = await evaluateAiGatewayRequest({
+      context,
+      provider: 'openai',
+      model: 'gpt-4o',
+      promptTokenEstimate: 10,
+      userMessage: 'Summarize this account',
+      lockdownLevel: 'strong',
+    })
+
+    expect(decision.allowed).toBe(true)
   })
 })

@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS ai_endpoint_allowlist (
   id          text        PRIMARY KEY,
   org_id      text        NOT NULL,
   provider    text        NOT NULL,
-  model_id    text,
+  model_id    text        NOT NULL,
   reason      text        NOT NULL,
   created_by  text        NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT NOW()

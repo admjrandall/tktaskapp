@@ -46,16 +46,39 @@ function _screenPii(message: string): { clean: string; detected: string[] } {
 import { withTenant } from '../services/base.js'
 import { sql } from 'drizzle-orm'
 
-// Check if the requested model is in the tenant's AI allowlist.
-// In strong/strict lockdown, a missing or empty allowlist means DENY ALL.
-async function _isTenantAllowedModel(orgId: string, model: string): Promise<boolean> {
+// Check if the requested provider/model pair is in the tenant's AI allowlist.
+// A missing or empty allowlist means DENY ALL in production and lockdown modes.
+async function _isTenantAllowedModel(
+  orgId: string,
+  provider: string,
+  model: string,
+): Promise<boolean> {
   try {
     const result = await withTenant(orgId, async (tx) =>
-      tx.execute(sql`SELECT provider FROM ai_endpoint_allowlist WHERE org_id = ${orgId}`),
+      tx.execute(sql`
+        SELECT provider, model_id
+        FROM ai_endpoint_allowlist
+        WHERE org_id = ${orgId}
+          AND provider = ${provider}
+          AND model_id = ${model}
+        LIMIT 1
+      `),
     )
-    const entries = result.rows as Array<{ provider: string }>
-    if (entries.length === 0) return false
-    return entries.some((e) => model === e.provider || model.startsWith(`${e.provider}:`))
+    const entries = result.rows as Array<{
+      provider?: unknown
+      model_id?: unknown
+      modelId?: unknown
+    }>
+    return entries.some((entry) => {
+      const entryProvider = typeof entry.provider === 'string' ? entry.provider : ''
+      const entryModel =
+        typeof entry.model_id === 'string'
+          ? entry.model_id
+          : typeof entry.modelId === 'string'
+            ? entry.modelId
+            : ''
+      return entryProvider === provider && entryModel === model
+    })
   } catch {
     return false
   }
@@ -70,14 +93,14 @@ function _sensitiveDataMode(): SensitiveDataMode {
 }
 
 // ── Model allowlist ────────────────────────────────────────────────────────────
-const _ALLOWED_MODELS = new Set([
-  'claude-opus-4-7',
-  'claude-sonnet-4-6',
-  'claude-haiku-4-5-20251001',
-  'gpt-4o',
-  'gpt-4o-mini',
-  'gemini-1.5-pro',
-  'gemini-1.5-flash',
+const _APPROVED_MODEL_CATALOG = new Map<string, string>([
+  ['claude-opus-4-7', 'anthropic'],
+  ['claude-sonnet-4-6', 'anthropic'],
+  ['claude-haiku-4-5-20251001', 'anthropic'],
+  ['gpt-4o', 'openai'],
+  ['gpt-4o-mini', 'openai'],
+  ['gemini-1.5-pro', 'google'],
+  ['gemini-1.5-flash', 'google'],
 ])
 
 // ── Per-user rate limiting ────────────────────────────────────────────────────
@@ -111,6 +134,14 @@ async function _getRedis(): Promise<RedisClient | null> {
 
 function _requiresDurableGatewayState(): boolean {
   return process.env['NODE_ENV'] === 'production'
+}
+
+function _requiresTenantModelAllowlist(lockdownLevel?: string): boolean {
+  return (
+    process.env['NODE_ENV'] === 'production' ||
+    lockdownLevel === 'strong' ||
+    lockdownLevel === 'strict'
+  )
 }
 
 async function _isRateLimited(userId: string, redis: RedisClient | null): Promise<boolean> {
@@ -163,24 +194,12 @@ export async function evaluateAiGatewayRequest(
   request: AiGatewayRequest,
 ): Promise<AiGatewayDecision> {
   const { context, model, promptTokenEstimate, userMessage, lockdownLevel } = request
-  const provider = request.provider ?? model.split(':')[0] ?? model
+  const provider = request.provider ?? _APPROVED_MODEL_CATALOG.get(model) ?? model
 
-  // 0. Lockdown enforcement — strong/strict only permits tenant-allowlisted providers (C.7)
-  if (lockdownLevel === 'strong' || lockdownLevel === 'strict') {
-    const tenantAllowed = await _isTenantAllowedModel(context.orgId, provider)
-    if (!tenantAllowed) {
-      await _auditLog(context, model, 'failure', `lockdown_blocked:${lockdownLevel}`)
-      return {
-        allowed: false,
-        reason: `Model '${model}' is not in the tenant AI allowlist (lockdown: ${lockdownLevel})`,
-      }
-    }
-  }
-
-  // 1. Model allowlist
-  if (!_ALLOWED_MODELS.has(model)) {
+  // 1. Global approved model catalog. Tenant policy narrows this further below.
+  if (!_APPROVED_MODEL_CATALOG.has(model)) {
     await _auditLog(context, model, 'failure', 'model_not_allowed')
-    return { allowed: false, reason: `Model '${model}' is not on the approved allowlist` }
+    return { allowed: false, reason: `Model '${model}' is not in the approved model catalog` }
   }
 
   const redis = await _getRedis()
@@ -192,19 +211,32 @@ export async function evaluateAiGatewayRequest(
     }
   }
 
-  // 2. Per-user rate limit
+  // 2. Tenant model allowlist. Production and strong/strict lockdown both deny by
+  // default unless the exact provider + model pair is approved for the tenant.
+  if (_requiresTenantModelAllowlist(lockdownLevel)) {
+    const tenantAllowed = await _isTenantAllowedModel(context.orgId, provider, model)
+    if (!tenantAllowed) {
+      await _auditLog(context, model, 'failure', `tenant_model_not_allowed:${provider}:${model}`)
+      return {
+        allowed: false,
+        reason: `Model '${provider}:${model}' is not approved for this tenant`,
+      }
+    }
+  }
+
+  // 3. Per-user rate limit
   if (await _isRateLimited(context.userId, redis)) {
     await _auditLog(context, model, 'failure', 'rate_limited')
     return { allowed: false, reason: 'Rate limit exceeded — maximum 20 requests per minute' }
   }
 
-  // 3. Per-tenant budget
+  // 4. Per-tenant budget
   if (await _isOverBudget(context.orgId, promptTokenEstimate, redis)) {
     await _auditLog(context, model, 'failure', 'budget_exceeded')
     return { allowed: false, reason: 'Monthly AI token budget exceeded for this organisation' }
   }
 
-  // 4. PII screening
+  // 5. PII screening
   const { clean, detected } = _screenPii(userMessage)
   if (detected.length > 0) {
     const mode = _sensitiveDataMode()
@@ -219,7 +251,7 @@ export async function evaluateAiGatewayRequest(
     return { allowed: true, sanitisedMessage: clean }
   }
 
-  // 5. Audit log — approved call
+  // 6. Audit log — approved call
   await _auditLog(context, model, 'success', 'approved')
   return { allowed: true, sanitisedMessage: userMessage }
 }
