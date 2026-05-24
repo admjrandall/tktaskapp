@@ -117,8 +117,8 @@ export interface KeyService {
 
 import { DefaultAzureCredential } from '@azure/identity'
 import { KeyClient, CryptographyClient } from '@azure/keyvault-keys'
-import { db } from '../db/index.js'
 import { kmsKeyLifecycle } from '../db/schema/kms-keys.js'
+import { withTenant } from '../services/base.js'
 
 export class KeyDestroyedError extends Error {
   constructor(userId: string) {
@@ -157,16 +157,20 @@ export class AzureKeyVaultKeyService implements KeyService {
     if (!key.id || !key.properties.version) {
       throw new Error('Azure Key Vault did not return key id or version')
     }
-    await db.insert(kmsKeyLifecycle).values({
-      orgId: tenantId,
-      userId,
-      keyVaultUri: key.id,
-      keyVersion: key.properties.version,
-      event: 'ISSUED',
-      effectiveAt: new Date(),
+    const keyId = key.id
+    const keyVersion = key.properties.version
+    await withTenant(tenantId, async (tx) => {
+      await tx.insert(kmsKeyLifecycle).values({
+        orgId: tenantId,
+        userId,
+        keyVaultUri: keyId,
+        keyVersion,
+        event: 'ISSUED',
+        effectiveAt: new Date(),
+      })
     })
     return {
-      keyId: key.id,
+      keyId,
       userId,
       tenantId,
       createdAt: key.properties.createdOn ?? new Date(),
@@ -201,13 +205,17 @@ export class AzureKeyVaultKeyService implements KeyService {
     if (!key.id || !key.properties.version) {
       throw new Error('Key not found in Azure Key Vault')
     }
-    await db.insert(kmsKeyLifecycle).values({
-      orgId: tenantId,
-      userId,
-      keyVaultUri: key.id,
-      keyVersion: key.properties.version,
-      event: 'SCHEDULE_DESTRUCTION',
-      effectiveAt: destroyAt,
+    const keyId = key.id
+    const keyVersion = key.properties.version
+    await withTenant(tenantId, async (tx) => {
+      await tx.insert(kmsKeyLifecycle).values({
+        orgId: tenantId,
+        userId,
+        keyVaultUri: keyId,
+        keyVersion,
+        event: 'SCHEDULE_DESTRUCTION',
+        effectiveAt: destroyAt,
+      })
     })
   }
 

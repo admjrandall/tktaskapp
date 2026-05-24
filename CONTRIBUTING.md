@@ -1,6 +1,6 @@
 # Contributing to Task App CRM
 
-Thank you for your interest in contributing to Task App CRM — an offline-first, AES-256-GCM encrypted CRM.
+Thank you for your interest in contributing to Task App CRM — an offline-first, AES-256-GCM encrypted CRM with offline-web, PWA sync, mobile PWA, Dataverse, and enterprise/server-backed targets sharing one core UI.
 
 ---
 
@@ -20,10 +20,10 @@ corepack enable
 # Install dependencies
 pnpm install
 
-# Build the offline app
+# Build the offline-web target
 pnpm turbo run build:offline
 
-# Open in browser — no server needed
+# Open the offline-web artifact in browser — no server needed
 open dist/offline/index.html   # macOS
 start dist/offline/index.html  # Windows
 xdg-open dist/offline/index.html  # Linux
@@ -48,6 +48,10 @@ pnpm run build:all
 
 # Build mobile PWA
 pnpm run build:mobile
+
+# Build PWA sync and Dataverse targets
+pnpm run build:sync
+pnpm run build:dataverse
 ```
 
 ---
@@ -119,7 +123,7 @@ Branch from `main`. Open PRs against `main` (or `integration` for agent work). N
 
 1. **Branch** — create a feature branch from `main` (`feat/short-description`).
 2. **Changeset** — if your change is version-worthy, run `pnpm changeset` and follow the prompts. Include the generated `.changeset/*.md` file in your PR.
-3. **Tests** — `pnpm run typecheck` and `pnpm run build:offline` must pass.
+3. **Tests** — `pnpm run typecheck` and the relevant target build must pass. For shared core changes, run `pnpm run build:offline` plus any connected target you affected (`build:sync`, `build:mobile`, or `build:dataverse`).
 4. **Security rules** — never bypass the rules in `CLAUDE.md`:
    - `trusted-types.ts` must remain the first import in `main.ts`
    - All user-visible strings through `escH()` before `innerHTML` interpolation
@@ -154,7 +158,8 @@ See [`CLAUDE.md`](CLAUDE.md) for the full architecture guide, module dependency 
 
 Key rules:
 
-- All app logic lives in `packages/core/src/`
-- Apps (`apps/`) are thin entry points — no business logic
-- The build output is `dist/offline/index.html` — a single self-contained HTML file
+- All shared app logic and UI lives in `packages/core/src/`
+- Apps (`apps/`) are thin target entry points — deployment policy, adapter wiring, target shell, and target bootstrap only
+- The offline-web output is `dist/offline/index.html` — a single self-contained HTML file
+- Connected targets use their target-specific adapters and host environments: PWA sync/mobile PWA use `RxDBAdapter`, Dataverse uses `DataverseAdapter`, and enterprise-web uses the server-backed `RxDBAdapter` path
 - Do not edit `taskapp.html` — it is the legacy reference file only

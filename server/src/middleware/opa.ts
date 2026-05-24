@@ -2,10 +2,17 @@ import type { MiddlewareHandler } from 'hono'
 import { otel } from '../observability/otel.js'
 
 export interface PolicyInput {
+  userId?: string
   role: string
   action: string
   tenantId: string
+  resourceType?: string
+  resourceId?: string
   resourceTenantId?: string | null
+  route?: {
+    method: string
+    path: string
+  }
 }
 
 // OPA REST sidecar response shape
@@ -98,12 +105,60 @@ export function opaMiddleware(action: string): MiddlewareHandler {
   return async (c, next) => {
     const role = c.get('role') as string | undefined
     const tenantId = c.get('tenantId') as string | undefined
+    const userId = c.get('userId') as string | undefined
 
     if (!role || !tenantId) {
       return c.json({ error: 'Forbidden' }, 403)
     }
 
-    const allowed = await evaluatePolicy({ role, action, tenantId })
+    const allowed = await evaluatePolicy({
+      role,
+      action,
+      tenantId,
+      ...(userId ? { userId } : {}),
+      route: { method: c.req.method, path: c.req.path },
+    })
+    if (!allowed) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+    await next()
+  }
+}
+
+export function resourcePolicyMiddleware(
+  action: string,
+  resourceType: string,
+  resolveResourceTenantId: (
+    c: Parameters<MiddlewareHandler>[0],
+    tenantId: string,
+    resourceId: string,
+  ) => Promise<string | null>,
+): MiddlewareHandler {
+  return async (c, next) => {
+    const role = c.get('role') as string | undefined
+    const tenantId = c.get('tenantId') as string | undefined
+    const userId = c.get('userId') as string | undefined
+    const resourceId = c.req.param('id')
+
+    if (!role || !tenantId || !resourceId) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+
+    const resourceTenantId = await resolveResourceTenantId(c, tenantId, resourceId)
+    if (!resourceTenantId) {
+      return c.json({ error: 'Not found' }, 404)
+    }
+
+    const allowed = await evaluatePolicy({
+      role,
+      action,
+      tenantId,
+      ...(userId ? { userId } : {}),
+      resourceType,
+      resourceId,
+      resourceTenantId,
+      route: { method: c.req.method, path: c.req.path },
+    })
     if (!allowed) {
       return c.json({ error: 'Forbidden' }, 403)
     }

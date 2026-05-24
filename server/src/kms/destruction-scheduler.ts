@@ -1,7 +1,7 @@
 import { db } from '../db/index.js'
 import { kmsKeyLifecycle } from '../db/schema/kms-keys.js'
 import { AzureKeyVaultKeyService } from './key-service.js'
-import { writeAuditEvent } from '../services/base.js'
+import { withTenant, writeAuditEvent } from '../services/base.js'
 import { and, eq, lte } from 'drizzle-orm'
 import { otel } from '../observability/otel.js'
 
@@ -13,8 +13,9 @@ async function _runOnce(): Promise<void> {
 
   const now = new Date()
 
-  // Find keys scheduled for destruction where effectiveAt has passed
-  // and no subsequent DESTROYED event exists for the same keyVaultUri
+  // System scheduler exception: this discovery pass scans across tenants because
+  // it has no request tenant. All tenant-owned mutations below re-enter through
+  // withTenant(row.orgId) before writing lifecycle or audit evidence.
   const pending = await db
     .select()
     .from(kmsKeyLifecycle)
@@ -28,16 +29,18 @@ async function _runOnce(): Promise<void> {
 
   for (const row of pending) {
     // Check if a DESTROYED event already exists for this keyVaultUri
-    const destroyed = await db
-      .select({ id: kmsKeyLifecycle.id })
-      .from(kmsKeyLifecycle)
-      .where(
-        and(
-          eq(kmsKeyLifecycle.keyVaultUri, row.keyVaultUri),
-          eq(kmsKeyLifecycle.event, 'DESTROYED'),
-        ),
-      )
-      .limit(1)
+    const destroyed = await withTenant(row.orgId, async (tx) => {
+      return tx
+        .select({ id: kmsKeyLifecycle.id })
+        .from(kmsKeyLifecycle)
+        .where(
+          and(
+            eq(kmsKeyLifecycle.keyVaultUri, row.keyVaultUri),
+            eq(kmsKeyLifecycle.event, 'DESTROYED'),
+          ),
+        )
+        .limit(1)
+    })
 
     if (destroyed.length > 0) continue
 
@@ -55,13 +58,17 @@ async function _runOnce(): Promise<void> {
       await poller.pollUntilDone()
 
       // Write DESTROYED event (append-only)
-      await db.insert(kmsKeyLifecycle).values({
-        orgId: row.orgId,
-        userId: row.userId,
-        keyVaultUri: row.keyVaultUri,
-        keyVersion: row.keyVersion,
-        event: 'DESTROYED',
-        effectiveAt: new Date(),
+      await withTenant(row.orgId, async (tx) => {
+        await tx.insert(kmsKeyLifecycle).values([
+          {
+            orgId: row.orgId,
+            userId: row.userId,
+            keyVaultUri: row.keyVaultUri,
+            keyVersion: row.keyVersion,
+            event: 'DESTROYED',
+            effectiveAt: new Date(),
+          },
+        ])
       })
 
       await writeAuditEvent({

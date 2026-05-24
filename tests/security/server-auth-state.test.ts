@@ -34,6 +34,21 @@ describe('server auth state store', () => {
     await expect(store.rememberRefreshTokenUse(token, 60)).resolves.toBe(false)
   })
 
+  it('rejects expired PKCE state in development memory mode', async () => {
+    vi.stubEnv('NODE_ENV', 'test')
+    vi.stubEnv('AUTH_STATE_REDIS_URL', '')
+    const store = await getAuthStateStore()
+    const state = `expired-${crypto.randomUUID()}`
+
+    await store.savePkceState(
+      state,
+      { codeVerifier: 'verifier', redirectTo: '/', expiresAt: Date.now() - 1 },
+      60,
+    )
+
+    await expect(store.consumePkceState(state)).resolves.toBeNull()
+  })
+
   it('fails closed in production without durable auth state', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('AUTH_STATE_REDIS_URL', '')

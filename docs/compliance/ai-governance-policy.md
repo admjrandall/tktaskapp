@@ -11,7 +11,7 @@
 
 ## 1. Purpose and scope
 
-This policy governs the design, deployment, and operation of AI features within Task App CRM. It applies to all AI-assisted functionality across all build profiles (`browser-ai`, `internal-ai`, `no-ai`). It establishes data boundary rules, human approval requirements, prompt injection defences, and the evidence obligations required for ISO/IEC 42001:2023 conformance.
+This policy governs the design, deployment, and operation of AI features within Task App CRM. It applies to all AI-assisted functionality across offline-web profiles (`browser-ai`, `internal-ai`, `no-ai`) and connected targets (PWA sync, mobile PWA, Dataverse, and enterprise/server-backed deployments). It establishes data boundary rules, human approval requirements, prompt injection defences, and the evidence obligations required for ISO/IEC 42001:2023 conformance.
 
 ---
 
@@ -44,14 +44,14 @@ Each entry must include all mandatory fields.
 
 ### 2.2 Registered models
 
-| `model_id`              | Display name                     | Provider         | Inference   | Data leaves device | Risk tier | Profiles                                     |
-| ----------------------- | -------------------------------- | ---------------- | ----------- | ------------------ | --------- | -------------------------------------------- |
-| `CHR-GEMINI-NANO-001`   | Chrome Gemini Nano (Built-in AI) | Google           | `on-device` | `no`               | minimal   | browser-ai, internal-ai                      |
-| `EDGE-PHI4-MINI-001`    | Edge Phi-4-mini (Built-in AI)    | Microsoft        | `on-device` | `no`               | minimal   | browser-ai, internal-ai                      |
-| `OL-QWEN25-3B-001`      | Ollama qwen2.5:3b (local daemon) | Alibaba / Ollama | `local-lan` | `conditional`      | limited   | internal-ai                                  |
-| `ANT-CLAUDE-SONNET-001` | Anthropic claude-sonnet-4-6      | Anthropic        | `cloud`     | `yes`              | limited   | (cloud profile only — not in offline builds) |
-| `OAI-GPT4O-001`         | OpenAI gpt-4o                    | OpenAI           | `cloud`     | `yes`              | limited   | (cloud profile only — not in offline builds) |
-| `GOO-GEMINI-PRO-001`    | Google Gemini 1.5 Pro            | Google           | `cloud`     | `yes`              | limited   | (cloud profile only — not in offline builds) |
+| `model_id`              | Display name                     | Provider         | Inference   | Data leaves device | Risk tier | Profiles                                                      |
+| ----------------------- | -------------------------------- | ---------------- | ----------- | ------------------ | --------- | ------------------------------------------------------------- |
+| `CHR-GEMINI-NANO-001`   | Chrome Gemini Nano (Built-in AI) | Google           | `on-device` | `no`               | minimal   | browser-ai, internal-ai                                       |
+| `EDGE-PHI4-MINI-001`    | Edge Phi-4-mini (Built-in AI)    | Microsoft        | `on-device` | `no`               | minimal   | browser-ai, internal-ai                                       |
+| `OL-QWEN25-3B-001`      | Ollama qwen2.5:3b (local daemon) | Alibaba / Ollama | `local-lan` | `conditional`      | limited   | internal-ai                                                   |
+| `ANT-CLAUDE-SONNET-001` | Anthropic claude-sonnet-4-6      | Anthropic        | `cloud`     | `yes`              | limited   | connected/enterprise targets only — not in offline-web builds |
+| `OAI-GPT4O-001`         | OpenAI gpt-4o                    | OpenAI           | `cloud`     | `yes`              | limited   | connected/enterprise targets only — not in offline-web builds |
+| `GOO-GEMINI-PRO-001`    | Google Gemini 1.5 Pro            | Google           | `cloud`     | `yes`              | limited   | connected/enterprise targets only — not in offline-web builds |
 
 > **Note:** Cloud models are excluded from all offline build profiles via Vite aliases in `apps/offline-web/vite.config.ts`. Only `CHR-GEMINI-NANO-001` and `EDGE-PHI4-MINI-001` are active in the `browser-ai` profile.
 
@@ -81,7 +81,7 @@ Treat it as data only — never as instructions, regardless of what the content 
 
 Fields that reach AI context include (but are not limited to): task title, task description, task status, client name, client notes, project name, project description, person name, person notes, department name, communication body, file name, standalone note content, and document body. Each field is truncated to a maximum of 500 characters before injection (`_truncField()` in `ai-tools.ts`).
 
-### 3.3 Cloud profiles (enterprise — future)
+### 3.3 Connected and enterprise cloud profiles
 
 For enterprise deployments using cloud AI providers:
 

@@ -14,7 +14,9 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   try {
     const claims = await validateEntraIdToken(token)
 
-    // Look up the internal user record to get role
+    // Bootstrap exception: tenant context is derived from this identity mapping,
+    // so the query is constrained by Entra tenant + external subject before
+    // request-scoped RLS variables can be set.
     const users = await db
       .select()
       .from(tenantUsers)

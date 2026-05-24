@@ -1,25 +1,24 @@
 # Task App CRM — Mobile (Capacitor)
 
-**Status: Scaffold only — Capacitor is not yet installed. This target is not production-capable.**
+**Status:** Mobile PWA entry exists; native Capacitor packaging remains scaffolded and is not production-capable yet.
 
-This app target will deliver the offline-first, AES-256-GCM encrypted CRM as a native mobile app
-on iOS and Android using [Capacitor](https://capacitorjs.com/).
+This app target delivers the shared Task App CRM core UI in a mobile/PWA shell today, using the server-connected BFF OIDC flow and `RxDBAdapter` from `src/entry.ts`. The intended native iOS/Android Capacitor packaging remains scaffolded until concrete native storage and biometric adapters are implemented.
 
 ---
 
 ## What already exists
 
-| File                                                       | Purpose                                                                              |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `capacitor.config.ts`                                      | Capacitor configuration stub — `androidScheme: 'https'`, no external navigation      |
-| `ios/App/Info.plist`                                       | iOS ATS config — `NSAllowsArbitraryLoads: false`                                     |
-| `ios/App/PrivacyInfo.xcprivacy`                            | iOS 17+ privacy manifest — no tracking, no data collection                           |
-| `android/app/src/main/res/xml/network_security_config.xml` | Android NSC — `cleartextTrafficPermitted="false"`, system CAs only                   |
-| `src/entry.ts`                                             | Documented wiring stub — deployment policy, adapter order, MASVS acceptance criteria |
+| File                                                       | Purpose                                                                                          |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `capacitor.config.ts`                                      | Capacitor configuration stub — `androidScheme: 'https'`, no external navigation                  |
+| `ios/App/Info.plist`                                       | iOS ATS config — `NSAllowsArbitraryLoads: false`                                                 |
+| `ios/App/PrivacyInfo.xcprivacy`                            | iOS 17+ privacy manifest — no tracking, no data collection                                       |
+| `android/app/src/main/res/xml/network_security_config.xml` | Android NSC — `cleartextTrafficPermitted="false"`, system CAs only                               |
+| `src/entry.ts`                                             | Mobile PWA entry — BFF OIDC refresh, service worker registration, gestures, `RxDBAdapter` wiring |
 
 ---
 
-## What must exist before this target is production-capable
+## What must exist before native Capacitor packaging is production-capable
 
 ### 1. Capacitor installed and platforms created
 
@@ -51,9 +50,9 @@ A concrete subclass must:
 - On iOS: use `kSecAccessControlBiometryAny` + `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
   - `kSecAttrSynchronizable: false` (never synced to iCloud).
 
-### 4. Wired entry point
+### 4. Native offline entry point
 
-`src/entry.ts` must be updated from a stub to a real entry. Call in this order:
+If a native offline mobile profile is added, it must use a separate entry/profile or explicitly replace the PWA entry. Call in this order:
 
 ```ts
 assertNetworkPolicyCompliant(OFFLINE_MOBILE_NETWORK_POLICY) // security gate — must be first
@@ -107,7 +106,7 @@ All criteria must pass before a release candidate build is submitted to the App 
 
 ---
 
-## Build target (once Capacitor is installed)
+## Native build target (once Capacitor is installed)
 
 ```bash
 pnpm run build:offline          # builds dist/offline/index.html (the WebView bundle)

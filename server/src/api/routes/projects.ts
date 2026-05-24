@@ -4,7 +4,7 @@ import {
   type CreateProjectInput,
   type UpdateProjectInput,
 } from '../../services/projects.service.js'
-import { opaMiddleware } from '../../middleware/opa.js'
+import { opaMiddleware, resourcePolicyMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { CreateProjectSchema, UpdateProjectSchema, safeParseV } from '../../schemas/index.js'
@@ -62,65 +62,87 @@ projectsRouter.post('/', opaMiddleware('create'), async (c) => {
   }
 })
 
-projectsRouter.get('/:id', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId')
-  try {
-    const row = await projectsService.getById(tenantId, c.req.param('id'))
-    return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'proj-get',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+projectsRouter.get(
+  '/:id',
+  resourcePolicyMiddleware('read', 'projects', async (_c, tenantId, resourceId) => {
+    const row = await projectsService.getById(tenantId, resourceId)
+    return row?.tenantId ?? null
+  }),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    try {
+      const row = await projectsService.getById(tenantId, c.req.param('id'))
+      return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'proj-get',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
-projectsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const userId = c.get('userId')
-  try {
-    const parsed = safeParseV(UpdateProjectSchema, await c.req.json())
-    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
-    const row = await projectsService.update(
-      tenantId,
-      userId,
-      c.req.param('id'),
-      parsed.data as unknown as UpdateProjectInput,
-    )
-    return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'proj-update',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+projectsRouter.patch(
+  '/:id',
+  resourcePolicyMiddleware('update', 'projects', async (_c, tenantId, resourceId) => {
+    const row = await projectsService.getById(tenantId, resourceId)
+    return row?.tenantId ?? null
+  }),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    try {
+      const parsed = safeParseV(UpdateProjectSchema, await c.req.json())
+      if (!parsed.success)
+        return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+      const row = await projectsService.update(
+        tenantId,
+        userId,
+        c.req.param('id'),
+        parsed.data as unknown as UpdateProjectInput,
+      )
+      return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'proj-update',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
-projectsRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const userId = c.get('userId')
-  try {
-    const ok = await projectsService.delete(tenantId, userId, c.req.param('id'))
-    return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'proj-delete',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+projectsRouter.delete(
+  '/:id',
+  resourcePolicyMiddleware('delete', 'projects', async (_c, tenantId, resourceId) => {
+    const row = await projectsService.getById(tenantId, resourceId)
+    return row?.tenantId ?? null
+  }),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    try {
+      const ok = await projectsService.delete(tenantId, userId, c.req.param('id'))
+      return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'proj-delete',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)

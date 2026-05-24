@@ -1,7 +1,6 @@
-import { db } from '../db/index.js'
 import { auditEvents } from '../db/schema/audit-events.js'
 import { eq, and, gte, lte, count } from 'drizzle-orm'
-import { paginationValues, type PaginatedResult } from './base.js'
+import { paginationValues, type PaginatedResult, withTenant } from './base.js'
 import type { InferSelectModel } from 'drizzle-orm'
 
 export type AuditEvent = InferSelectModel<typeof auditEvents>
@@ -28,18 +27,20 @@ export class AuditService {
     if (filters.from) conditions.push(gte(auditEvents.createdAt, new Date(filters.from)))
     if (filters.to) conditions.push(lte(auditEvents.createdAt, new Date(filters.to)))
 
-    const [rows, countRows] = await Promise.all([
-      db
-        .select()
-        .from(auditEvents)
-        .where(and(...conditions))
-        .limit(limit)
-        .offset(offset),
-      db
-        .select({ value: count() })
-        .from(auditEvents)
-        .where(and(...conditions)),
-    ])
+    const [rows, countRows] = await withTenant(tenantId, async (tx) =>
+      Promise.all([
+        tx
+          .select()
+          .from(auditEvents)
+          .where(and(...conditions))
+          .limit(limit)
+          .offset(offset),
+        tx
+          .select({ value: count() })
+          .from(auditEvents)
+          .where(and(...conditions)),
+      ]),
+    )
     return {
       data: rows,
       pagination: {
@@ -55,10 +56,12 @@ export class AuditService {
     const conditions = [eq(auditEvents.orgId, tenantId)]
     if (from) conditions.push(gte(auditEvents.createdAt, new Date(from)))
     if (to) conditions.push(lte(auditEvents.createdAt, new Date(to)))
-    const rows = await db
-      .select()
-      .from(auditEvents)
-      .where(and(...conditions))
+    const rows = await withTenant(tenantId, async (tx) =>
+      tx
+        .select()
+        .from(auditEvents)
+        .where(and(...conditions)),
+    )
     return rows.map((r) => JSON.stringify(r)).join('\n')
   }
 
@@ -66,10 +69,12 @@ export class AuditService {
     const conditions = [eq(auditEvents.orgId, tenantId)]
     if (from) conditions.push(gte(auditEvents.createdAt, new Date(from)))
     if (to) conditions.push(lte(auditEvents.createdAt, new Date(to)))
-    const rows = await db
-      .select()
-      .from(auditEvents)
-      .where(and(...conditions))
+    const rows = await withTenant(tenantId, async (tx) =>
+      tx
+        .select()
+        .from(auditEvents)
+        .where(and(...conditions)),
+    )
     if (rows.length === 0) return ''
     const headers = Object.keys(rows[0] ?? {}).join(',')
     const lines = rows.map((r) =>

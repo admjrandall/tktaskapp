@@ -16,7 +16,9 @@ If you get stuck in a loop trying to fix an issue, try twice, then stop and disc
 
 ## What this is
 
-**Task App CRM** — a fully offline-first, AES-256-GCM encrypted CRM. It is developed as a **TypeScript monorepo** (pnpm workspaces, Vite build) and deployed as a **single self-contained HTML file** (`dist/offline/index.html`). No server needed. Open in Chrome or Edge and it runs from `file://`.
+**Task App CRM** — an offline-first, AES-256-GCM encrypted CRM with multiple deployment targets. The app is developed as a **TypeScript monorepo** (pnpm workspaces, Vite build) around a shared core UI in `packages/core/src/`. The offline-web target still ships as a **single self-contained HTML file** (`dist/offline/index.html`) that needs no server and can run from `file://`, but the product is **not strictly offline-only**: PWA sync, mobile PWA, Dataverse, and enterprise/server-backed targets are also part of the intended architecture.
+
+Target-specific behavior belongs in the thin app entry points under `apps/`; shared business logic and UI stay in `packages/core/src/`. Each target sets a deployment policy and injects the appropriate adapter before calling `init()`.
 
 The legacy single-file source (`taskapp.html`, ~7,853 lines) still exists in the repo root as a reference but is **no longer the active codebase**. All development happens in the monorepo packages.
 
@@ -119,8 +121,8 @@ d:\techkeycrmapp\
 │   │           ├── browser-transformers-disabled.ts ← stub for non-WebGPU builds
 │   │           ├── cloud-disabled.ts          ← stub when cloud AI is disallowed
 │   │           ├── ollama.ts, anthropic.ts, openai.ts, google.ts, powerplatform.ts
-│   ├── adapter-null/src/index.ts          ← NullAdapter (offline-only, no-op)
-│   ├── adapter-rxdb/src/index.ts          ← RxDBAdapter stub
+│   ├── adapter-null/src/index.ts          ← NullAdapter (offline/no-sync, no-op)
+│   ├── adapter-rxdb/src/index.ts          ← Hono sync adapter for PWA/mobile/enterprise targets
 │   ├── adapter-rxdb-couchdb/src/index.ts  ← RxDB adapter using CouchDB replication protocol
 │   ├── adapter-dataverse/src/index.ts     ← DataverseAdapter stub
 │   ├── adapter-kms/src/index.ts           ← KMS adapter interface (Azure KV / AWS KMS / HashiCorp; GDPR crypto-shredding contract)
@@ -139,11 +141,11 @@ d:\techkeycrmapp\
 │   │   │   └── entry-internal-ai.ts ← browser AI + private Ollama endpoints; OT_AI_CONNECT_SRC at build
 │   │   ├── vite.config.ts        ← builds browser-ai profile → dist/offline/index.html
 │   │   └── README.md             ← documents three sub-profiles
-│   ├── pwa-sync/                 ← PWA build (NullAdapter for now)
-│   ├── dataverse/                ← Power Apps Code App build
-│   ├── mobile/                   ← Capacitor config stub
-│   └── enterprise-web/           ← Phase 9 stub; server-backed enterprise build (NOT production-ready)
-│       └── src/entry.ts          ← documented design stub with acceptance checklist
+│   ├── pwa-sync/                 ← Server-connected PWA build using RxDBAdapter
+│   ├── dataverse/                ← Power Apps Code App build using DataverseAdapter
+│   ├── mobile/                   ← Mobile PWA/Capacitor target; native Capacitor packaging remains scaffolded
+│   └── enterprise-web/           ← Server-backed enterprise web entry using RxDBAdapter
+│       └── src/entry.ts          ← OIDC/PKCE bootstrap, server health check, RxDBAdapter wiring
 ├── dist/
 │   └── offline/index.html        ← built single-file output (open this in browser)
 ├── server/                       ← Hono v4 REST API backend (Node.js, TypeScript)
@@ -206,7 +208,21 @@ pnpm run build:all       # build:offline + build:sync + build:mobile + build:dat
 pnpm run typecheck       # TypeScript type check (no emit)
 ```
 
-After `build:offline`, open `dist/offline/index.html` in Chrome or Edge. No server needed.
+After `build:offline`, open `dist/offline/index.html` in Chrome or Edge. No server needed. Connected targets (`build:sync`, `build:mobile`, `build:dataverse`, and enterprise-web when wired into a Vite config) require their target-specific host, auth, and/or backend services.
+
+## Deployment targets
+
+The repo intentionally supports multiple deployment targets with one shared core UI:
+
+| Target         | Entry                                      | Adapter            | Runtime intent                                                                          |
+| -------------- | ------------------------------------------ | ------------------ | --------------------------------------------------------------------------------------- |
+| Offline web    | `apps/offline-web/src/entry-browser-ai.ts` | `NullAdapter`      | Single-file local app; no CRM server required                                           |
+| PWA sync       | `apps/pwa-sync/src/entry.ts`               | `RxDBAdapter`      | Server-connected PWA using the Hono sync API                                            |
+| Mobile PWA     | `apps/mobile/src/entry.ts`                 | `RxDBAdapter`      | Mobile web/PWA shell with BFF OIDC flow; native Capacitor packaging is still scaffolded |
+| Dataverse      | `apps/dataverse/src/entry.ts`              | `DataverseAdapter` | Power Platform Code App backed by Microsoft Dataverse                                   |
+| Enterprise web | `apps/enterprise-web/src/entry.ts`         | `RxDBAdapter`      | Server-backed enterprise web app with OIDC/PKCE, health check, and enterprise policy    |
+
+Do not describe the whole monorepo as "offline-only." Use "offline-first" for the product architecture, and reserve "offline-only" or "local-only" for the offline-web build/profile where `NullAdapter` and offline CSP restrictions apply.
 
 The three offline sub-profiles are built from `apps/offline-web/`:
 
@@ -318,7 +334,7 @@ stream(onRemoteChange) → unsubscribe fn
 clear()               → void
 ```
 
-`NullAdapter` (the default) inherits all four as no-ops. The app never imports a concrete adapter directly — `setAdapter()` in `storage/db.ts` injects it, called from the app entry file (e.g. `apps/offline-web/src/entry-browser-ai.ts`) before `init()`.
+`NullAdapter` is the offline/no-sync adapter and inherits all four methods as no-ops. Connected targets inject concrete adapters such as `RxDBAdapter` or `DataverseAdapter`. The core app never imports a concrete adapter directly — `setAdapter()` in `storage/db.ts` injects it from the target entry file before `init()`.
 
 ---
 
@@ -499,7 +515,7 @@ In `storage/db.ts`, `dbFlush()` calls `fsWriteVault()` lazily (dynamic import) t
 
 ## Running / testing
 
-Open `dist/offline/index.html` directly in Chrome or Edge. No server needed — `file://` protocol works.
+For the offline-web target, open `dist/offline/index.html` directly in Chrome or Edge. No server needed — `file://` protocol works. For PWA sync, mobile PWA, Dataverse, and enterprise-web targets, use the target-specific host/backend described by that app entry and deployment environment.
 
 For Built-in AI (the only AI tier in the offline build — Gemini Nano in Chrome, Phi-4-mini in Edge):
 

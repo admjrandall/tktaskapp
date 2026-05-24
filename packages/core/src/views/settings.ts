@@ -267,6 +267,28 @@ export function resetSecurityState(): void {
 }
 
 export function renderSettings(state: AppState): string {
+  const isOfflineProfile =
+    deploymentPolicy.id.startsWith('offline-') || deploymentPolicy.id === 'ot-only'
+  const targetLabel = escH(deploymentPolicy.label || 'Task App CRM')
+  const dataBoundaryIntro = isOfflineProfile
+    ? 'This offline-web build is a local, no-CRM-server deployment. CRM data stays on this device unless you manually export or import a backup.'
+    : `This ${targetLabel} deployment uses the shared Task App CRM core UI with a target-specific connected adapter. Local encrypted storage may be used for session, cache, and offline-first behavior, while CRM sync or integration traffic follows this deployment's configured backend.`
+  const dataBoundaryBullets = isOfflineProfile
+    ? `<li>No telemetry, analytics, or crash reports are collected</li>
+            <li>No cloud sync — all data stays in your browser on this device</li>
+            <li>AI uses only approved offline/on-device or private internal endpoints for this build profile</li>`
+    : `<li>No telemetry, analytics, or crash reports are collected by the shared core UI</li>
+            <li>CRM sync/integration traffic is handled by this target's injected adapter and deployment policy</li>
+            <li>AI availability and data flow are controlled by this target's deployment policy</li>`
+  const dataControllerText = isOfflineProfile
+    ? 'You are the sole data controller for the offline-web build. This application processes data on your own device under your control, with no third-party data processor involved in the offline profile.'
+    : `Data-controller and processor roles depend on the organization and backend selected for the ${targetLabel} deployment. The shared UI encrypts local state where applicable; connected processing is governed by the target backend, identity provider, adapter, and tenant policy.`
+  const privacyNoticeIntro = isOfflineProfile
+    ? 'Task App CRM offline-web is a local deployment. All CRM data you enter is stored in your browser storage, encrypted with AES-256-GCM using a key derived from your master password (PBKDF2-HMAC-SHA-256, 600,000 iterations).'
+    : `Task App CRM ${targetLabel} is a connected deployment using the shared encrypted core UI plus a target-specific adapter. Local browser storage may hold encrypted cache/session data; synced CRM records, identity, audit, and AI requests follow the configured backend or integration boundary.`
+  const privacyTransmissionText = isOfflineProfile
+    ? '<strong>No CRM data is transmitted to a CRM server by this offline-web build.</strong> No telemetry, analytics, crash reports, or usage data is collected or sent anywhere.'
+    : '<strong>This is not the offline-only artifact.</strong> CRM sync, identity, audit, integration, and AI traffic may be transmitted to the configured backend or platform services required by this deployment.'
   const secs = [
     { id: 'profile', label: 'Profile' },
     { id: 'general', label: 'General' },
@@ -690,13 +712,11 @@ export function renderSettings(state: AppState): string {
         </div>
       </div>
       <div class="card" style="padding:1.25rem;margin-bottom:1rem">
-        <div style="font-weight:600;margin-bottom:.75rem">What is NOT sent anywhere</div>
+        <div style="font-weight:600;margin-bottom:.75rem">Data boundary</div>
         <div style="font-size:.875rem;color:var(--text-secondary);line-height:1.8">
-          <p style="margin:0 0 .5rem">This is a fully <strong>offline, local-only</strong> application. No data leaves your device.</p>
+          <p style="margin:0 0 .5rem">${dataBoundaryIntro}</p>
           <ul style="margin:0;padding-left:1.25rem">
-            <li>No telemetry, analytics, or crash reports are collected</li>
-            <li>No cloud sync — all data stays in your browser on this device</li>
-            <li>AI uses only on-device models (Gemini Nano in Chrome, Phi-4-mini in Edge) — queries never leave your device</li>
+            ${dataBoundaryBullets}
             <li>Your master password is never stored or transmitted; only a non-extractable derived key is kept in memory</li>
           </ul>
         </div>
@@ -715,7 +735,7 @@ export function renderSettings(state: AppState): string {
       <div class="card" style="padding:1.25rem">
         <div style="font-weight:600;margin-bottom:.75rem">Data controller</div>
         <div style="font-size:.875rem;color:var(--text-secondary);line-height:1.8">
-          You are the sole data controller. This application processes data exclusively on your own device under your control. There is no third-party data processor involved in the offline build.
+          ${dataControllerText}
         </div>
       </div>`
   } else if (_settingsSection === 'tags') {
@@ -785,9 +805,9 @@ export function renderSettings(state: AppState): string {
       <div class="card" style="padding:1.25rem">
         <div style="font-weight:600;margin-bottom:.75rem">Privacy Notice</div>
         <div style="font-size:.875rem;color:var(--text-secondary);line-height:1.7">
-          <p style="margin:0 0 .625rem">Task App CRM is a fully <strong>offline, local-only</strong> application. All data you enter is stored exclusively in your browser's IndexedDB, encrypted with AES-256-GCM using a key derived from your master password (PBKDF2-HMAC-SHA-256, 600,000 iterations).</p>
-          <p style="margin:0 0 .625rem"><strong>No data is transmitted to any server.</strong> No telemetry, analytics, crash reports, or usage data is collected or sent anywhere.</p>
-          <p style="margin:0 0 .625rem">If you use the optional AI features with a local Ollama server or cloud AI provider, queries are sent to that endpoint only. Queries are not logged by this application except in the encrypted audit log you control.</p>
+          <p style="margin:0 0 .625rem">${privacyNoticeIntro}</p>
+          <p style="margin:0 0 .625rem">${privacyTransmissionText}</p>
+          <p style="margin:0 0 .625rem">If you use optional AI features, queries are sent only to providers/endpoints allowed by this deployment policy. AI actions are governed by the human approval and audit controls in the app.</p>
           <p style="margin:0 0 .625rem">Your data is protected by your master password and lives entirely on your device. Clearing browser data or using a different browser will result in data loss unless you have linked a vault file or exported a backup.</p>
           <p style="margin:0"><strong>Your rights (GDPR/CCPA):</strong> You have full control — export, import, or permanently delete all your data at any time from Settings → Data &amp; Backup and Settings → Security → Danger Zone.</p>
         </div>

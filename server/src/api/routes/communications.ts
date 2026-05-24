@@ -4,7 +4,7 @@ import {
   type CreateCommunicationInput,
   type UpdateCommunicationInput,
 } from '../../services/communications.service.js'
-import { opaMiddleware } from '../../middleware/opa.js'
+import { opaMiddleware, resourcePolicyMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
 import {
@@ -68,69 +68,91 @@ communicationsRouter.post('/', opaMiddleware('create'), async (c) => {
   }
 })
 
-communicationsRouter.get('/:id', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId')
-  try {
-    const row = await communicationsService.getById(tenantId, c.req.param('id'))
-    return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'comm-get',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
-
-communicationsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const userId = c.get('userId')
-  try {
-    const parsed = safeParseV(UpdateCommunicationSchema, await c.req.json())
-    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
-    const changes = {
-      ...parsed.data,
-      ...(parsed.data.occurredAt ? { occurredAt: new Date(parsed.data.occurredAt) } : {}),
+communicationsRouter.get(
+  '/:id',
+  resourcePolicyMiddleware('read', 'communications', async (_c, tenantId, resourceId) => {
+    const row = await communicationsService.getById(tenantId, resourceId)
+    return row?.tenantId ?? null
+  }),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    try {
+      const row = await communicationsService.getById(tenantId, c.req.param('id'))
+      return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'comm-get',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
     }
-    const row = await communicationsService.update(
-      tenantId,
-      userId,
-      c.req.param('id'),
-      changes as unknown as UpdateCommunicationInput,
-    )
-    return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'comm-update',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+  },
+)
 
-communicationsRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const userId = c.get('userId')
-  try {
-    const ok = await communicationsService.delete(tenantId, userId, c.req.param('id'))
-    return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'comm-delete',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+communicationsRouter.patch(
+  '/:id',
+  resourcePolicyMiddleware('update', 'communications', async (_c, tenantId, resourceId) => {
+    const row = await communicationsService.getById(tenantId, resourceId)
+    return row?.tenantId ?? null
+  }),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    try {
+      const parsed = safeParseV(UpdateCommunicationSchema, await c.req.json())
+      if (!parsed.success)
+        return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+      const changes = {
+        ...parsed.data,
+        ...(parsed.data.occurredAt ? { occurredAt: new Date(parsed.data.occurredAt) } : {}),
+      }
+      const row = await communicationsService.update(
+        tenantId,
+        userId,
+        c.req.param('id'),
+        changes as unknown as UpdateCommunicationInput,
+      )
+      return row ? c.json(row, 200) : c.json({ error: 'Not found' }, 404)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'comm-update',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
+
+communicationsRouter.delete(
+  '/:id',
+  resourcePolicyMiddleware('delete', 'communications', async (_c, tenantId, resourceId) => {
+    const row = await communicationsService.getById(tenantId, resourceId)
+    return row?.tenantId ?? null
+  }),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    try {
+      const ok = await communicationsService.delete(tenantId, userId, c.req.param('id'))
+      return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'comm-delete',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)

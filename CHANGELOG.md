@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 
 ---
 
+## [2026-05-24] — Multi-target documentation clarification
+
+### Changed
+
+- Clarified that Task App CRM is offline-first, not strictly offline-only: offline-web, PWA sync, mobile PWA, Dataverse, and enterprise/server-backed targets share one core UI with target-specific adapters.
+- Updated root agent/contributor guidance and target READMEs so offline-only language applies only to the offline-web profile.
+- Made Settings → Data & Privacy and About copy deployment-aware so connected targets no longer display offline-only privacy claims.
+
+---
+
 ## [2026-05-22] — Phase 4: Lockdown Mode + Compliance Pack
 
 ### Added — `packages/core/src/`

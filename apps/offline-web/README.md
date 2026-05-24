@@ -1,8 +1,10 @@
 # apps/offline-web
 
-Thin entry point for all offline web build profiles. Sets the deployment policy and NullAdapter, then calls `init()` from `packages/core`.
+Thin entry point for all offline-web build profiles. Sets the deployment policy and `NullAdapter`, then calls `init()` from `packages/core`.
 
 No business logic lives here — see [`packages/core/src/`](../../packages/core/src/).
+
+This target is the local, no-CRM-server deployment of Task App CRM. It is one deployment target in a larger monorepo that also contains PWA sync, mobile PWA, Dataverse, and enterprise/server-backed entries sharing the same core UI. Do not use this README to describe the whole product as offline-only.
 
 ---
 
@@ -57,6 +59,8 @@ pnpm run build:offline
 start dist/offline/index.html    # Windows
 open dist/offline/index.html     # macOS
 ```
+
+For connected deployments, use the sibling app targets instead: `apps/pwa-sync`, `apps/mobile`, `apps/dataverse`, and `apps/enterprise-web`.
 
 ---
 

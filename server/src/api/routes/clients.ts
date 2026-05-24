@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { clientsService, type UpdateClientInput } from '../../services/clients.service.js'
-import { opaMiddleware } from '../../middleware/opa.js'
+import { opaMiddleware, resourcePolicyMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { CreateClientSchema, UpdateClientSchema, safeParseV } from '../../schemas/index.js'
@@ -55,75 +55,97 @@ clientsRouter.post('/', opaMiddleware('create'), async (c) => {
   }
 })
 
-clientsRouter.get('/:id', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const id = c.req.param('id')
-  try {
-    const client = await clientsService.getById(tenantId, id)
-    if (!client) return c.json({ error: 'Not found' }, 404)
-    return c.json(client, 200)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'clients-get',
-      message: 'Error getting client',
-      extra: { error: String(err) },
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+clientsRouter.get(
+  '/:id',
+  resourcePolicyMiddleware('read', 'clients', async (_c, tenantId, resourceId) => {
+    const client = await clientsService.getById(tenantId, resourceId)
+    return client?.tenantId ?? null
+  }),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const id = c.req.param('id')
+    try {
+      const client = await clientsService.getById(tenantId, id)
+      if (!client) return c.json({ error: 'Not found' }, 404)
+      return c.json(client, 200)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'clients-get',
+        message: 'Error getting client',
+        extra: { error: String(err) },
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
-clientsRouter.patch('/:id', opaMiddleware('update'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const userId = c.get('userId')
-  const id = c.req.param('id')
-  try {
-    const body: unknown = await c.req.json()
-    const parsed = safeParseV(UpdateClientSchema, body)
-    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
-    const client = await clientsService.update(
-      tenantId,
-      userId,
-      id,
-      parsed.data as unknown as UpdateClientInput,
-    )
-    if (!client) return c.json({ error: 'Not found' }, 404)
-    return c.json(client, 200)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'clients-update',
-      message: 'Error updating client',
-      extra: { error: String(err) },
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+clientsRouter.patch(
+  '/:id',
+  resourcePolicyMiddleware('update', 'clients', async (_c, tenantId, resourceId) => {
+    const client = await clientsService.getById(tenantId, resourceId)
+    return client?.tenantId ?? null
+  }),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+    try {
+      const body: unknown = await c.req.json()
+      const parsed = safeParseV(UpdateClientSchema, body)
+      if (!parsed.success)
+        return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+      const client = await clientsService.update(
+        tenantId,
+        userId,
+        id,
+        parsed.data as unknown as UpdateClientInput,
+      )
+      if (!client) return c.json({ error: 'Not found' }, 404)
+      return c.json(client, 200)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'clients-update',
+        message: 'Error updating client',
+        extra: { error: String(err) },
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
-clientsRouter.delete('/:id', opaMiddleware('delete'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const userId = c.get('userId')
-  const id = c.req.param('id')
-  try {
-    const ok = await clientsService.delete(tenantId, userId, id)
-    if (!ok) return c.json({ error: 'Not found' }, 404)
-    return c.body(null, 204)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'clients-delete',
-      message: 'Error deleting client',
-      extra: { error: String(err) },
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+clientsRouter.delete(
+  '/:id',
+  resourcePolicyMiddleware('delete', 'clients', async (_c, tenantId, resourceId) => {
+    const client = await clientsService.getById(tenantId, resourceId)
+    return client?.tenantId ?? null
+  }),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    const id = c.req.param('id')
+    try {
+      const ok = await clientsService.delete(tenantId, userId, id)
+      if (!ok) return c.json({ error: 'Not found' }, 404)
+      return c.body(null, 204)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'clients-delete',
+        message: 'Error deleting client',
+        extra: { error: String(err) },
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
