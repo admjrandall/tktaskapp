@@ -526,7 +526,8 @@ export function renderSettings(state: AppState): string {
     } else {
       const isEnabled = mfaStatus.totpEnabled
       totpSection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
-        <div style="font-weight:600;margin-bottom:.75rem">Two-Factor Authentication (TOTP)</div>
+        <div style="font-weight:600;margin-bottom:.25rem">Two-Factor Authentication (TOTP)</div>
+        <div style="font-size:.8125rem;color:var(--text-secondary);margin-bottom:.75rem">Secondary option — use a passkey above for stronger phishing-resistant protection (NIST SP 800-63B-4 AAL2). TOTP does not protect against real-time phishing.</div>
         <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
           <span style="font-size:.8125rem;font-weight:600;color:${isEnabled ? '#10b981' : '#94a3b8'}">${isEnabled ? '✓ Enabled' : 'Disabled'}</span>
         </div>
@@ -566,8 +567,8 @@ export function renderSettings(state: AppState): string {
         : `<p style="font-size:.875rem;color:var(--text-tertiary)">No passkeys registered</p>`
 
       passkeySection = `<div class="card" style="padding:1.25rem;margin-bottom:1rem">
-        <div style="font-weight:600;margin-bottom:.75rem">Passkeys (WebAuthn)</div>
-        <div style="font-size:.8125rem;color:var(--text-secondary);margin-bottom:.75rem">Sign in with Touch ID, Face ID, or Windows Hello. Passkeys use the WebAuthn PRF extension to protect your vault.</div>
+        <div style="font-weight:600;margin-bottom:.25rem">Passkeys (WebAuthn) — Recommended</div>
+        <div style="font-size:.8125rem;color:var(--text-secondary);margin-bottom:.75rem">Primary authenticator (NIST SP 800-63B-4 AAL2). Sign in with Touch ID, Face ID, or Windows Hello — phishing-resistant and more secure than TOTP. Passkeys use the WebAuthn PRF extension to protect your vault.</div>
         ${passkeyList}
         <button class="btn btn-secondary btn-sm" id="add-passkey-btn" style="margin-top:.625rem">Add Passkey</button>
       </div>`
@@ -656,7 +657,9 @@ export function renderSettings(state: AppState): string {
       <button class="btn btn-danger" id="reset-app-btn">Reset App</button>
     </div>`
 
-    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">Security</h2>${sessionSection}${passwordSection}${totpSection}${passkeySection}${auditSection}${dangerSection}`
+    // NIST SP 800-63B-4 §5.1.7 — passkeys (phishing-resistant, AAL2) are presented
+    // before TOTP (AAL1 downgrade path) to guide users toward stronger authentication.
+    body = `<h2 style="font-size:1.125rem;font-weight:600;margin-bottom:1.25rem">Security</h2>${sessionSection}${passwordSection}${passkeySection}${totpSection}${auditSection}${dangerSection}`
   } else if (_settingsSection === 'storage') {
     const hasFsApi = typeof window !== 'undefined' && 'showSaveFilePicker' in window
     const fsReady = _isFsReady()
