@@ -160,6 +160,20 @@ export const AI_TOOLS: Record<string, { desc: string; args: string[] }> = {
   },
 }
 
+const SYSTEM_PROMPT_EXAMPLES = `
+Examples:
+User: "create a task named Task 1 due Friday"
+You: {"tool":"create_record","args":{"store":"tasks","fields":{"title":"Task 1","dueDate":"2026-05-15","status":"Todo"}}}
+
+User: "how many overdue tasks?"
+You: {"tool":"count_records","args":{"store":"tasks","filter":{"overdue":true}}}
+
+User: "mark Task 1 as done"
+You: {"tool":"update_record","args":{"store":"tasks","id_or_name":"Task 1","changes":{"status":"Done"}}}
+
+User: "thanks!"
+You: You're welcome!`.trim()
+
 export function buildSystemPrompt(): string {
   const toolLines = Object.entries(AI_TOOLS)
     .map(([name, t]) => {
@@ -167,7 +181,7 @@ export function buildSystemPrompt(): string {
       return `- ${name}${argsStr} — ${t.desc}`
     })
     .join('\n')
-  return `${aiSystemPromptBase()}\n\nAvailable tools:\n${toolLines}\n\nExamples:\nUser: "create a task named Task 1 due Friday"\nYou: {"tool":"create_record","args":{"store":"tasks","fields":{"title":"Task 1","dueDate":"2026-05-15","status":"Todo"}}}\n\nUser: "how many overdue tasks?"\nYou: {"tool":"count_records","args":{"store":"tasks","filter":{"overdue":true}}}\n\nUser: "mark Task 1 as done"\nYou: {"tool":"update_record","args":{"store":"tasks","id_or_name":"Task 1","changes":{"status":"Done"}}}\n\nUser: "thanks!"\nYou: You're welcome!`
+  return `${aiSystemPromptBase()}\n\nAvailable tools:\n${toolLines}\n\n${SYSTEM_PROMPT_EXAMPLES}`
 }
 
 setRuntimePromptBuilder(buildSystemPrompt)
