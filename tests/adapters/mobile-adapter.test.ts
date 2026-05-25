@@ -1,13 +1,68 @@
 // Mobile adapter contract tests — MASVS 2.0 acceptance requirements.
 // Tests marked .todo require physical iOS/Android hardware or OS-level access.
+// Device-gated tests live in tests/e2e/mobile/platform-security.spec.ts.
 // See docs/architecture/0004-mobile-storage.md for the full design.
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   MockMobileVaultAdapter,
   MockMobileBackupAdapter,
   MockBiometricUnlockAdapter,
 } from './mock-mobile-adapters.js'
+
+// ── Capacitor Filesystem module mock ──────────────────────────────────────────
+// CapacitorVaultAdapter uses @capacitor/filesystem which relies on native bridge
+// APIs not available in Node.js. We mock the whole module so the atomicity test
+// can control each method individually via the `_filesystemOps` store below.
+
+const _filesystemOps = {
+  store: {} as Record<string, string>,
+  rejectNextRename: false,
+}
+
+vi.mock('@capacitor/filesystem', () => {
+  return {
+    Filesystem: {
+      writeFile: vi.fn(async (opts: { path: string; data: string }) => {
+        _filesystemOps.store[opts.path] = opts.data
+        return { uri: opts.path }
+      }),
+      readFile: vi.fn(async (opts: { path: string }) => {
+        const d = _filesystemOps.store[opts.path]
+        if (d === undefined) throw new Error('not found')
+        return { data: d }
+      }),
+      stat: vi.fn(async (opts: { path: string }) => {
+        if (_filesystemOps.store[opts.path] === undefined) throw new Error('not found')
+        return { type: 'file', size: 0, ctime: Date.now(), mtime: Date.now(), uri: opts.path }
+      }),
+      deleteFile: vi.fn(async (opts: { path: string }) => {
+        delete _filesystemOps.store[opts.path]
+      }),
+      rename: vi.fn(
+        async (opts: { from: string; to: string; directory?: string; toDirectory?: string }) => {
+          if (_filesystemOps.rejectNextRename) {
+            _filesystemOps.rejectNextRename = false
+            throw new Error('simulated crash mid-rename')
+          }
+          _filesystemOps.store[opts.to] = _filesystemOps.store[opts.from] ?? ''
+          delete _filesystemOps.store[opts.from]
+        },
+      ),
+    },
+    Directory: {
+      Data: 'DATA',
+      Documents: 'DOCUMENTS',
+      External: 'EXTERNAL',
+      ExternalStorage: 'EXTERNAL_STORAGE',
+      Cache: 'CACHE',
+      Library: 'LIBRARY',
+    },
+    Encoding: {
+      UTF8: 'utf8',
+    },
+  }
+})
 
 describe('MobileVaultAdapter — vault persistence (MASVS-STORAGE-1)', () => {
   it('readVault() returns null on first launch (no vault written yet)', async () => {
@@ -30,7 +85,35 @@ describe('MobileVaultAdapter — vault persistence (MASVS-STORAGE-1)', () => {
     expect(result2!.data[0]).toBe(1)
   })
 
-  it.todo('writeVault() is atomic — a crash mid-write leaves the previous vault intact')
+  it('writeVault() is atomic — a crash mid-rename leaves the previous vault intact', async () => {
+    // Uses CapacitorVaultAdapter with a mocked Filesystem (see top-of-file vi.mock).
+    // The mock intercepts Filesystem.rename and can simulate a crash between
+    // the temp write and the atomic rename — the prior vault must survive.
+    const { CapacitorVaultAdapter } =
+      await import('../../packages/adapter-mobile-native/src/capacitor-vault-adapter.js')
+
+    // Reset the in-memory filesystem store before this test.
+    _filesystemOps.store = {}
+    _filesystemOps.rejectNextRename = false
+
+    const adapter = new CapacitorVaultAdapter()
+    const original = new Uint8Array([0xca, 0xfe])
+
+    // First write — succeeds, establishing the known-good vault.
+    await adapter.writeVault(original)
+    expect(await adapter.vaultExists()).toBe(true)
+
+    // Second write — temp file written, but rename throws mid-operation.
+    _filesystemOps.rejectNextRename = true
+    await expect(adapter.writeVault(new Uint8Array([0xde, 0xad]))).rejects.toThrow(
+      'simulated crash mid-rename',
+    )
+
+    // Original vault must still be readable — temp did not replace it.
+    const result = await adapter.readVault()
+    expect(result).not.toBeNull()
+    expect(result!.data).toEqual(original)
+  })
 
   it('vaultExists() returns false before first write and true after', async () => {
     const adapter = new MockMobileVaultAdapter()
@@ -48,11 +131,9 @@ describe('MobileVaultAdapter — vault persistence (MASVS-STORAGE-1)', () => {
     expect(await adapter.readVault()).toBeNull()
   })
 
-  it.todo(
-    'vault file is in the platform private directory and not world-readable (iOS: Library/Application Support, Android: filesDir)',
-  )
-
-  it.todo('vault file is not accessible to other apps (confirmed via adb / Xcode Organizer)')
+  // Device-gated: tests/e2e/mobile/platform-security.spec.ts
+  // 'vault file is in the platform private directory and not world-readable'
+  // 'vault file is not accessible to other apps (confirmed via adb / Xcode Organizer)'
 })
 
 describe('MobileBackupAdapter — backup/export/import round-trip', () => {
