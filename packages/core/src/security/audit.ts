@@ -34,6 +34,7 @@ export type AuditEventType =
   | 'ai_key_removed'
   | 'ai_query'
   | 'ai_tool_rejected'
+  | 'ai_tool_unknown'
   // AI extended (C.6)
   | 'ai_attribute_computed'
   | 'ai_attribute_failed'

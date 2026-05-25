@@ -157,7 +157,9 @@ aiAttributesRouter.post(
       try {
         const llmResp = await callLlm({
           model: modelId,
-          systemPrompt: _stringField(def, 'system_prompt', '') || undefined,
+          ...(_stringField(def, 'system_prompt', '')
+            ? { systemPrompt: _stringField(def, 'system_prompt', '') }
+            : {}),
           userMessage: sanitisedMessage,
           maxTokens: 512,
           temperature: 0,

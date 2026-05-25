@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import type { Context } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { OidcServiceImpl, generatePkceAsync } from './oidc-service.js'
 import type { OidcConfig } from './oidc.js'
@@ -316,6 +316,3 @@ authRouter.post('/step-up', authMiddleware as MiddlewareHandler, async (c) => {
 })
 
 const STEP_UP_TOKEN_HEADER_EXPORT = 'X-Step-Up-Token'
-
-// Re-export type for middleware import
-type MiddlewareHandler = Parameters<typeof authRouter.post>[1]
