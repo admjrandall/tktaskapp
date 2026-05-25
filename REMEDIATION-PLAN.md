@@ -79,7 +79,7 @@ production use. Implement before any MODERATE or LOW items.
 
 ---
 
-### C-1 — Missing `0001_rls_policies.sql`: RLS not enforced on `tenant_users` and `user_kms_keys` ✅ PRIORITY 1
+### C-1 — Missing `0001_rls_policies.sql`: RLS not enforced on `tenant_users` and `user_kms_keys` ✅ DONE 2026-05-25
 
 **Severity:** CRITICAL — active tenant-isolation vulnerability
 **OWASP:** A01:2025 Broken Access Control
@@ -180,7 +180,7 @@ Create `tests/security/server-rls-coverage.test.ts`. Test that:
 
 ---
 
-### C-2 — Step-up auth client wiring is missing — all admin operations silently fail
+### C-2 — Step-up auth client wiring is missing — all admin operations silently fail ✅ DONE 2026-05-25
 
 **Severity:** CRITICAL — broken user flow; admin UI cannot complete any high-risk operation
 **Standard:** RFC 9470 §3 (step-up challenge protocol); NIST SP 800-63B-4 AAL2/AAL3
@@ -281,7 +281,7 @@ Add to `tests/security/server-auth.test.ts`:
 
 ---
 
-### C-3 — Mobile native adapters are fully abstract with zero concrete implementations
+### C-3 — Mobile native adapters are fully abstract with zero concrete implementations ✅ DONE 2026-05-25
 
 **Severity:** CRITICAL for Phase 8 mobile delivery; must not ship without this
 **Standard:** MASVS 2.0 MASVS-STORAGE-1 (encrypted native storage), MASVS-CRYPTO-1
@@ -494,7 +494,7 @@ them to a `tests/e2e/mobile/` Playwright-Mobile suite.
 
 ---
 
-### C-4 — Zero unit tests for 16 server-side service files
+### C-4 — Zero unit tests for 16 server-side service files ✅ DONE 2026-05-25
 
 **Severity:** CRITICAL for production confidence
 **Standard:** OWASP A10:2025 Mishandling of Exceptional Conditions; NIST audit trail integrity
@@ -525,13 +525,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const { mockExecute, mockInsert } = vi.hoisted(() => ({
   mockExecute: vi.fn().mockResolvedValue(undefined),
-  mockInsert: vi
-    .fn()
-    .mockReturnValue({
-      values: vi
-        .fn()
-        .mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'audit-1' }]) }),
-    }),
+  mockInsert: vi.fn().mockReturnValue({
+    values: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'audit-1' }]) }),
+  }),
 }))
 
 vi.mock('../../server/src/db/index.js', () => ({
@@ -621,7 +617,7 @@ Implement after all CRITICAL items are complete and green.
 
 ---
 
-### M-1 — Placeholder architecture directories contain only stub comments
+### M-1 — Placeholder architecture directories contain only stub comments ✅ DONE 2026-05-25
 
 **Severity:** MODERATE — misleading to new contributors; import graph has dead entries
 **Files:**
@@ -650,7 +646,7 @@ violate the production-readiness standard in CLAUDE.md.
 
 ---
 
-### M-2 — `ai-tools.ts` default case throws uncaught runtime error
+### M-2 — `ai-tools.ts` default case throws uncaught runtime error ✅ DONE 2026-05-25
 
 **Severity:** MODERATE — crashes the AI panel on unknown tool calls
 **OWASP:** A10:2025 Mishandling of Exceptional Conditions
@@ -690,7 +686,7 @@ a system message rather than silently discarding it.
 
 ---
 
-### M-3 — E2E Playwright tests have no CI integration
+### M-3 — E2E Playwright tests have no CI integration ✅ DONE 2026-05-25
 
 **Severity:** MODERATE — accessibility regressions can ship undetected
 **Files:** `tests/e2e/accessibility/*.spec.ts`, `playwright.config.ts`
@@ -730,7 +726,7 @@ The config should read `process.env.PLAYWRIGHT_BASE_URL ?? 'file://...'` as its
 
 ---
 
-### M-4 — `it.todo()` mobile tests have no offline equivalent for atomic-write invariant
+### M-4 — `it.todo()` mobile tests have no offline equivalent for atomic-write invariant ✅ DONE 2026-05-25
 
 **Severity:** MODERATE — data corruption risk if vault write is interrupted
 **File:** `tests/adapters/mobile-adapter.test.ts:33`
@@ -762,7 +758,7 @@ with a skip guard: `test.skip(!process.env.MOBILE_DEVICE_CONNECTED, 'requires ph
 
 ---
 
-### M-5 — `DataverseNotImplementedError` is dead code — exported but never thrown
+### M-5 — `DataverseNotImplementedError` is dead code — exported but never thrown ✅ DONE 2026-05-25
 
 **Severity:** MODERATE — misleads readers about adapter completeness
 **File:** `packages/adapter-dataverse/src/index.ts:198–206`
@@ -776,7 +772,7 @@ a specific method name tied to the unimplemented method.
 
 ---
 
-### M-6 — No tests for KMS erasure workflow and destruction scheduler
+### M-6 — No tests for KMS erasure workflow and destruction scheduler ✅ DONE 2026-05-25
 
 **Severity:** MODERATE — GDPR Article 17 compliance is untested server-side
 **Standard:** EDPB Guidelines 02/2025 on crypto-shredding as valid erasure
@@ -846,7 +842,7 @@ describe('LegalHoldService', () => {
 
 ---
 
-### M-7 — No tests for `adapter-rxdb-couchdb`
+### M-7 — No tests for `adapter-rxdb-couchdb` ✅ DONE 2026-05-25
 
 **Severity:** MODERATE — alternative sync protocol is unverified
 **File:** `packages/adapter-rxdb-couchdb/src/index.ts`
@@ -879,7 +875,7 @@ but should be resolved within the same sprint to prevent compounding technical d
 
 ---
 
-### L-1 — AI system prompt is a single unreadable line in source
+### L-1 — AI system prompt is a single unreadable line in source ✅ DONE 2026-05-25
 
 **Severity:** LOW
 **File:** `packages/core/src/ai/ai-tools.ts:170`
@@ -898,7 +894,7 @@ in future audits.
 
 ---
 
-### L-2 — `DataverseAdapter.pull()` OData primary key normalization is a silent no-op
+### L-2 — `DataverseAdapter.pull()` OData primary key normalization is a silent no-op ✅ DONE 2026-05-25
 
 **Severity:** LOW but data-integrity risk for all Dataverse sync operations
 **File:** `packages/adapter-dataverse/src/index.ts:77`
@@ -917,7 +913,7 @@ correctly normalised after a `pull()` that returns a row with a Dataverse PK fie
 
 ---
 
-### L-3 — Drizzle migration journal gap should be formally documented
+### L-3 — Drizzle migration journal gap should be formally documented ✅ DONE 2026-05-25
 
 **Severity:** LOW
 **File:** `server/drizzle/meta/_journal.json`
@@ -928,7 +924,7 @@ This is housekeeping rather than a code change.
 
 ---
 
-### L-4 — Duplicate accessibility tests as both `.test.ts` (vitest) and `.spec.ts` (Playwright)
+### L-4 — Duplicate accessibility tests as both `.test.ts` (vitest) and `.spec.ts` (Playwright) ✅ DONE 2026-05-25
 
 **Severity:** LOW — test maintenance burden and potential drift
 **Files:** `tests/accessibility/*.test.ts` (3 files) and `tests/e2e/accessibility/*.spec.ts` (3 files)
@@ -948,7 +944,7 @@ but are missing controls that 2026 standards now require.
 
 ---
 
-### S-1 — NIST SP 800-63B-4 supersedes 800-63B: passkeys are now required for AAL2
+### S-1 — NIST SP 800-63B-4 supersedes 800-63B: passkeys are now required for AAL2 ✅ DONE 2026-05-25
 
 **Standard:** NIST SP 800-63B-4 (final, released July 2025; supersedes 800-63B which was
 withdrawn August 1 2025)
@@ -966,7 +962,7 @@ are the new baseline for AAL2).
 
 ---
 
-### S-2 — RFC 9700 (OAuth 2.0 Security BCP) token binding requirements
+### S-2 — RFC 9700 (OAuth 2.0 Security BCP) token binding requirements ✅ DONE 2026-05-25
 
 **Standard:** RFC 9700 Best Current Practice for OAuth 2.0 Security (final)
 
@@ -980,7 +976,7 @@ Verify `server/src/auth/oidc-service.ts` and `server/src/auth/middleware.ts` imp
 
 ---
 
-### S-3 — EDPB Guidelines 02/2025: audit log for erasure must include key destruction timestamp
+### S-3 — EDPB Guidelines 02/2025: audit log for erasure must include key destruction timestamp ✅ DONE 2026-05-25
 
 **Standard:** EDPB Guidelines 02/2025 on Blockchain and GDPR (published 2026)
 
@@ -1077,26 +1073,26 @@ Sprint 9 — Cleanup
 
 ## §9 — Issue Index (quick reference)
 
-| ID  | Severity | File                                                                   | Status  |
-| --- | -------- | ---------------------------------------------------------------------- | ------- |
-| C-1 | CRITICAL | `server/drizzle/0001_rls_policies.sql` (missing)                       | ⬜ Open |
-| C-2 | CRITICAL | `server/src/auth/routes.ts:261` + `packages/core/src/security/auth.ts` | ⬜ Open |
-| C-3 | CRITICAL | `packages/adapter-mobile-native/src/*.ts` (all abstract)               | ⬜ Open |
-| C-4 | CRITICAL | `server/src/services/*.ts` (zero tests)                                | ⬜ Open |
-| M-1 | MODERATE | `packages/core/src/{application,domain,migrations,platform}/index.ts`  | ⬜ Open |
-| M-2 | MODERATE | `packages/core/src/ai/ai-tools.ts:645`                                 | ⬜ Open |
-| M-3 | MODERATE | `.github/workflows/e2e.yml` (missing)                                  | ⬜ Open |
-| M-4 | MODERATE | `tests/adapters/mobile-adapter.test.ts:33`                             | ⬜ Open |
-| M-5 | MODERATE | `packages/adapter-dataverse/src/index.ts:198`                          | ⬜ Open |
-| M-6 | MODERATE | `server/src/kms/erasure-workflow.ts` (no tests)                        | ⬜ Open |
-| M-7 | MODERATE | `packages/adapter-rxdb-couchdb/src/index.ts` (no tests)                | ⬜ Open |
-| S-1 | SECURITY | `packages/core/src/security/webauthn.ts` — NIST SP 800-63B-4 AAL2      | ⬜ Open |
-| S-2 | SECURITY | `server/src/auth/oidc-service.ts` — RFC 9700 token binding             | ⬜ Open |
-| S-3 | SECURITY | `server/src/kms/erasure-workflow.ts` — EDPB 02/2025 audit              | ⬜ Open |
-| L-1 | LOW      | `packages/core/src/ai/ai-tools.ts:170`                                 | ⬜ Open |
-| L-2 | LOW      | `packages/adapter-dataverse/src/index.ts:77`                           | ⬜ Open |
-| L-3 | LOW      | `server/drizzle/meta/_journal.json`                                    | ⬜ Open |
-| L-4 | LOW      | `tests/accessibility/*.test.ts` vs `tests/e2e/accessibility/*.spec.ts` | ⬜ Open |
+| ID  | Severity | File                                                                   | Status             |
+| --- | -------- | ---------------------------------------------------------------------- | ------------------ |
+| C-1 | CRITICAL | `server/drizzle/0001_rls_policies.sql` (missing)                       | ✅ DONE 2026-05-25 |
+| C-2 | CRITICAL | `server/src/auth/routes.ts:261` + `packages/core/src/security/auth.ts` | ✅ DONE 2026-05-25 |
+| C-3 | CRITICAL | `packages/adapter-mobile-native/src/*.ts` (all abstract)               | ✅ DONE 2026-05-25 |
+| C-4 | CRITICAL | `server/src/services/*.ts` (zero tests)                                | ✅ DONE 2026-05-25 |
+| M-1 | MODERATE | `packages/core/src/{application,domain,migrations,platform}/index.ts`  | ✅ DONE 2026-05-25 |
+| M-2 | MODERATE | `packages/core/src/ai/ai-tools.ts:645`                                 | ✅ DONE 2026-05-25 |
+| M-3 | MODERATE | `.github/workflows/accessibility.yml` (stub → real Playwright)         | ✅ DONE 2026-05-25 |
+| M-4 | MODERATE | `tests/adapters/mobile-adapter.test.ts:33`                             | ✅ DONE 2026-05-25 |
+| M-5 | MODERATE | `packages/adapter-dataverse/src/index.ts:198`                          | ✅ DONE 2026-05-25 |
+| M-6 | MODERATE | `server/src/kms/erasure-workflow.ts` (no tests)                        | ✅ DONE 2026-05-25 |
+| M-7 | MODERATE | `packages/adapter-rxdb-couchdb/src/index.ts` (no tests)                | ✅ DONE 2026-05-25 |
+| S-1 | SECURITY | `packages/core/src/security/webauthn.ts` — NIST SP 800-63B-4 AAL2      | ✅ DONE 2026-05-25 |
+| S-2 | SECURITY | `server/src/auth/oidc-service.ts` — RFC 9700 token binding             | ✅ DONE 2026-05-25 |
+| S-3 | SECURITY | `server/src/kms/erasure-workflow.ts` — EDPB 02/2025 audit              | ✅ DONE 2026-05-25 |
+| L-1 | LOW      | `packages/core/src/ai/ai-tools.ts:170`                                 | ✅ DONE 2026-05-25 |
+| L-2 | LOW      | `packages/adapter-dataverse/src/index.ts:77`                           | ✅ DONE 2026-05-25 |
+| L-3 | LOW      | `server/drizzle/` migration headers                                    | ✅ DONE 2026-05-25 |
+| L-4 | LOW      | `tests/accessibility/*.test.ts` vs `tests/e2e/accessibility/*.spec.ts` | ✅ DONE 2026-05-25 |
 
 ---
 

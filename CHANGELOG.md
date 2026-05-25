@@ -5,6 +5,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 
 ---
 
+## [2026-05-25] — Full remediation plan completion (all 18 items)
+
+### Security
+
+- **C-1**: Added `server/drizzle/0001_rls_policies.sql` — RLS + `FORCE ROW LEVEL SECURITY` on `tenant_users` and `user_kms_keys` with tenant-isolation restrictive policies and `org_id` index coverage.
+- **C-2**: Wired RFC 9470 step-up auth client — `requestStepUpToken()`, `performWithStepUp()`, and admin-console GDPR erase flow now handle the 401 challenge/retry cycle with `X-Step-Up-Token`.
+- **S-1**: Passkeys (FIDO2) now offered first in re-auth modal and MFA selection per NIST SP 800-63B-4 AAL2; TOTP moved to secondary position.
+- **S-2**: Added RFC 9700 nonce validation for ID tokens and `azp` audience binding in `oidc-service.ts`.
+- **S-3**: Added `keyDestructionScheduledAt` / `keyDestroyedAt` fields to `gdpr_erasure_requested` audit event per EDPB Guidelines 02/2025.
+
+### Added
+
+- **C-3**: Concrete `CapacitorVaultAdapter` (atomic write via temp→rename, `Directory.Data`) and `CapacitorBiometricAdapter` (`capacitor-native-biometric` AES-KW wrapped key storage) — fully implements MASVS-STORAGE-1 and MASVS-CRYPTO-1 for iOS/Android.
+- **M-1**: Production-grade implementations for four Phase-1 placeholder modules: `domain/index.ts` (branded ID types, value objects, domain errors, event bus), `application/index.ts` (UseCase base, pagination, command/query interfaces), `migrations/index.ts` (MigrationRunner with idempotent DDL helpers), `platform/index.ts` (capability detection, Capacitor/Dataverse/browser-offline detection).
+- **M-7**: `tests/adapters/rxdb-couchdb-adapter.test.ts` — CouchDB adapter contract suite with stub (fetch + EventSource mocked) and live (COUCHDB_URL guarded) modes.
+- **M-6**: `tests/unit/kms/erasure-workflow.test.ts` — full coverage for `runDataRemovalWorkflow`, `DestructionScheduler`, and `LegalHoldService`.
+- **C-4**: `tests/unit/services/base.service.test.ts`, `clients.service.test.ts`, `tasks.service.test.ts`, `audit.service.test.ts` — service layer coverage; 80% branches/lines threshold added to `vitest.config.ts`.
+
+### Fixed
+
+- **M-2**: `ai-tools.ts` default case no longer throws; unknown tools emit an `ai.tool.unknown` audit event and return a structured error to the chat UI.
+- **M-4**: Replaced `it.todo` atomic-write test with real mock-based test using module-level `vi.mock('@capacitor/filesystem')`.
+- **M-5**: Removed `DataverseNotImplementedError` dead export from adapter and its test file.
+- **L-2**: Fixed `DataverseAdapter.pull()` OData PK normalization no-op (`entitySet.replace('tktaskapp_', '') + 'id'`).
+
+### Changed
+
+- **M-3**: `.github/workflows/accessibility.yml` — replaced stub `playwright-a11y` job with real Playwright E2E run (installs Chromium, runs `tests/e2e/accessibility/`, uploads report artifact).
+- **L-1**: AI system prompt examples extracted to `SYSTEM_PROMPT_EXAMPLES` named constant in `ai-tools.ts`.
+- **L-3**: Migration headers updated with ordering rationale, dependency notes, and destructive-change warnings for 0002, 0005, 0006, 0007.
+- **L-4**: `tests/accessibility/keyboard-navigation.test.ts` header now documents the Vitest (static HTML) vs Playwright (runtime browser) split — both suites are intentional.
+
+---
+
 ## [2026-05-24] — Build target consolidation: three delivery types
 
 ### Changed
