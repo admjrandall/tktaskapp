@@ -1,4 +1,10 @@
--- Auth hardening: internal org mapping boundary and durable auth state support.
+-- 0005_auth_state_and_identity_mapping.sql
+-- Adds Entra ID tenant mapping to tenant_users and creates the auth_state table
+-- used by AuthStateStore for PKCE nonce tracking and refresh-token replay prevention.
+--
+-- Position: must follow 0004_sync_admin_tables.sql (which introduces org_settings,
+-- needed by the auth state FK). Precedes 0006 because the audit append-only trigger
+-- in 0006 references audit_events which is created in 0004.
 
 ALTER TABLE tenant_users
   ADD COLUMN IF NOT EXISTS entra_tenant_id text;

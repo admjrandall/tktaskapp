@@ -1,5 +1,10 @@
--- CRM entity tables: RLS policies and KMS append-only trigger
--- Run after Drizzle generates the schema migration for CRM tables.
+-- 0002_crm_entities.sql
+-- Enables Row-Level Security on all CRM entity tables and adds the
+-- KMS key-lifecycle append-only trigger.
+--
+-- Position: must follow 0001_rls_policies.sql (which enables RLS on tenant_users
+-- and user_kms_keys). All CRM tables reference tenant_users via FK, so tenant_users
+-- must be secured first. The KMS trigger in this file also references user_kms_keys.
 
 -- ── clients ──────────────────────────────────────────────────────────────────
 

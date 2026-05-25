@@ -1,3 +1,12 @@
+-- 0006_audit_append_only.sql
+-- Installs a BEFORE UPDATE/DELETE trigger on audit_events that raises an exception,
+-- making the table append-only. This enforces NIST audit integrity requirements
+-- (SP 800-92) and satisfies the EDPB Guidelines 02/2025 on audit trail immutability.
+--
+-- Position: must follow 0004_sync_admin_tables.sql (which creates audit_events)
+-- and 0005 (which populates audit FK columns). Safe to run on any database state —
+-- CREATE OR REPLACE is idempotent.
+
 CREATE OR REPLACE FUNCTION prevent_audit_events_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
