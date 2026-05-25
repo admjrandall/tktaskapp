@@ -17,6 +17,17 @@ export default defineConfig({
       // Playwright E2E tests run via pnpm exec playwright test, not vitest.
       'tests/e2e/**',
     ],
+    coverage: {
+      provider: 'istanbul',
+      include: [
+        'server/src/**/*.ts',
+        'packages/core/src/security/**/*.ts',
+        'packages/core/src/storage/**/*.ts',
+      ],
+      exclude: ['**/*.d.ts', '**/node_modules/**', 'server/src/db/schema/**'],
+      thresholds: { branches: 80, functions: 80, lines: 80, statements: 80 },
+      reportsDirectory: './coverage',
+    },
   },
   resolve: {
     alias: {
