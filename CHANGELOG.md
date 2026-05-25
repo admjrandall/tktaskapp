@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 
 ---
 
+## [2026-05-25 patch] — Post-audit gap closure (C-3c, S-1 items 1 & 3)
+
+### Security
+
+- **S-1 item 3 (re-auth lockout)**: The admin re-auth modal password path now enforces the same exponential-backoff lockout as the primary login (`nexus_auth_fail_count` / `nexus_auth_locked_until`). Lockout is checked before PBKDF2 work is started. Failed attempts are audit-logged with `context: 're-auth'`. The password field is cleared on each failure. Three new exports from `auth.ts` — `getAuthLockedUntil`, `recordAuthFailure`, `resetAuthLockout` — share the policy with any future re-auth surface.
+- **S-1 item 3 (passkey NotAllowedError)**: Passkey loop in re-auth modal now aborts on `NotAllowedError` (user cancelled / authenticator timeout) rather than silently falling through to remaining enrolled credentials. Structural errors that indicate the credential is not on this device still advance to the next credential.
+- **S-1 item 1 (first-run passkey enrollment)**: After vault creation, `auth.ts` now presents a passkey setup card inline in the auth screen before calling `onSuccess(key)`. The `setAuthPasskeyHook` injection (wired in `bootstrap.ts`) persists the credential to `nexus_data_v1` using the freshly derived key before `state.cryptoKey` is populated — bypassing the hook-based webauthn.ts helpers that require an already-authed state.
+
+### Added
+
+- **C-3c**: `packages/adapter-mobile-native/src/capacitor-backup-adapter.ts` — concrete `CapacitorBackupAdapter` implementing `MobileBackupAdapter`. Export uses Web Share API Level 2 (files) as primary path (native share sheet on iOS/Android); falls back to `@capacitor/filesystem` Directory.Documents with a thrown error surfacing the save location. Import uses a hidden `<input type="file">` with `cancel` event cleanup. `dryRunImport` validates the vault JSON envelope without touching the live vault. 4 Vitest tests added for `dryRunImport`.
+
+---
+
 ## [2026-05-25] — Full remediation plan completion (all 18 items)
 
 ### Security

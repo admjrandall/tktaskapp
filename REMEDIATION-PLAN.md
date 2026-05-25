@@ -281,7 +281,9 @@ Add to `tests/security/server-auth.test.ts`:
 
 ---
 
-### C-3 — Mobile native adapters are fully abstract with zero concrete implementations ✅ DONE 2026-05-25
+### C-3 — Mobile native adapters are fully abstract with zero concrete implementations ✅ DONE 2026-05-25 (C-3c gap closed 2026-05-25)
+
+> **Post-audit note (2026-05-25):** C-3a (`CapacitorVaultAdapter`) and C-3b (`CapacitorBiometricAdapter`) were complete. C-3c (`CapacitorBackupAdapter`) was absent despite C-3 being marked done. `capacitor-backup-adapter.ts` was created: Web Share API Level 2 (primary export path) + `@capacitor/filesystem` Documents fallback, hidden `<input type="file">` for import, synchronous JSON envelope validation for dry-run. 4 Vitest tests added (dryRunImport, in-process only — device-gated export/import tests remain `.todo`).
 
 **Severity:** CRITICAL for Phase 8 mobile delivery; must not ship without this
 **Standard:** MASVS 2.0 MASVS-STORAGE-1 (encrypted native storage), MASVS-CRYPTO-1
@@ -944,7 +946,13 @@ but are missing controls that 2026 standards now require.
 
 ---
 
-### S-1 — NIST SP 800-63B-4 supersedes 800-63B: passkeys are now required for AAL2 ✅ DONE 2026-05-25
+### S-1 — NIST SP 800-63B-4 supersedes 800-63B: passkeys are now required for AAL2 ✅ DONE 2026-05-25 (items 1 and 3 gaps closed 2026-05-25)
+
+> **Post-audit note (2026-05-25):** Item 2 (settings UX labelling) was complete. Items 1 and 3 were not:
+>
+> **Item 1 (first-run passkey enrollment):** `auth.ts` now calls `isWebAuthnAvailable()` after vault creation and, when the injected `_savePasskeyForAuth` hook is present, renders a passkey setup card inline in the auth screen before calling `onSuccess(key)`. The hook (wired in `bootstrap.ts` via `setAuthPasskeyHook`) writes the credential directly to `nexus_data_v1` using the freshly derived key, bypassing the hook-based webauthn.ts helpers which require `state.cryptoKey` to already be set.
+>
+> **Item 3 (re-auth modal verification):** The previous implementation accepted any non-empty password string as sufficient proof (`if (!pw) return; resolve()`). Fixed: now calls `initCrypto(pw)` → `verifyPassword(derivedKey)` (600k PBKDF2 rounds + AES-GCM tag check). Passkey option is rendered first when enrolled credentials exist. Failed attempts are subject to the same exponential-backoff lockout as the primary login (shared `nexus_auth_fail_count` / `nexus_auth_locked_until` via exported `getAuthLockedUntil`, `recordAuthFailure`, `resetAuthLockout`). `NotAllowedError` (user cancelled) aborts the passkey loop immediately rather than falling through to remaining credentials. All re-auth outcomes are audit-logged.
 
 **Standard:** NIST SP 800-63B-4 (final, released July 2025; supersedes 800-63B which was
 withdrawn August 1 2025)
