@@ -41,6 +41,11 @@
     "test:watch": {
       "cache": false,
       "persistent": true
+    },
+    "build:server": {
+      "dependsOn": [],
+      "inputs": ["src/**", "tsconfig.json", "package.json"],
+      "outputs": ["dist/**"]
     }
   }
 }

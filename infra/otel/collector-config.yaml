@@ -1,0 +1,106 @@
+# OpenTelemetry Collector Contrib — local development configuration
+#
+# Pipeline: server → otel-collector (OTLP 4317/4318) → Jaeger (OTLP gRPC 4317)
+#
+# Architecture notes:
+#
+#   The native "jaeger" exporter was removed from otel-collector-contrib after
+#   v0.85.0.  From v0.86.0 onward traces are forwarded via OTLP.  Jaeger
+#   all-in-one enables its built-in OTLP/gRPC receiver on port 4317 when
+#   COLLECTOR_OTLP_ENABLED=true (set in docker-compose.yml).
+#   Ref: https://opentelemetry.io/blog/2023/jaeger-exporter-collector-migration/
+#
+#   memory_limiter MUST be the first processor in every pipeline.  If placed
+#   after batch, the batch processor can hold large buffers that the limiter
+#   cannot evict, resulting in OOM kills.
+#   Ref: https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/memorylimiterprocessor/README.md
+#
+#   Span name values are set by server/src/observability/middleware.ts as
+#   `${method} ${route}` (e.g. "GET /healthz") using Hono's routePath helper.
+#
+# Memory budget (matches GOMEMLIMIT in docker-compose.yml):
+#   Container memory limit : 256 MiB
+#   GOMEMLIMIT             : 204 MiB  (80 % of container limit)
+#   memory_limiter limit   : 160 MiB  (~78 % of GOMEMLIMIT)
+#   memory_limiter spike   :  40 MiB  (25 % of limit_mib)
+
+extensions:
+  # Exposes GET http://localhost:13133/ — used by the docker-compose healthcheck
+  # and by Kubernetes liveness/readiness probes.
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # pprof endpoint for diagnosing collector CPU/memory in development.
+  # Disable or bind to 127.0.0.1 in internet-facing deployments.
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # ── 1. memory_limiter — MUST be first ──────────────────────────────────────
+  # Starts refusing data when heap usage exceeds limit_mib.  Refuses a fraction
+  # of incoming data (back-pressure to the SDK) rather than crashing.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 160
+    spike_limit_mib: 40
+
+  # ── 2. filter — drop health-check noise before batching ──────────────────
+  # Span names are set in server/src/observability/middleware.ts.
+  # Drop before batch so health-check traffic never enters the batch buffer.
+  filter/healthchecks:
+    error_mode: ignore
+    traces:
+      span:
+        - 'name == "GET /healthz"'
+        - 'name == "GET /readyz"'
+
+  # ── 3. batch — MUST be last processor before export ───────────────────────
+  # Accumulates spans into larger payloads to reduce exporter round-trips.
+  # Placed after filter so health-check spans don't inflate batch sizes.
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+exporters:
+  # Forward to Jaeger's built-in OTLP/gRPC receiver (port 4317 on the Docker
+  # bridge network).  "jaeger" is only a label — the protocol is OTLP.
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+    # Retry with exponential back-off when Jaeger is temporarily unavailable.
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    # In-memory queue absorbs bursts while Jaeger recovers.
+    # Each entry is one batch (~1 MiB at send_batch_max_size).  20 × 1 MiB = 20 MiB
+    # worst-case queue memory — well within the memory budget above.
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 20
+
+  # One-line summary per exported batch — useful during local development.
+  # Remove or set verbosity: basic in staging/production to reduce log noise.
+  debug:
+    verbosity: normal
+
+service:
+  extensions: [health_check, pprof]
+
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, filter/healthchecks, batch]
+      exporters: [otlp/jaeger, debug]
