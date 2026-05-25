@@ -136,6 +136,52 @@ describe('MobileVaultAdapter — vault persistence (MASVS-STORAGE-1)', () => {
   // 'vault file is not accessible to other apps (confirmed via adb / Xcode Organizer)'
 })
 
+describe('CapacitorBackupAdapter.dryRunImport — pure parsing (no device required)', () => {
+  it('parses a valid vault envelope and returns correct schemaVersion', async () => {
+    const { CapacitorBackupAdapter } =
+      await import('../../packages/adapter-mobile-native/src/capacitor-backup-adapter.js')
+    const adapter = new CapacitorBackupAdapter()
+    const env = {
+      v: 2,
+      salt: 'abc',
+      verify: 'def',
+      vault: 'ghi',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+    const result = await adapter.dryRunImport(new TextEncoder().encode(JSON.stringify(env)))
+    expect(result.schemaVersion).toBe(2)
+    expect(result.vaultCreatedAt).toBe('2026-01-01T00:00:00.000Z')
+    expect(result.recordCounts).toBeDefined()
+  })
+
+  it('throws on empty data', async () => {
+    const { CapacitorBackupAdapter } =
+      await import('../../packages/adapter-mobile-native/src/capacitor-backup-adapter.js')
+    const adapter = new CapacitorBackupAdapter()
+    await expect(adapter.dryRunImport(new Uint8Array())).rejects.toThrow(/empty/i)
+  })
+
+  it('throws on non-JSON bytes', async () => {
+    const { CapacitorBackupAdapter } =
+      await import('../../packages/adapter-mobile-native/src/capacitor-backup-adapter.js')
+    const adapter = new CapacitorBackupAdapter()
+    await expect(adapter.dryRunImport(new Uint8Array([0xde, 0xad, 0xbe, 0xef]))).rejects.toThrow()
+  })
+
+  it('throws on JSON missing the v field', async () => {
+    const { CapacitorBackupAdapter } =
+      await import('../../packages/adapter-mobile-native/src/capacitor-backup-adapter.js')
+    const adapter = new CapacitorBackupAdapter()
+    await expect(
+      adapter.dryRunImport(new TextEncoder().encode(JSON.stringify({ foo: 'bar' }))),
+    ).rejects.toThrow(/schema version/i)
+  })
+
+  // Device-gated: tests/e2e/mobile/platform-security.spec.ts
+  // 'exportVault() presents the platform share sheet without throwing on user cancellation'
+  // 'exportAuditLog() produces a file that is parseable and contains no key material'
+})
+
 describe('MobileBackupAdapter — backup/export/import round-trip', () => {
   it.todo('exportVault() presents the platform share sheet without throwing on user cancellation')
 
