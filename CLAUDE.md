@@ -173,13 +173,16 @@ d:\techkeycrmapp\
 │   │   │   ├── index.ts          ← Drizzle ORM pg pool + closeDb()
 │   │   │   ├── migrate.ts        ← run Drizzle migrations
 │   │   │   ├── seed.ts           ← dev seed data (idempotent)
-│   │   │   └── schema/           ← Drizzle table definitions (CRM entities + audit + KMS + users + org/sync/integrations)
+│   │   │   └── schema/           ← Drizzle table definitions (CRM entities + audit + KMS + users + org/sync/integrations + revoked-tokens)
 │   │   ├── auth/
 │   │   │   ├── oidc.ts           ← OidcService interface + validateEntraIdToken
 │   │   │   ├── oidc-service.ts   ← OidcServiceImpl (PKCE, token exchange, JWKS validation via jose)
-│   │   │   └── middleware.ts     ← authMiddleware — sets userId/tenantId/role on context
+│   │   │   ├── middleware.ts     ← authMiddleware — revocation check → JWT validate → DB lookup → sets context
+│   │   │   ├── routes.ts         ← OIDC/PKCE routes + POST /auth/step-up endpoint
+│   │   │   ├── state-store.ts    ← AuthStateStore (Redis-primary + memory fallback); PKCE, refresh, revocation
+│   │   │   └── step-up.ts        ← requireStepUp(operation) middleware; issueStepUpToken(); RFC 9470
 │   │   ├── authorization/
-│   │   │   └── policy-engine.ts  ← deny-by-default TypeScript ABAC engine (Phase 9+: replace with OPA/Cedar)
+│   │   │   └── policy-engine.ts  ← deny-by-default TypeScript ABAC engine
 │   │   ├── middleware/
 │   │   │   ├── cors.ts           ← ALLOW_ORIGINS whitelist; no wildcards
 │   │   │   ├── lockdown.ts       ← lockdown mode middleware (emergency access restriction)
@@ -189,17 +192,18 @@ d:\techkeycrmapp\
 │   │   │   ├── middleware.ts     ← otelMiddleware; root span per request; X-Trace-Id header
 │   │   │   └── metrics.ts        ← RED metrics (requests counter, duration histogram, connections gauge)
 │   │   ├── services/             ← one service file per CRM entity; all use withTenant() + writeAuditEvent()
-│   │   ├── api/routes/           ← one Hono router per entity; Zod validation; OPA per route
+│   │   ├── api/routes/           ← one Hono router per entity; Valibot validation; OPA per route
 │   │   │   └── (includes: sync.ts, ai-attributes.ts, health.ts in addition to all CRM entities)
 │   │   ├── types/
 │   │   │   └── vendor.d.ts       ← ambient type declarations for third-party modules
 │   │   ├── kms/
-│   │   │   ├── key-service.ts    ← AzureKeyVaultKeyService; scheduleKeyExpiry / getKeyUri
+│   │   │   ├── key-service.ts    ← KeyService interface; AzureKeyVaultKeyService + AwsKmsKeyService; getKmsService() factory
 │   │   │   ├── legal-hold.ts     ← LegalHoldService; placeHold / liftHold / isUserOnHold
 │   │   │   ├── erasure-workflow.ts ← runDataRemovalWorkflow; retention hold check → KMS schedule → soft-delete → audit
-│   │   │   └── destruction-scheduler.ts ← polls kmsKeyLifecycle every 60s; calls Azure KV scheduleKeyExpiry
+│   │   │   └── destruction-scheduler.ts ← polls kmsKeyLifecycle every 60s; calls getKmsService().deleteKey()
 │   │   └── ai-gateway/
-│   │       └── policy-engine.ts  ← evaluateAiGatewayRequest; model allowlist, rate limit, budget, PII scrub
+│   │       ├── policy-engine.ts  ← evaluateAiGatewayRequest; model allowlist, rate limit, budget, PII scrub
+│   │       └── llm-client.ts     ← callLlm(); native-fetch Anthropic/OpenAI/Google clients; LlmUnconfiguredError (501)
 │   ├── policies/
 │   │   └── crm.rego              ← OPA policy (role-based allow/deny + cross-tenant deny)
 │   ├── drizzle/                  ← generated SQL migrations
@@ -557,25 +561,30 @@ The server is a **Hono v4** REST API running on Node.js with `@hono/node-server`
 
 All CRM routes are mounted at `/api/v1/<entity>`. Public routes: `GET /healthz`, `GET /readyz`.
 
-| Prefix                     | Entity                            |
-| -------------------------- | --------------------------------- |
-| `/api/v1/clients`          | Clients                           |
-| `/api/v1/departments`      | Departments                       |
-| `/api/v1/projects`         | Projects                          |
-| `/api/v1/tasks`            | Tasks                             |
-| `/api/v1/people`           | People                            |
-| `/api/v1/tags`             | Tags                              |
-| `/api/v1/communications`   | Communications                    |
-| `/api/v1/time-entries`     | Time entries                      |
-| `/api/v1/notifications`    | Notifications                     |
-| `/api/v1/files`            | Files                             |
-| `/api/v1/documents`        | Documents                         |
-| `/api/v1/standalone-notes` | Standalone notes                  |
-| `/api/v1/conversations`    | Conversations (+ `/messages`)     |
-| `/api/v1/audit`            | Audit log (+ `/export`)           |
-| `/api/v1/admin`            | Admin: users, suspend, GDPR erase |
-| `/api/v1/sync`             | Adapter sync checkpoint/push/pull |
-| `/api/v1/ai-attributes`    | AI-inferred attribute values      |
+| Prefix                     | Entity / notes                                              |
+| -------------------------- | ----------------------------------------------------------- |
+| `/auth/login`              | OIDC authorize redirect (public)                            |
+| `/auth/callback`           | OIDC code exchange (public)                                 |
+| `/auth/refresh`            | Refresh-token rotation (cookie)                             |
+| `/auth/logout`             | Token revocation + cookie clear                             |
+| `/auth/step-up`            | Issue single-use step-up token (requires Bearer)            |
+| `/api/v1/clients`          | Clients                                                     |
+| `/api/v1/departments`      | Departments                                                 |
+| `/api/v1/projects`         | Projects                                                    |
+| `/api/v1/tasks`            | Tasks                                                       |
+| `/api/v1/people`           | People                                                      |
+| `/api/v1/tags`             | Tags                                                        |
+| `/api/v1/communications`   | Communications                                              |
+| `/api/v1/time-entries`     | Time entries                                                |
+| `/api/v1/notifications`    | Notifications                                               |
+| `/api/v1/files`            | Files                                                       |
+| `/api/v1/documents`        | Documents                                                   |
+| `/api/v1/standalone-notes` | Standalone notes                                            |
+| `/api/v1/conversations`    | Conversations (+ `/messages`)                               |
+| `/api/v1/audit`            | Audit log (+ `/export`)                                     |
+| `/api/v1/admin`            | Admin: users, suspend, GDPR erase (step-up on erase + keys) |
+| `/api/v1/sync`             | Adapter sync checkpoint/push/pull                           |
+| `/api/v1/ai-attributes`    | AI-inferred attribute values (calls `callLlm()`)            |
 
 ### Database (Drizzle ORM + PostgreSQL)
 
@@ -592,7 +601,59 @@ Audit events write to the existing `audit_events` table via `writeAuditEvent()` 
 
 ### Auth (Entra ID OIDC + PKCE)
 
-`server/src/auth/middleware.ts` — reads `Authorization: Bearer <token>`, calls `validateEntraIdToken()` (JWKS via `jose`), looks up user in DB, sets `userId`/`tenantId`/`role` on the Hono context. Returns 401 on failure. Never expose raw errors to HTTP responses.
+`server/src/auth/middleware.ts` — authentication pipeline per request:
+
+1. Extract `Authorization: Bearer <token>`
+2. **Revocation check** — SHA-256 hash the token; query `AuthStateStore.isAccessTokenRevoked()` (Redis-primary, DB audit trail, memory fallback). Returns 401 immediately on a hit — before any JWT work. In production, returns 401 if the revocation store is unreachable (fail-closed).
+3. Validate JWT via `validateEntraIdToken()` (JWKS via `jose`)
+4. Look up active tenant user in DB; set `userId`/`tenantId`/`role`/`externalId`/`email`/`tokenHash` on the Hono context
+
+`server/src/auth/state-store.ts` — `AuthStateStore` interface with three implementations:
+
+- `RedisAuthStateStore` — primary (requires `AUTH_STATE_REDIS_URL`); stores PKCE state, refresh-token replay guard, revoked access tokens
+- `MemoryAuthStateStore` — dev/test fallback; in-memory maps with TTL bookkeeping + best-effort DB audit writes
+- `pruneExpiredRevocations()` — maintenance helper; deletes expired rows from `revoked_access_tokens`
+- `hashAccessToken(token)` — exported SHA-256 base64url helper shared by middleware and revocation callers
+
+`server/src/auth/routes.ts` — OIDC/PKCE flow routes plus `POST /auth/step-up`:
+
+- `POST /auth/step-up` — requires a valid Bearer token; validates `operation` (Valibot); issues a single-use step-up token via `issueStepUpToken()`; returns `{ step_up_token, operation, expires_in: 300 }`
+
+### Step-up authentication (RFC 9470)
+
+`server/src/auth/step-up.ts` — enforces re-authentication for high-risk operations.
+
+**Operations catalogue:** `gdpr_erase`, `admin_user_change`, `ai_provider_configure`, `data_export`, `legal_hold_change`, `kms_key_manage`, `org_settings_change`
+
+**Flow:**
+
+1. Client calls the protected route — middleware checks for `X-Step-Up-Token` header
+2. If missing: responds with `HTTP 401` + `WWW-Authenticate: Bearer error="insufficient_user_authentication", acr_values="phrh", max_age=0` (RFC 9470 §3)
+3. Client re-authenticates (password + TOTP/passkey if enrolled); POSTs to `/auth/step-up`
+4. Server calls `issueStepUpToken(userId, tenantId, operation)` → raw token stored as SHA-256 hash in Redis (or memory fallback); TTL = 5 min
+5. Client retries with `X-Step-Up-Token: <token>`
+6. `requireStepUp(operation)` middleware consumes and validates the token (single-use — deleted on first check); passes or returns 401
+
+**Routes protected by `requireStepUp`:**
+
+- `POST /api/v1/admin/users/:id/erase` — `gdpr_erase`
+- `POST /api/v1/admin/ai-allowlist` — `ai_provider_configure`
+- `PUT /api/v1/admin/ai-allowlist/:id` — `ai_provider_configure`
+- `POST /api/v1/admin/integrations` — `admin_user_change`
+- `PUT /api/v1/admin/org-settings` — `org_settings_change`
+
+**Never use step-up tokens as session tokens** — they are single-use, operation-scoped, and expire after 5 minutes.
+
+### Token revocation
+
+`server/src/db/schema/revoked-tokens.ts` — `revoked_access_tokens` table (migration `0008_token_revocation.sql`):
+
+- `token_hash` — SHA-256(raw token), base64url; unique index for O(1) lookup
+- `expires_at` — copied from the token's `exp` claim; rows past this date are dead weight
+- `reason` — `'logout'` (default), `'admin'`, `'step_up_failure'`, etc. for audit evidence
+- NOT tenant-scoped — a revoked token must be rejected globally regardless of which tenant issued it
+
+Revocation store priority: Redis (fast hot-path) → PostgreSQL audit trail (durable record). `authMiddleware` checks Redis/memory first; the DB write is best-effort.
 
 ### Authorization (OPA)
 
@@ -602,23 +663,68 @@ Audit events write to the existing `audit_events` table via `writeAuditEvent()` 
 2. **WASM** — loads `policies/crm.wasm` via `@open-policy-agent/opa-wasm` (compile with `opa build crm.rego`)
 3. **In-process TypeScript fallback** — role-based logic in `opa.ts`
 
-Policy: `admin`/`owner` → all actions; `editor` → read/create/update; `viewer` → read only. Cross-tenant access always denied.
+Role/action matrix (in-process fallback):
+
+| Action set                                                                                                                                                  | Roles allowed                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `erase_user`, `ai:configure` (owner-only)                                                                                                                   | `owner` only                                |
+| `manage_users`, `suspend_user`, `manage_keys`, `manage_ai_allowlist`, `manage_integrations`, `manage_org_settings`, `view_audit`, `export_audit`, `admin:*` | `owner`, `admin`                            |
+| `create`, `update`, `delete`, `sync:push`, `ai:compute_attribute`                                                                                           | `owner`, `admin`, `editor`                  |
+| `read`, `sync:pull`, `sync:stream`                                                                                                                          | any authenticated role (including `viewer`) |
+
+Cross-tenant access always denied (checked first, before role evaluation).
 
 ### KMS / GDPR
 
-- `server/src/kms/key-service.ts` — `AzureKeyVaultKeyService`; schedules key expiry in `kms_key_lifecycle` (append-only table; update trigger prevents row modification)
-- `server/src/kms/legal-hold.ts` — `LegalHoldService`; checks retention holds before allowing data removal
-- `server/src/kms/erasure-workflow.ts` — `runDataRemovalWorkflow(userId, tenantId, requestedBy)`: checks retention hold → schedules KMS key expiry → soft-deletes all user records across CRM tables → writes `gdpr_erasure_requested` audit event
-- `server/src/kms/destruction-scheduler.ts` — polls every 60s; calls `scheduleKeyExpiry()` on Azure Key Vault; writes `EXPIRED` lifecycle event
+- `server/src/kms/key-service.ts` — `KeyService` interface + two implementations:
+  - `AzureKeyVaultKeyService` — `DefaultAzureCredential`; RSA-HSM 4096-bit keys; RSA-OAEP-256 wrap/unwrap; `beginDeleteKey()` + poll for destruction
+  - `AwsKmsKeyService` — `@aws-sdk/client-kms` v3; alias-based key lookup (`alias/tktaskapp-user-<userId>`); `ScheduleKeyDeletionCommand` (7-day minimum window)
+  - `getKmsService()` — factory; reads `KMS_PROVIDER=aws|azure` env var; defaults to `azure`; throws if required env var is absent
+- `server/src/kms/legal-hold.ts` — `LegalHoldService`; `placeHold` / `liftHold` / `isUserOnHold`; blocks erasure while active
+- `server/src/kms/erasure-workflow.ts` — `runDataRemovalWorkflow(userId, tenantId, requestedBy)`: checks legal hold → `getKmsService().scheduleKeyDestruction()` → soft-deletes all CRM records → writes `gdpr_erasure_requested` audit event
+- `server/src/kms/destruction-scheduler.ts` — polls every 60s; queries `kmsKeyLifecycle` for `SCHEDULE_DESTRUCTION` rows past `effectiveAt`; calls `getKmsService().deleteKey()` which writes the `DESTROYED` lifecycle event; checks `AZURE_KV_URL` or `AWS_REGION` before starting
 
 ### AI Gateway
 
 `server/src/ai-gateway/policy-engine.ts` — `evaluateAiGatewayRequest()`: model allowlist → per-user rate limit (20 RPM; Redis if `AI_GATEWAY_REDIS_URL` set, else in-memory) → per-tenant monthly token budget → PII scrubbing (regex redaction). All decisions are audit-logged.
 
+`server/src/ai-gateway/llm-client.ts` — `callLlm(req: LlmRequest): Promise<LlmResponse>`:
+
+- Provider routing: `_MODEL_PROVIDER_MAP` maps known model IDs; falls back to `AI_PROVIDER` env var; then model name prefix; then Anthropic
+- `_callAnthropic` — Anthropic Messages API (`anthropic-version: 2023-06-01`); `ANTHROPIC_API_KEY`
+- `_callOpenAI` — Chat Completions API; `OPENAI_API_KEY`
+- `_callGoogle` — Gemini `generateContent` REST; `GOOGLE_AI_API_KEY`
+- Throws `LlmUnconfiguredError` (statusCode 501) when no API key is configured for the resolved provider
+- Throws `LlmApiError` on non-2xx provider responses
+- `ai-attributes` route uses `callLlm()` and surfaces provider + token counts in provenance metadata
+
 ### Environment variables
 
 All configuration via env vars (see `server/.env.example`):
-`PORT`, `NODE_ENV`, `DATABASE_URL`, `AZURE_KV_URL`, `AZURE_CLIENT_ID/SECRET/TENANT_ID`, `ENTRA_TENANT_ID/CLIENT_ID/CLIENT_SECRET`, `OIDC_REDIRECT_URI`, `ALLOW_ORIGINS`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OPA_URL` (optional), `AI_GATEWAY_MONTHLY_BUDGET_TOKENS`, `AI_GATEWAY_REDIS_URL` (optional), `ENTERPRISE_STATIC_DIR` (optional — path to `dist/enterprise/`; enables static SPA serving).
+
+| Variable                                  | Required              | Description                                                                                  |
+| ----------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------- |
+| `PORT`                                    | No                    | HTTP port (default 3000)                                                                     |
+| `NODE_ENV`                                | No                    | `production` enables fail-closed security gates                                              |
+| `DATABASE_URL`                            | Yes                   | PostgreSQL connection string                                                                 |
+| `KMS_PROVIDER`                            | No                    | `azure` (default) or `aws`                                                                   |
+| `AZURE_KV_URL`                            | If KMS_PROVIDER=azure | Azure Key Vault URL                                                                          |
+| `AZURE_CLIENT_ID/SECRET/TENANT_ID`        | If KMS_PROVIDER=azure | Azure service principal                                                                      |
+| `AWS_REGION`                              | If KMS_PROVIDER=aws   | AWS region for KMS                                                                           |
+| `ENTRA_TENANT_ID/CLIENT_ID/CLIENT_SECRET` | Yes                   | Entra ID OIDC config                                                                         |
+| `OIDC_REDIRECT_URI`                       | Yes                   | OAuth 2.0 redirect URI                                                                       |
+| `COOKIE_SECRET`                           | Yes                   | Signs PKCE state cookies — `openssl rand -base64 32`                                         |
+| `ALLOW_ORIGINS`                           | Yes                   | Comma-separated CORS allowlist; no wildcards                                                 |
+| `AUTH_STATE_REDIS_URL`                    | Production            | Redis for PKCE state, refresh-token replay, access-token revocation                          |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`             | No                    | OTLP HTTP exporter endpoint                                                                  |
+| `OPA_URL`                                 | No                    | OPA REST sidecar URL; if absent, falls back to WASM then in-process                          |
+| `AI_GATEWAY_MONTHLY_BUDGET_TOKENS`        | No                    | Per-tenant token budget (default 1,000,000)                                                  |
+| `AI_GATEWAY_REDIS_URL`                    | No                    | Redis for AI gateway rate limiting (also used by auth state if `AUTH_STATE_REDIS_URL` unset) |
+| `AI_PROVIDER`                             | No                    | Default LLM provider override: `anthropic`, `openai`, or `google`                            |
+| `ANTHROPIC_API_KEY`                       | If using Anthropic    | Anthropic API key                                                                            |
+| `OPENAI_API_KEY`                          | If using OpenAI       | OpenAI API key                                                                               |
+| `GOOGLE_AI_API_KEY`                       | If using Google       | Google AI Studio API key                                                                     |
+| `ENTERPRISE_STATIC_DIR`                   | No                    | Path to `dist/enterprise/`; enables static SPA serving                                       |
 
 ### Server development commands
 
@@ -641,7 +747,10 @@ pnpm test          # vitest
 3. Every create/update/delete/suspend/erase endpoint writes an audit event via `writeAuditEvent()`.
 4. All secrets from environment variables — never hardcode credentials.
 5. Valibot validation on all request bodies — schemas live in `server/src/schemas/index.ts`, parsed via `safeParseV` helper; return 400 with error details on failure.
-6. Do not edit files in `packages/core/src/` from server code — frontend and server are separate packages.
+6. High-risk operations (GDPR erase, AI config, key management, org settings) must use `requireStepUp(operation)` middleware — never bypass it.
+7. Access token revocation (`revokeAccessToken`) must write to the `AuthStateStore` on explicit logout or admin suspension — never just discard the token.
+8. `KMS_PROVIDER` env var selects the KMS backend — never hardcode `AzureKeyVaultKeyService` or `AwsKmsKeyService` directly; always call `getKmsService()`.
+9. Do not edit files in `packages/core/src/` from server code — frontend and server are separate packages.
 
 ---
 
