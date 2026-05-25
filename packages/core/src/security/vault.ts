@@ -20,6 +20,23 @@ import { validateImportPayload } from '../schemas/import.schema.js'
 import { u8ToBase64, base64ToU8, aesEncrypt, aesDecrypt, deriveKey } from './crypto.js'
 import { PBKDF2_ITERATIONS, PBKDF2_ITERATIONS_LEGACY } from '../constants.js'
 
+// ── Native vault writer hook ───────────────────────────────────────────────────
+// Set by apps/enterprise-web/src/entry.ts when running on a Capacitor native
+// platform. Receives the encrypted vault blob after every IDB write so it can
+// mirror the data to the platform private filesystem (MASVS-STORAGE-1).
+// IDB remains the authoritative store — native write is best-effort.
+type NativeVaultWriter = (encryptedBlob: Uint8Array) => Promise<void>
+let _nativeVaultWriter: NativeVaultWriter | null = null
+
+export function setNativeVaultWriter(fn: NativeVaultWriter): void {
+  _nativeVaultWriter = fn
+}
+
+export function _writeToNativeVault(b64: string): void {
+  if (!_nativeVaultWriter) return
+  void _nativeVaultWriter(base64ToU8(b64))
+}
+
 export function _vaultDbOpen(): Promise<IDBDatabase> {
   return new Promise((res, rej) => {
     const req = indexedDB.open(VAULT_DB_NAME, 1)
@@ -119,7 +136,9 @@ export async function loadVault(key: CryptoKey): Promise<Record<string, unknown[
 }
 
 export async function saveVault(key: CryptoKey, data: Record<string, unknown[]>): Promise<void> {
-  await _vaultMetaSet(VAULT_KEY, await aesEncrypt(key, data))
+  const encrypted = await aesEncrypt(key, data)
+  await _vaultMetaSet(VAULT_KEY, encrypted)
+  _writeToNativeVault(encrypted)
 }
 
 export async function writeVerifyToken(key: CryptoKey): Promise<void> {

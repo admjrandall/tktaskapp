@@ -14,6 +14,7 @@ import {
   ENTERPRISE_DEPLOYMENT_POLICY,
 } from '../../../packages/core/src/deployment-policy.js'
 import { init } from '../../../packages/core/src/main.js'
+import { setNativeVaultWriter } from '../../../packages/core/src/security/vault.js'
 import { initMobileGestures } from './gestures.js'
 
 // ── Server URL ─────────────────────────────────────────────────────────────────
@@ -159,6 +160,21 @@ async function bootstrap(): Promise<void> {
   }
 
   setDeploymentPolicy(ENTERPRISE_DEPLOYMENT_POLICY)
+
+  // On Capacitor native (iOS / Android), mirror vault writes to the platform
+  // private filesystem using the concrete CapacitorVaultAdapter (MASVS-STORAGE-1).
+  // The dynamic import is Capacitor-only and tree-shaken in the browser build.
+  try {
+    const { Capacitor } = await import('@capacitor/core')
+    if (Capacitor.isNativePlatform()) {
+      const { CapacitorVaultAdapter } =
+        await import('../../../packages/adapter-mobile-native/src/capacitor-vault-adapter.js')
+      const nativeVault = new CapacitorVaultAdapter()
+      setNativeVaultWriter((blob) => nativeVault.writeVault(blob))
+    }
+  } catch {
+    // Capacitor not available — running in a standard browser context
+  }
 
   setAdapter(
     new RxDBAdapter({
