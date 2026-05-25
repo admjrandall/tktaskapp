@@ -93,7 +93,12 @@ export async function runErasureWorkflow(
     eventType: 'gdpr_erasure_requested',
     resourceType: 'users',
     resourceId: userId,
-    details: { effectiveAt: effectiveAt.toISOString(), requestedBy },
+    details: {
+      effectiveAt: effectiveAt.toISOString(),
+      requestedBy,
+      keyDestructionScheduledAt: effectiveAt.toISOString(),
+      keyDestroyedAt: null,
+    },
   })
 
   return { userId, status: 'scheduled', effectiveAt, auditEventId }
