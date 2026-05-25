@@ -10,8 +10,15 @@ import { getState as _getState, setState, showToast } from '../state.js'
 import type { AppState, LockdownLevel } from '../state.js'
 import { auditLog, loadAuditLog, verifyAuditChain } from '../security/audit.js'
 import type { AuditEntry } from '../security/audit.js'
-import { performWithStepUp } from '../security/auth.js'
+import {
+  performWithStepUp,
+  getAuthLockedUntil,
+  recordAuthFailure,
+  resetAuthLockout,
+} from '../security/auth.js'
 import { setAuditedStaticHtml } from '../render-utils.js'
+import { loadPasskeys, authenticateWithPasskey, isWebAuthnAvailable } from '../security/webauthn.js'
+import { initCrypto, verifyPassword } from '../security/vault.js'
 
 type AnyRecord = Record<string, unknown>
 
@@ -62,10 +69,35 @@ export function setAdminConsoleHooks(hooks: {
 
 /**
  * Show a re-authentication modal before issuing a step-up token.
- * The user must confirm their password (and TOTP/passkey if enrolled) before
- * the admin operation proceeds. Returns a promise that resolves on success.
+ *
+ * NIST SP 800-63B-4 §5.1.7 — phishing-resistant authenticators (passkeys) are offered
+ * as the primary option when enrolled. TOTP / password is the AAL1 fallback.
+ *
+ * The password path actually verifies the credential against the encrypted vault token
+ * via PBKDF2 re-derivation + AES-GCM decrypt — it never accepts a non-empty string as
+ * sufficient proof. This is intentional: step-up is a re-authentication event.
  */
-function _showAdminReauthModal(): Promise<void> {
+async function _showAdminReauthModal(): Promise<void> {
+  // Load enrolled passkeys (requires vault key already in state — user is authenticated).
+  const webAuthnAvail = isWebAuthnAvailable()
+  const passkeys = webAuthnAvail ? await loadPasskeys() : []
+  const hasPasskeys = passkeys.length > 0
+
+  const passkeySection = hasPasskeys
+    ? `<button class="btn btn-primary" id="admin-reauth-passkey" style="width:100%;margin-bottom:.75rem">
+         🔑 Authenticate with passkey (recommended)
+       </button>
+       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem">
+         <div style="flex:1;height:1px;background:var(--border-subtle,#334155)"></div>
+         <span style="font-size:.75rem;color:var(--text-secondary,#94a3b8)">or use master password</span>
+         <div style="flex:1;height:1px;background:var(--border-subtle,#334155)"></div>
+       </div>`
+    : ''
+
+  const description = hasPasskeys
+    ? 'This operation requires re-authentication. Use your passkey or master password to continue.'
+    : 'This operation requires you to confirm your identity. Enter your master password to continue.'
+
   return new Promise<void>((resolve, reject) => {
     const overlay = document.createElement('div')
     overlay.id = 'admin-reauth-overlay'
@@ -75,7 +107,8 @@ function _showAdminReauthModal(): Promise<void> {
       overlay,
       `<div style="background:var(--bg-elevated,#1e293b);border:1px solid var(--border-subtle,#334155);border-radius:14px;padding:2rem;width:380px;max-width:90vw">
         <h3 style="font-size:1.0625rem;font-weight:600;margin-bottom:.5rem">Re-authentication required</h3>
-        <p style="font-size:.875rem;color:var(--text-secondary,#94a3b8);margin-bottom:1.25rem">This operation requires you to confirm your identity. Enter your master password to continue.</p>
+        <p style="font-size:.875rem;color:var(--text-secondary,#94a3b8);margin-bottom:1.25rem">${description}</p>
+        ${passkeySection}
         <input type="password" id="admin-reauth-pw" class="input" placeholder="Master password" style="width:100%;margin-bottom:.75rem" autocomplete="current-password">
         <div id="admin-reauth-error" style="display:none;font-size:.8125rem;color:#f87171;margin-bottom:.75rem"></div>
         <div style="display:flex;gap:.75rem;justify-content:flex-end">
@@ -90,24 +123,122 @@ function _showAdminReauthModal(): Promise<void> {
       overlay.remove()
     }
 
+    const showErr = (msg: string) => {
+      const el = document.getElementById('admin-reauth-error')
+      if (el) {
+        el.textContent = msg
+        el.style.display = 'block'
+      }
+    }
+
     document.getElementById('admin-reauth-cancel')?.addEventListener('click', () => {
       cleanup()
       reject(new Error('Re-authentication cancelled'))
     })
 
-    document.getElementById('admin-reauth-confirm')?.addEventListener('click', () => {
+    // Passkey path — phishing-resistant, primary option (NIST SP 800-63B-4 AAL2)
+    if (hasPasskeys) {
+      document.getElementById('admin-reauth-passkey')?.addEventListener('click', async () => {
+        const btn = document.getElementById('admin-reauth-passkey') as HTMLButtonElement | null
+        if (btn) {
+          btn.disabled = true
+          btn.textContent = 'Authenticating…'
+        }
+        const errEl = document.getElementById('admin-reauth-error')
+        if (errEl) errEl.style.display = 'none'
+
+        for (const cred of passkeys) {
+          try {
+            await authenticateWithPasskey(cred)
+            // Success — reset lockout shared with password path and resolve
+            resetAuthLockout()
+            auditLog('auth_success', { context: 're-auth', method: 'passkey' })
+            cleanup()
+            resolve()
+            return
+          } catch (err) {
+            const name = (err as DOMException).name
+            if (name === 'NotAllowedError') {
+              // User explicitly cancelled or the authenticator timed out.
+              // Do not try remaining credentials — that would silently re-prompt.
+              if (btn) {
+                btn.disabled = false
+                btn.textContent = '🔑 Authenticate with passkey (recommended)'
+              }
+              showErr('Authentication was cancelled. Try again or use your master password.')
+              return
+            }
+            // Any other error (e.g. credential not found on this device) — try next credential.
+          }
+        }
+
+        // Exhausted all enrolled credentials without success.
+        if (btn) {
+          btn.disabled = false
+          btn.textContent = '🔑 Authenticate with passkey (recommended)'
+        }
+        showErr('No matching passkey found on this device. Use your master password below.')
+      })
+    }
+
+    // Password path — PBKDF2-verified (600k rounds), subject to the same exponential-backoff
+    // lockout as the primary login flow (nexus_auth_fail_count / nexus_auth_locked_until).
+    document.getElementById('admin-reauth-confirm')?.addEventListener('click', async () => {
       const pw =
         (document.getElementById('admin-reauth-pw') as HTMLInputElement | null)?.value ?? ''
-      if (!pw) {
-        const errEl = document.getElementById('admin-reauth-error')
-        if (errEl) {
-          errEl.textContent = 'Password is required.'
-          errEl.style.display = 'block'
-        }
+      const errEl = document.getElementById('admin-reauth-error')
+      if (errEl) errEl.style.display = 'none'
+
+      // Check lockout BEFORE doing any crypto work — same policy as primary login.
+      const lockedUntil = getAuthLockedUntil()
+      if (Date.now() < lockedUntil) {
+        const secs = Math.ceil((lockedUntil - Date.now()) / 1000)
+        showErr(`Too many failed attempts. Try again in ${secs}s.`)
         return
       }
-      cleanup()
-      resolve()
+
+      if (!pw) {
+        showErr('Password is required.')
+        return
+      }
+
+      const confirmBtn = document.getElementById('admin-reauth-confirm') as HTMLButtonElement | null
+      if (confirmBtn) {
+        confirmBtn.disabled = true
+        confirmBtn.textContent = 'Verifying…'
+      }
+
+      try {
+        const derivedKey = await initCrypto(pw)
+        const valid = await verifyPassword(derivedKey)
+        if (!valid) {
+          const { count, lockDelay } = recordAuthFailure()
+          auditLog('auth_failure', {
+            context: 're-auth',
+            method: 'password',
+            attempts: String(count),
+          })
+          const secs = Math.ceil(lockDelay / 1000)
+          if (confirmBtn) {
+            confirmBtn.disabled = false
+            confirmBtn.textContent = 'Confirm'
+          }
+          const pwEl = document.getElementById('admin-reauth-pw') as HTMLInputElement | null
+          if (pwEl) pwEl.value = ''
+          showErr(`Incorrect password.${count >= 3 ? ` Next attempt allowed in ${secs}s.` : ''}`)
+          return
+        }
+        resetAuthLockout()
+        auditLog('auth_success', { context: 're-auth', method: 'password' })
+        cleanup()
+        resolve()
+      } catch {
+        if (confirmBtn) {
+          confirmBtn.disabled = false
+          confirmBtn.textContent = 'Confirm'
+        }
+        showErr('Verification failed. Please try again.')
+      }
     })
   })
 }

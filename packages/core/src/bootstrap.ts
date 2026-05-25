@@ -22,7 +22,13 @@ import {
   hasSessionSentinel,
 } from './security/session.js'
 import { auditLog, setAuditHooks, flushAuditBuffer } from './security/audit.js'
-import { setAuthIDBHooks, setAuthAuditHook, renderAuth, bindAuth } from './security/auth.js'
+import {
+  setAuthIDBHooks,
+  setAuthAuditHook,
+  setAuthPasskeyHook,
+  renderAuth,
+  bindAuth,
+} from './security/auth.js'
 import { setMFAHooks } from './security/mfa.js'
 import { setWebAuthnHooks } from './security/webauthn.js'
 import { fsInit } from './storage/fs.js'
@@ -34,7 +40,7 @@ import { isAITierAllowed } from './deployment-policy.js'
 import { wireHooks } from './hooks-wiring.js'
 import { auditedStaticHtml } from './render-utils.js'
 import { appEl, appRenderWorkspace, fullRender } from './render-pipeline.js'
-import { lockApp, setOnAuthSuccess, _resetIdleTimer } from './app-lock.js'
+import { setOnAuthSuccess, _resetIdleTimer } from './app-lock.js'
 import { renderToast } from './ui/components.js'
 import { saveDocument, closeDocumentEditor, _docOpenId } from './views/documents.js'
 
@@ -137,6 +143,13 @@ export async function init(): Promise<void> {
   setAuthAuditHook((event, details) => {
     auditLog(event as Parameters<typeof auditLog>[0], details)
   })
+  // Allows the passkey-setup step (shown after first-run vault creation) to persist
+  // the passkey credential using the freshly derived vault key — before state.cryptoKey
+  // is set and before dbInit() is called by afterUnlock. The IDB data store is already
+  // open at this point (opened during _dataDbOpen() before the auth screen renders).
+  setAuthPasskeyHook(async (cred, key) => {
+    await _idbPutRecord('documents', { id: '__mfa_passkeys__', credentials: [cred] }, key)
+  })
 
   const _activityEvents = [
     'pointermove',
@@ -213,9 +226,14 @@ export async function init(): Promise<void> {
         const target = getStore(store) as Array<Record<string, unknown>>
         for (const rec of recs as Array<Record<string, unknown>>) {
           const idx = target.findIndex((x) => x['id'] === rec['id'])
-          if (idx === -1) target.push(rec)
-          else if ((rec['updatedAt'] as string) > (target[idx]!['updatedAt'] as string))
-            target[idx] = rec
+          if (idx === -1) {
+            target.push(rec)
+          } else {
+            const existing = target[idx]
+            if (existing && (rec['updatedAt'] as string) > (existing['updatedAt'] as string)) {
+              target[idx] = rec
+            }
+          }
         }
       }
       reloadData()

@@ -15,14 +15,25 @@ import { fsInit as _fsInit, fsSetHandle } from '../storage/fs.js'
 import { SALT_KEY, VERIFY_KEY, VAULT_KEY } from '../constants.js'
 import { _vaultMetaSet } from './vault.js'
 import { totpSecondsRemaining, verifyTOTPCode } from './totp.js'
-import { auditedStaticHtml } from '../render-utils.js'
+import { auditedStaticHtml, setAuditedStaticHtml } from '../render-utils.js'
 import { MASTER_PASSWORD_MIN_LENGTH, validateMasterPassword } from './master-password-policy.js'
+import { isWebAuthnAvailable, registerPasskey, type PasskeyCredential } from './webauthn.js'
 
 // ── MFA IDB hooks — injected from main.ts after dbInit wires up ───────────────
 type IdbLoadFn = (store: string, key: CryptoKey) => Promise<Record<string, unknown>[]>
 let _idbLoadStore: IdbLoadFn | null = null
 export function setAuthIDBHooks(hooks: { idbLoadStore: IdbLoadFn }): void {
   _idbLoadStore = hooks.idbLoadStore
+}
+
+// ── Passkey save hook — injected from bootstrap.ts ─────────────────────────────
+// Allows the passkey-setup step shown after first-run vault creation to persist
+// the credential directly with the freshly derived key (state.cryptoKey is null
+// at this point — the hook bypasses the hook-based webauthn.ts helpers).
+type SavePasskeyFn = (cred: PasskeyCredential, key: CryptoKey) => Promise<void>
+let _savePasskeyForAuth: SavePasskeyFn | null = null
+export function setAuthPasskeyHook(fn: SavePasskeyFn): void {
+  _savePasskeyForAuth = fn
 }
 
 // ── Audit log hook ─────────────────────────────────────────────────────────────
@@ -57,6 +68,22 @@ function _setLockedUntil(n: number): void {
 function _resetLockout(): void {
   localStorage.removeItem(_LS_FAIL_COUNT)
   localStorage.removeItem(_LS_LOCKED_UNTIL)
+}
+
+// Exported so re-authentication surfaces (admin console, step-up prompts) share the
+// same lockout state and exponential-backoff policy as the primary login flow.
+export function getAuthLockedUntil(): number {
+  return _getLockedUntil()
+}
+export function recordAuthFailure(): { count: number; lockDelay: number } {
+  const newCount = _getFailCount() + 1
+  _setFailCount(newCount)
+  const delay = Math.min(30000, 500 * Math.pow(2, newCount - 1))
+  _setLockedUntil(Date.now() + delay)
+  return { count: newCount, lockDelay: delay }
+}
+export function resetAuthLockout(): void {
+  _resetLockout()
 }
 
 export async function renderAuth(): Promise<string> {
@@ -266,7 +293,14 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
       const key = await initCrypto(pw)
       if (fr) {
         await writeVerifyToken(key)
-        onSuccess(key)
+        _audit('vault_created')
+        // NIST SP 800-63B-4 §5.1.7 — offer passkey enrollment immediately after vault creation.
+        // Only shown on secure contexts (https://) where WebAuthn PRF is available.
+        if (isWebAuthnAvailable() && _savePasskeyForAuth) {
+          _showPasskeySetupStep(appEl, pw, key, onSuccess)
+        } else {
+          onSuccess(key)
+        }
       } else {
         // Check lockout before attempting verify
         if (Date.now() < _getLockedUntil()) {
@@ -303,6 +337,80 @@ export function bindAuth(appEl: Element, onSuccess: (key: CryptoKey) => void): v
       if (btn) btn.disabled = false
       if (lbl) lbl.textContent = fr ? 'Create Vault' : 'Unlock'
     }
+  })
+}
+
+// ── Passkey setup step — shown inline in the auth screen after first-run ────────
+// Replaces the auth card HTML (still within the auth screen — appEl is the root element)
+// so the user sees this before the main app loads. The step is optional; skipping sets
+// no permanent flag so a future settings nudge can remind the user.
+
+function _showPasskeySetupStep(
+  appEl: Element,
+  masterPassword: string,
+  key: CryptoKey,
+  onSuccess: (key: CryptoKey) => void,
+): void {
+  setAuditedStaticHtml(
+    appEl,
+    `<div class="auth-screen"><div class="auth-card" style="max-width:420px">
+      <div class="auth-logo">Task App <span>CRM</span></div>
+      <div style="font-weight:600;font-size:1rem;margin-bottom:.5rem;text-align:center">Vault created</div>
+      <p style="font-size:.875rem;color:#94a3b8;margin-bottom:.75rem;text-align:center">
+        Secure fast unlock with a passkey — phishing-resistant biometric authentication
+        recommended by NIST SP 800-63B-4 as your primary authenticator.
+      </p>
+      <ul style="font-size:.8125rem;color:#94a3b8;margin:0 0 1.25rem 1.25rem;padding:0">
+        <li>Touch ID, Face ID, Windows Hello, or hardware security key</li>
+        <li>No password to forget or reuse</li>
+        <li>Works offline — your passkey stays on this device</li>
+      </ul>
+      <button id="passkey-setup-btn" class="btn btn-primary" style="width:100%;margin-bottom:.75rem">
+        🔑 Set up passkey (recommended)
+      </button>
+      <button id="passkey-skip-btn" class="btn btn-ghost" style="width:100%;font-size:.8125rem">
+        Skip — I'll set up a passkey later in Settings
+      </button>
+      <div id="passkey-setup-error" style="display:none;color:#f87171;font-size:.8125rem;margin-top:.75rem;text-align:center"></div>
+    </div></div>`,
+  )
+
+  const showSetupErr = (msg: string) => {
+    const el = document.getElementById('passkey-setup-error')
+    if (el) {
+      el.textContent = msg
+      el.style.display = 'block'
+    }
+  }
+
+  document.getElementById('passkey-setup-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('passkey-setup-btn') as HTMLButtonElement | null
+    const errEl = document.getElementById('passkey-setup-error')
+    if (errEl) errEl.style.display = 'none'
+    if (btn) {
+      btn.disabled = true
+      btn.textContent = 'Setting up passkey…'
+    }
+    try {
+      const cred = await registerPasskey(masterPassword)
+      await _savePasskeyForAuth!(cred, key)
+      _audit('passkey_registered', { context: 'onboarding' })
+      onSuccess(key)
+    } catch (err) {
+      if (btn) {
+        btn.disabled = false
+        btn.textContent = '🔑 Set up passkey (recommended)'
+      }
+      const msg = (err as Error).message.includes('PRF')
+        ? 'Your device does not support the PRF extension required for passkey vault protection. You can try a different authenticator or set up a passkey later in Settings.'
+        : (err as Error).message || 'Passkey setup failed. You can try again in Settings.'
+      showSetupErr(msg)
+    }
+  })
+
+  document.getElementById('passkey-skip-btn')?.addEventListener('click', () => {
+    _audit('passkey_setup_skipped', { context: 'onboarding' })
+    onSuccess(key)
   })
 }
 
