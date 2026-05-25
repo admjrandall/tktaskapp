@@ -29,7 +29,4 @@ export const userKmsKeys = pgTable('user_kms_keys', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
-// RLS: ALTER TABLE tenant_users ENABLE ROW LEVEL SECURITY;
-// RLS: CREATE POLICY tenant_isolation ON tenant_users USING (org_id = current_setting('app.org_id')::uuid);
-// RLS: Same pattern for user_kms_keys.
-// These statements belong in server/src/db/migrations/0001_rls_policies.sql
+// RLS for tenant_users and user_kms_keys is enforced by server/drizzle/0001_rls_policies.sql.
