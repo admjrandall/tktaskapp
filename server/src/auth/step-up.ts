@@ -146,6 +146,36 @@ async function _consumeStepUpToken(
   return entry
 }
 
+/**
+ * Validate a step-up token without consuming it.
+ * Returns the entry if valid, null otherwise.
+ * Used for testing and health-check purposes only — do not use in production request paths
+ * (use requireStepUp middleware which consumes the token atomically).
+ */
+export async function validateStepUpToken(
+  token: string,
+  userId: string,
+  operation: StepUpOperation,
+): Promise<boolean> {
+  const tokenHash = _hashToken(token)
+  const redis = await _getRedis()
+
+  let entry: StepUpEntry | null = null
+  if (redis) {
+    const raw = await redis.get(_redisKey(tokenHash))
+    if (!raw) return false
+    entry = JSON.parse(raw) as StepUpEntry
+  } else {
+    entry = _memStore.get(tokenHash) ?? null
+  }
+
+  if (!entry) return false
+  if (entry.expiresAt < Date.now()) return false
+  if (entry.userId !== userId) return false
+  if (entry.operation !== operation) return false
+  return true
+}
+
 // ── Middleware factory ────────────────────────────────────────────────────────
 
 /**

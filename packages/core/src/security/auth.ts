@@ -438,3 +438,94 @@ function _showTOTPStep(
     }
   })
 }
+
+// ── Step-up authentication — RFC 9470 ─────────────────────────────────────────
+// Used by admin-console.ts for high-risk operations (GDPR erase, KMS key management,
+// AI allowlist, org settings) when the enterprise-web target connects to the server.
+
+/** Server base URL injected by the enterprise-web entry point. Null in offline builds. */
+let _serverUrl: string | null = null
+/** Access token getter injected by the enterprise-web entry point. */
+let _getAccessToken: (() => string | null) | null = null
+
+export function setStepUpHooks(hooks: {
+  serverUrl: string
+  getAccessToken: () => string | null
+}): void {
+  _serverUrl = hooks.serverUrl
+  _getAccessToken = hooks.getAccessToken
+}
+
+/**
+ * Request a single-use step-up token for the given high-risk operation.
+ * The caller must have completed re-authentication (password + TOTP/passkey) first.
+ *
+ * RFC 9470 §3 — step-up tokens are scoped to one (userId, operation) pair,
+ * expire after 5 minutes, and are consumed on first use.
+ */
+export async function requestStepUpToken(operation: string): Promise<string> {
+  if (!_serverUrl || !_getAccessToken) {
+    throw new Error('Step-up hooks not configured — enterprise server required')
+  }
+  const accessToken = _getAccessToken()
+  if (!accessToken) throw new Error('No access token — please log in')
+
+  const resp = await fetch(`${_serverUrl}/auth/step-up`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ operation }),
+  })
+  if (!resp.ok) throw new Error(`Step-up request failed: ${resp.status}`)
+  const data = (await resp.json()) as { step_up_token?: string }
+  if (!data.step_up_token) throw new Error('Server did not return a step-up token')
+  return data.step_up_token
+}
+
+/**
+ * Execute fn(), retrying once with a step-up token if the server responds with
+ * 401 + WWW-Authenticate: Bearer error="insufficient_user_authentication".
+ *
+ * RFC 9470 — challenge-response cycle:
+ *   1. Try the request (no step-up token)
+ *   2. If 401, prompt the user to re-authenticate → obtain step-up token
+ *   3. Retry with X-Step-Up-Token header
+ */
+export async function performWithStepUp(
+  operation: string,
+  fn: (stepUpToken?: string) => Promise<Response>,
+  onReauthRequired: () => Promise<void>,
+): Promise<{ ok: boolean; status: number; data: unknown; error: string | null }> {
+  const first = await fn(undefined)
+
+  if (first.status !== 401) {
+    if (!first.ok) {
+      const errText = await first.text().catch(() => String(first.status))
+      return { ok: false, status: first.status, data: null, error: errText }
+    }
+    const data: unknown = await first.json().catch(() => null)
+    return { ok: true, status: first.status, data, error: null }
+  }
+
+  const wwwAuth = first.headers.get('WWW-Authenticate') ?? ''
+  if (!wwwAuth.includes('insufficient_user_authentication')) {
+    return { ok: false, status: 401, data: null, error: 'Unauthorized' }
+  }
+
+  // RFC 9470 §3 — challenge received; prompt re-auth then retry with step-up token
+  try {
+    await onReauthRequired()
+    const stepUpToken = await requestStepUpToken(operation)
+    const second = await fn(stepUpToken)
+    if (!second.ok) {
+      const errText = await second.text().catch(() => String(second.status))
+      return { ok: false, status: second.status, data: null, error: errText }
+    }
+    const data: unknown = await second.json().catch(() => null)
+    return { ok: true, status: second.status, data, error: null }
+  } catch (err) {
+    return { ok: false, status: 401, data: null, error: String(err) }
+  }
+}

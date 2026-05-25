@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createPkceChallengeForVerifier } from '../../server/src/auth/oidc-service.js'
+import { issueStepUpToken, validateStepUpToken } from '../../server/src/auth/step-up.js'
 
 // vi.mock factories are hoisted to the top of the file by vitest — all variables
 // referenced inside them must be declared with vi.hoisted() so they're initialized
@@ -72,6 +73,43 @@ describe('server PKCE', () => {
     await expect(
       createPkceChallengeForVerifier('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk'),
     ).resolves.toBe('E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM')
+  })
+})
+
+describe('step-up authentication (RFC 9470)', () => {
+  it('issueStepUpToken returns a non-empty string', async () => {
+    const token = await issueStepUpToken('user-1', 'tenant-1', 'gdpr_erase')
+    expect(typeof token).toBe('string')
+    expect(token.length).toBeGreaterThan(0)
+  })
+
+  it('validateStepUpToken returns true for a freshly issued token', async () => {
+    const token = await issueStepUpToken('user-2', 'tenant-1', 'data_export')
+    const valid = await validateStepUpToken(token, 'user-2', 'data_export')
+    expect(valid).toBe(true)
+  })
+
+  it('validateStepUpToken returns false for wrong userId', async () => {
+    const token = await issueStepUpToken('user-3', 'tenant-1', 'org_settings_change')
+    const valid = await validateStepUpToken(token, 'wrong-user', 'org_settings_change')
+    expect(valid).toBe(false)
+  })
+
+  it('validateStepUpToken returns false for wrong operation', async () => {
+    const token = await issueStepUpToken('user-4', 'tenant-1', 'kms_key_manage')
+    const valid = await validateStepUpToken(token, 'user-4', 'ai_provider_configure')
+    expect(valid).toBe(false)
+  })
+
+  it('validateStepUpToken returns false for a token that was never issued', async () => {
+    const valid = await validateStepUpToken('bogus-token', 'user-1', 'gdpr_erase')
+    expect(valid).toBe(false)
+  })
+
+  it('issueStepUpToken produces unique tokens on repeated calls', async () => {
+    const t1 = await issueStepUpToken('user-5', 'tenant-1', 'admin_user_change')
+    const t2 = await issueStepUpToken('user-5', 'tenant-1', 'admin_user_change')
+    expect(t1).not.toBe(t2)
   })
 })
 

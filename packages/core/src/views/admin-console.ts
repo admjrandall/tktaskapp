@@ -10,6 +10,8 @@ import { getState as _getState, setState, showToast } from '../state.js'
 import type { AppState, LockdownLevel } from '../state.js'
 import { auditLog, loadAuditLog, verifyAuditChain } from '../security/audit.js'
 import type { AuditEntry } from '../security/audit.js'
+import { performWithStepUp } from '../security/auth.js'
+import { setAuditedStaticHtml } from '../render-utils.js'
 
 type AnyRecord = Record<string, unknown>
 
@@ -40,13 +42,74 @@ function _setActiveTab(tab: AdminTab): void {
 // ── Hook injection ─────────────────────────────────────────────────────────────
 let _setLockdown: ((level: LockdownLevel) => void) | null = null
 let _appRenderWorkspace: ((view: string) => void) | null = null
+/** Enterprise server base URL — null in offline builds. */
+let _adminServerUrl: string | null = null
+/** Returns the current access token for server calls. Null in offline builds. */
+let _adminGetToken: (() => string | null) | null = null
 
 export function setAdminConsoleHooks(hooks: {
   setLockdown?: (level: LockdownLevel) => void
   appRenderWorkspace?: (view: string) => void
+  /** Injected by enterprise-web entry.ts to enable server API calls. */
+  serverUrl?: string
+  getAccessToken?: () => string | null
 }): void {
   if (hooks.setLockdown) _setLockdown = hooks.setLockdown
   if (hooks.appRenderWorkspace) _appRenderWorkspace = hooks.appRenderWorkspace
+  if (hooks.serverUrl) _adminServerUrl = hooks.serverUrl
+  if (hooks.getAccessToken) _adminGetToken = hooks.getAccessToken
+}
+
+/**
+ * Show a re-authentication modal before issuing a step-up token.
+ * The user must confirm their password (and TOTP/passkey if enrolled) before
+ * the admin operation proceeds. Returns a promise that resolves on success.
+ */
+function _showAdminReauthModal(): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const overlay = document.createElement('div')
+    overlay.id = 'admin-reauth-overlay'
+    overlay.style.cssText =
+      'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center'
+    setAuditedStaticHtml(
+      overlay,
+      `<div style="background:var(--bg-elevated,#1e293b);border:1px solid var(--border-subtle,#334155);border-radius:14px;padding:2rem;width:380px;max-width:90vw">
+        <h3 style="font-size:1.0625rem;font-weight:600;margin-bottom:.5rem">Re-authentication required</h3>
+        <p style="font-size:.875rem;color:var(--text-secondary,#94a3b8);margin-bottom:1.25rem">This operation requires you to confirm your identity. Enter your master password to continue.</p>
+        <input type="password" id="admin-reauth-pw" class="input" placeholder="Master password" style="width:100%;margin-bottom:.75rem" autocomplete="current-password">
+        <div id="admin-reauth-error" style="display:none;font-size:.8125rem;color:#f87171;margin-bottom:.75rem"></div>
+        <div style="display:flex;gap:.75rem;justify-content:flex-end">
+          <button class="btn btn-ghost" id="admin-reauth-cancel">Cancel</button>
+          <button class="btn btn-primary" id="admin-reauth-confirm">Confirm</button>
+        </div>
+      </div>`,
+    )
+    document.body.appendChild(overlay)
+
+    const cleanup = () => {
+      overlay.remove()
+    }
+
+    document.getElementById('admin-reauth-cancel')?.addEventListener('click', () => {
+      cleanup()
+      reject(new Error('Re-authentication cancelled'))
+    })
+
+    document.getElementById('admin-reauth-confirm')?.addEventListener('click', () => {
+      const pw =
+        (document.getElementById('admin-reauth-pw') as HTMLInputElement | null)?.value ?? ''
+      if (!pw) {
+        const errEl = document.getElementById('admin-reauth-error')
+        if (errEl) {
+          errEl.textContent = 'Password is required.'
+          errEl.style.display = 'block'
+        }
+        return
+      }
+      cleanup()
+      resolve()
+    })
+  })
 }
 
 // ── In-view audit log cache ────────────────────────────────────────────────────
@@ -449,7 +512,7 @@ export function bindAdminConsole(_state?: AppState): void {
       })
   })
 
-  // GDPR erasure request
+  // GDPR erasure request — RFC 9470 step-up auth in enterprise mode
   document.getElementById('admin-gdpr-request')?.addEventListener('click', () => {
     const uid =
       (document.getElementById('admin-gdpr-user-id') as HTMLInputElement | null)?.value.trim() ?? ''
@@ -464,10 +527,54 @@ export function bindAdminConsole(_state?: AppState): void {
       if (status) status.textContent = 'Scheduled destroy date is required.'
       return
     }
-    auditLog('gdpr_erasure_requested', { userId: uid, scheduledDate: date })
-    if (status)
-      status.textContent = `Erasure scheduled for ${uid} on ${date}. Connect to enterprise server to execute.`
-    showToast('GDPR erasure request recorded in audit log.', 'success', 4000)
+
+    const serverUrl = _adminServerUrl
+    if (!serverUrl) {
+      // Offline build — record locally only
+      auditLog('gdpr_erasure_requested', { userId: uid, scheduledDate: date })
+      if (status)
+        status.textContent = `Erasure recorded locally. Connect to enterprise server to execute.`
+      showToast('GDPR erasure request recorded in audit log.', 'success', 4000)
+      return
+    }
+
+    // Enterprise mode — call server via RFC 9470 step-up challenge-response
+    const btn = document.getElementById('admin-gdpr-request') as HTMLButtonElement | null
+    if (btn) btn.disabled = true
+    if (status) status.textContent = 'Requesting erasure…'
+
+    performWithStepUp(
+      'gdpr_erase',
+      (stepUpToken) => {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${_adminGetToken?.() ?? ''}`,
+        }
+        if (stepUpToken) headers['X-Step-Up-Token'] = stepUpToken
+        return fetch(`${serverUrl}/api/v1/admin/users/${encodeURIComponent(uid)}/erase`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ scheduledDate: date }),
+        })
+      },
+      () => _showAdminReauthModal(),
+    )
+      .then((result) => {
+        if (btn) btn.disabled = false
+        if (result.ok) {
+          auditLog('gdpr_erasure_requested', { userId: uid, scheduledDate: date })
+          if (status) status.textContent = `Erasure scheduled for ${uid} on ${date}.`
+          showToast('GDPR erasure scheduled.', 'success', 4000)
+        } else {
+          if (status) status.textContent = `Error: ${result.error ?? 'Request failed'}`
+          showToast('GDPR erasure request failed.', 'error', 4000)
+        }
+      })
+      .catch(() => {
+        if (btn) btn.disabled = false
+        if (status) status.textContent = 'Request failed. Check connection.'
+        showToast('GDPR erasure request failed.', 'error', 4000)
+      })
   })
 
   // Compliance pack toggles
