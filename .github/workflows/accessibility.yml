@@ -103,20 +103,47 @@ jobs:
           path: axe-report.json
           retention-days: 30
 
-  # Stub job — promote to full suite once Playwright test harness is set up.
-  # These tests cover post-auth views, focus traps, and keyboard navigation.
-  # See tests/accessibility/ for the stub test definitions.
+  # Full Playwright E2E accessibility suite — keyboard navigation, focus traps,
+  # ARIA labels, and WCAG 2.1 AA interaction compliance.
+  # Runs against dist/offline/index.html served via file:// via Chromium.
   playwright-a11y:
-    name: Playwright accessibility tests (stub — always passes)
+    name: Playwright E2E accessibility tests
     runs-on: ubuntu-latest
+    needs: axe # axe scan must pass before we run the interactive tests
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Note
-        run: |
-          echo "Playwright accessibility tests are defined in tests/accessibility/ as .todo stubs."
-          echo "This job will be replaced with a real Playwright run once the test harness is implemented."
-          echo "See: tests/accessibility/keyboard-navigation.test.ts"
-          echo "See: tests/accessibility/modal-focus-trap.test.ts"
-          echo "See: tests/accessibility/screen-reader-labels.test.ts"
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build offline artifact
+        run: pnpm run build:offline
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright E2E accessibility tests
+        run: pnpm exec playwright test tests/e2e/accessibility/
+        env:
+          # file:// URL for the built offline app — playwright.config.ts reads this
+          PLAYWRIGHT_BASE_URL: file://${{ github.workspace }}/dist/offline/index.html
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-accessibility-report
+          path: playwright-report/
+          retention-days: 30
