@@ -74,7 +74,7 @@ export class DataverseAdapter extends SyncAdapter {
         const mod = row['modifiedon'] as string | undefined
         if (mod && (!latestModified || mod > latestModified)) latestModified = mod
         // Normalise Dataverse primary key to 'id'
-        const pkField = `${entitySet.replace('tktaskapp_', 'tktaskapp_')}id`
+        const pkField = entitySet.replace('tktaskapp_', '') + 'id'
         if (!row['id'] && row[pkField]) row['id'] = row[pkField]
       }
 
