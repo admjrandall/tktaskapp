@@ -33,11 +33,12 @@
     "vitest": "^4.1.7"
   },
   "files": [
-    "dist"
+    "dist",
+    "drizzle"
   ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json --noEmit && esbuild src/index.ts --bundle --packages=external --platform=node --target=node22 --format=esm --outfile=dist/server.js",
+    "build": "tsc -p tsconfig.json --noEmit && esbuild src/index.ts --bundle --packages=external --platform=node --target=node22 --format=esm --outfile=dist/server.js && esbuild src/db/migrate.ts --bundle --packages=external --platform=node --target=node22 --format=esm --outfile=dist/migrate.js",
     "build:server": "pnpm run build",
     "start": "node dist/server.js",
     "lint": "eslint src",

@@ -67,6 +67,9 @@ WORKDIR /app
 # dist/server.js as ESM (Node.js searches up from the file for package.json).
 COPY --from=builder /app/server-deploy/package.json     ./package.json
 COPY --from=builder /app/server-deploy/dist             ./dist
+# drizzle/ contains the committed SQL migrations run by dist/migrate.js on startup.
+# The migrator resolves migrationsFolder: './drizzle' relative to process.cwd() (/app).
+COPY --from=builder /app/server-deploy/drizzle          ./drizzle
 COPY --from=builder /app/server-deploy/node_modules     ./node_modules
 
 # nonroot is the pre-created UID 65532 in all distroless images

@@ -3,6 +3,27 @@
 name: tktaskapp
 
 services:
+  # ── Database migrations ─────────────────────────────────────────────────────
+  # Runs dist/migrate.js once and exits with code 0 on success.
+  # The server waits for this to complete (condition: service_completed_successfully)
+  # so it never starts against an un-migrated schema.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    command: ['dist/migrate.js']
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+    networks:
+      - backend
+
   # ── Application server ──────────────────────────────────────────────────────
   server:
     build:
@@ -18,6 +39,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_healthy
     restart: unless-stopped
@@ -29,6 +52,10 @@ services:
     image: postgres:16-alpine
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Exposed to the host for local tooling: DBeaver, psql, manual migration runs.
+      # Remove this mapping in deployments where the DB must not be reachable externally.
+      - '5432:5432'
     environment:
       POSTGRES_DB: tktaskapp
       POSTGRES_USER: tktaskapp
