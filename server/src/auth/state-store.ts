@@ -13,6 +13,8 @@ export interface PkceStateRecord {
   codeVerifier: string
   redirectTo: string
   expiresAt: number
+  /** RFC 9700 §2.3.1 — nonce bound to this PKCE flow to prevent ID token replay. */
+  nonce: string
 }
 
 export interface AuthStateStore {

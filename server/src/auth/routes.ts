@@ -7,6 +7,7 @@ import type { HonoEnv } from '../hono-types.js'
 import { getAuthStateStore } from './state-store.js'
 import { issueStepUpToken } from './step-up.js'
 import { authMiddleware } from './middleware.js'
+import { validateIdToken } from './oidc.js'
 import * as v from 'valibot'
 
 // ── OIDC config ────────────────────────────────────────────────────────────────
@@ -101,6 +102,11 @@ authRouter.get('/login', async (c) => {
   crypto.getRandomValues(stateBytes)
   const state = Buffer.from(stateBytes).toString('base64url')
 
+  // RFC 9700 §2.3.1 — nonce prevents ID token replay across PKCE flows.
+  const nonceBytes = new Uint8Array(32)
+  crypto.getRandomValues(nonceBytes)
+  const nonce = Buffer.from(nonceBytes).toString('base64url')
+
   try {
     const store = await getAuthStateStore()
     await store.savePkceState(
@@ -109,6 +115,7 @@ authRouter.get('/login', async (c) => {
         codeVerifier,
         redirectTo: rawRedirect,
         expiresAt: Date.now() + PKCE_TTL_SECONDS * 1000,
+        nonce,
       },
       PKCE_TTL_SECONDS,
     )
@@ -125,6 +132,7 @@ authRouter.get('/login', async (c) => {
     redirect_uri: redirectUri,
     scope: 'openid profile email offline_access',
     state,
+    nonce,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
   })
@@ -168,6 +176,15 @@ authRouter.get('/callback', async (c) => {
     tokens = await _oidcService.exchangeCodeForToken(code, pending.codeVerifier, config)
   } catch {
     return c.json({ error: 'Token exchange failed' }, 401)
+  }
+
+  // RFC 9700 §2.3.1 — validate ID token nonce to prevent replay attacks.
+  if (tokens.idToken) {
+    try {
+      await validateIdToken(tokens.idToken, pending.nonce)
+    } catch {
+      return c.json({ error: 'ID token validation failed' }, 401)
+    }
   }
 
   if (tokens.refreshToken) {

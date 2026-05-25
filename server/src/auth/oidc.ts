@@ -169,6 +169,9 @@ function _decodePayloadUnsafe(jwt: string): Record<string, unknown> {
  * Validate a Microsoft Entra ID v2.0 access token.
  * Throws on any validation failure — never return partial claims.
  *
+ * RFC 9700 §2.3 — validates audience, issuer, algorithm, and azp (authorized party)
+ * to ensure the token was issued to this client, not a different one sharing the IdP.
+ *
  * DPoP (RFC 9449) support is on the roadmap — design accommodates it as a near-term addition.
  */
 export async function validateEntraIdToken(jwt: string): Promise<EntraIdClaims> {
@@ -191,8 +194,58 @@ export async function validateEntraIdToken(jwt: string): Promise<EntraIdClaims> 
   const oid = payload['oid']
   if (typeof oid !== 'string' || !oid) throw new Error('Missing oid claim')
 
+  // RFC 9700 §2.3.1 — azp (authorized party) must match our client_id.
+  // Entra ID v2.0 access tokens include azp when issued via PKCE.
+  const azp = payload['azp'] ?? payload['appid']
+  if (typeof azp === 'string' && azp !== clientId) {
+    throw new Error(`Token azp claim mismatch: expected ${clientId}, got ${azp}`)
+  }
+
   const upn = payload['preferred_username'] ?? payload['upn'] ?? payload['email']
   if (typeof upn !== 'string' || !upn) throw new Error('Missing email claim')
 
   return { externalId: oid, tenantId: tid, email: upn }
+}
+
+/**
+ * Validate a Microsoft Entra ID v2.0 ID token and verify the nonce.
+ * Called after code exchange in the PKCE callback to prevent ID token replay attacks.
+ * RFC 9700 §2.3.1 — nonce must match the value sent in the authorization request.
+ */
+export async function validateIdToken(
+  idTokenJwt: string,
+  expectedNonce: string,
+): Promise<{ sub: string; oid: string; email: string; tenantId: string }> {
+  const rawPayload = _decodePayloadUnsafe(idTokenJwt)
+  const tid = rawPayload['tid']
+  if (typeof tid !== 'string' || !tid) throw new Error('Missing tid claim in ID token')
+
+  const clientId = process.env['ENTRA_CLIENT_ID']
+  if (!clientId) throw new Error('ENTRA_CLIENT_ID env var not set')
+
+  const getKey = _getJwksForTenant(tid)
+
+  const { payload } = await jwtVerify(idTokenJwt, getKey, {
+    issuer: `https://login.microsoftonline.com/${tid}/v2.0`,
+    audience: clientId,
+    algorithms: ['RS256'],
+  })
+
+  // Nonce validation — RFC 9700 §2.3.1 and OpenID Connect Core §3.1.3.7
+  const actualNonce = payload['nonce']
+  if (typeof actualNonce !== 'string' || actualNonce !== expectedNonce) {
+    throw new Error('ID token nonce mismatch — possible replay attack')
+  }
+
+  const sub = payload['sub']
+  if (typeof sub !== 'string' || !sub) throw new Error('Missing sub claim in ID token')
+
+  const oid = payload['oid']
+  if (typeof oid !== 'string' || !oid) throw new Error('Missing oid claim in ID token')
+
+  const email =
+    payload['preferred_username'] ?? payload['upn'] ?? payload['email'] ?? payload['unique_name']
+  if (typeof email !== 'string' || !email) throw new Error('Missing email claim in ID token')
+
+  return { sub, oid, email, tenantId: tid }
 }
