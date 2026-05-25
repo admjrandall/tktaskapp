@@ -1,8 +1,17 @@
-// Keyboard navigation accessibility tests.
-// Tests that can be verified by parsing rendered HTML strings run here (Vitest,
-// Node environment). Tests that require actual browser focus management (Tab
-// cycling, Escape handling, focus-return) are kept as .todo — they belong in a
-// Playwright suite against dist/offline/index.html.
+// Keyboard navigation accessibility tests — static HTML structure (Vitest / Node).
+//
+// WHY THIS FILE EXISTS alongside tests/e2e/accessibility/keyboard-navigation.spec.ts:
+//   These Vitest tests verify *static HTML structure*: correct element types (<button>
+//   vs <div>), presence of landmark elements (<nav>), and absence of tabindex="-1" on
+//   focusable elements. They run in Node without a browser and catch regressions in
+//   render functions immediately on save, without a build step.
+//
+//   The companion Playwright spec (tests/e2e/accessibility/keyboard-navigation.spec.ts)
+//   tests *runtime browser behaviour*: actual Tab key cycling, focus traps, Escape
+//   handling, and ARIA live-region announcements. These require a real Chromium context
+//   and dist/offline/index.html to be built first.
+//
+//   Keep both suites: they test different things and neither is a subset of the other.
 // Target: WCAG 2.1 AA §2.1 (Keyboard Accessible).
 
 import { describe, it, expect, vi, beforeAll } from 'vitest'
