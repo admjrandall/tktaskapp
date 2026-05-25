@@ -1,7 +1,7 @@
 // ── Composition root ──────────────────────────────────────────────────────────
-// Phase 0.5: main.ts is now a thin entry point. All logic has moved to:
+// main.ts is a thin entry point. All logic has moved to:
 //   bootstrap.ts     — init() flow and afterUnlock closure
-//   render-pipeline.ts — fullRender(), appRenderWorkspace(), appRenderRail()
+//   render-pipeline.ts — fullRender(), appRenderWorkspace()
 //   hooks-wiring.ts  — all setXHooks() cross-module wires
 //   app-lock.ts      — lockApp(), _resetIdleTimer(), idle detection
 //
@@ -9,6 +9,6 @@
 export { init } from './bootstrap.js'
 
 // Re-export symbols that entry files or tests may import from @core/main.js
-export { appRenderWorkspace, fullRender, appRenderRail, appEl } from './render-pipeline.js'
+export { appRenderWorkspace, fullRender, appEl } from './render-pipeline.js'
 export { lockApp, setLockTimeout, _resetIdleTimer, _lastActivityAt } from './app-lock.js'
 export { wireHooks } from './hooks-wiring.js'

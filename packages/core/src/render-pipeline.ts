@@ -45,9 +45,6 @@ export const appEl = document.getElementById('app')!
 
 let _prevView = ''
 
-// Phase 1 stub — rail navigation (not yet implemented)
-export function appRenderRail(): void {}
-
 // ── appRenderWorkspace ────────────────────────────────────────────────────────
 export function appRenderWorkspace(view: string): void {
   const state = getState()

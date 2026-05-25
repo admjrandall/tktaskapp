@@ -1,6 +1,6 @@
 import { db } from '../db/index.js'
 import { kmsKeyLifecycle } from '../db/schema/kms-keys.js'
-import { AzureKeyVaultKeyService } from './key-service.js'
+import { getKmsService } from './key-service.js'
 import { withTenant, writeAuditEvent } from '../services/base.js'
 import { and, eq, lte } from 'drizzle-orm'
 import { otel } from '../observability/otel.js'
@@ -8,8 +8,15 @@ import { otel } from '../observability/otel.js'
 const POLL_INTERVAL_MS = 60_000
 
 async function _runOnce(): Promise<void> {
-  const vaultUrl = process.env['AZURE_KV_URL']
-  if (!vaultUrl) return
+  // Require at least one KMS provider to be configured
+  if (!process.env['AZURE_KV_URL'] && !process.env['AWS_REGION']) return
+
+  let kmsService: ReturnType<typeof getKmsService>
+  try {
+    kmsService = getKmsService()
+  } catch {
+    return // provider not configured — skip this cycle
+  }
 
   const now = new Date()
 
@@ -24,8 +31,6 @@ async function _runOnce(): Promise<void> {
     )
 
   if (pending.length === 0) return
-
-  const kmsService = new AzureKeyVaultKeyService(vaultUrl)
 
   for (const row of pending) {
     // Check if a DESTROYED event already exists for this keyVaultUri
@@ -45,31 +50,9 @@ async function _runOnce(): Promise<void> {
     if (destroyed.length > 0) continue
 
     try {
-      // Destroy the key via Azure Key Vault
-      const keyName = `tktaskapp-user-${row.userId}`
-      const keyClient = (
-        kmsService as unknown as {
-          _keyClient: {
-            beginDeleteKey: (name: string) => Promise<{ pollUntilDone: () => Promise<unknown> }>
-          }
-        }
-      )._keyClient
-      const poller = await keyClient.beginDeleteKey(keyName)
-      await poller.pollUntilDone()
-
-      // Write DESTROYED event (append-only)
-      await withTenant(row.orgId, async (tx) => {
-        await tx.insert(kmsKeyLifecycle).values([
-          {
-            orgId: row.orgId,
-            userId: row.userId,
-            keyVaultUri: row.keyVaultUri,
-            keyVersion: row.keyVersion,
-            event: 'DESTROYED',
-            effectiveAt: new Date(),
-          },
-        ])
-      })
+      // Delegate destruction to the KMS service — deleteKey() handles the
+      // provider-specific deletion call and writes the DESTROYED lifecycle event.
+      await kmsService.deleteKey(row.userId, row.orgId)
 
       await writeAuditEvent({
         tenantId: row.orgId,

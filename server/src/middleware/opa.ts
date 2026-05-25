@@ -63,15 +63,47 @@ async function _evaluateViaRest(input: PolicyInput): Promise<boolean> {
   return body.result
 }
 
+/** Actions that require owner or admin role. */
+const _OPA_ADMIN_ACTIONS = new Set([
+  'manage_users',
+  'suspend_user',
+  'manage_keys',
+  'manage_ai_allowlist',
+  'manage_integrations',
+  'manage_org_settings',
+  'view_audit',
+  'export_audit',
+  'admin:delete-user',
+  'admin:manage-keys',
+  'admin:view-audit',
+])
+
+/** Actions restricted to owner only. */
+const _OPA_OWNER_ONLY_ACTIONS = new Set(['erase_user', 'ai:configure'])
+
+/** Actions allowed for editors and above (not viewer-accessible). */
+const _OPA_EDITOR_ONLY_ACTIONS = new Set([
+  'create',
+  'update',
+  'delete',
+  'sync:push',
+  'ai:compute_attribute',
+])
+
+/** Actions any authenticated role may perform (viewer and above). */
+const _OPA_VIEWER_ACTIONS = new Set(['read', 'sync:pull', 'sync:stream'])
+
 function _evaluateInProcess(input: PolicyInput): boolean {
   const { role, action, tenantId, resourceTenantId } = input
 
-  // Cross-tenant deny
+  // Cross-tenant deny — always first, no exceptions
   if (resourceTenantId != null && resourceTenantId !== tenantId) return false
 
-  if (role === 'owner' || role === 'admin') return true
-  if (role === 'editor') return action === 'read' || action === 'create' || action === 'update'
-  if (role === 'viewer') return action === 'read'
+  if (_OPA_OWNER_ONLY_ACTIONS.has(action)) return role === 'owner'
+  if (_OPA_ADMIN_ACTIONS.has(action)) return role === 'owner' || role === 'admin'
+  if (_OPA_EDITOR_ONLY_ACTIONS.has(action))
+    return role === 'owner' || role === 'admin' || role === 'editor'
+  if (_OPA_VIEWER_ACTIONS.has(action)) return true // any authenticated role
   return false
 }
 

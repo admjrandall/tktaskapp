@@ -16,7 +16,6 @@ export interface PersonaPreset {
 }
 
 export const PERSONA_PRESETS: Record<PersonaId, PersonaPreset> = {
-  // Phase 5 — OT/ICS vertical: terminology uses field-ops language
   operator: {
     id: 'operator',
     label: 'Operator',

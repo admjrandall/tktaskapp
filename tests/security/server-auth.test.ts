@@ -1,11 +1,25 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createPkceChallengeForVerifier } from '../../server/src/auth/oidc-service.js'
 
-const validateEntraIdToken = vi.fn()
-const limit = vi.fn()
-const where = vi.fn(() => ({ limit }))
-const from = vi.fn(() => ({ where }))
-const select = vi.fn(() => ({ from }))
+// vi.mock factories are hoisted to the top of the file by vitest — all variables
+// referenced inside them must be declared with vi.hoisted() so they're initialized
+// before the hoisted factory runs.
+const { validateEntraIdToken, limit, where, from, select, mockStore } = vi.hoisted(() => {
+  const limit = vi.fn()
+  const where = vi.fn(() => ({ limit }))
+  const from = vi.fn(() => ({ where }))
+  const select = vi.fn(() => ({ from }))
+  const validateEntraIdToken = vi.fn()
+  const mockStore = {
+    isAccessTokenRevoked: vi.fn().mockResolvedValue(false),
+    revokeAccessToken: vi.fn().mockResolvedValue(undefined),
+    savePkceState: vi.fn(),
+    consumePkceState: vi.fn(),
+    rememberRefreshTokenUse: vi.fn(),
+    revokeRefreshToken: vi.fn(),
+  }
+  return { validateEntraIdToken, limit, where, from, select, mockStore }
+})
 
 vi.mock('../../server/src/auth/oidc.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../server/src/auth/oidc.js')>()),
@@ -14,6 +28,11 @@ vi.mock('../../server/src/auth/oidc.js', async (importOriginal) => ({
 
 vi.mock('../../server/src/db/index.js', () => ({
   db: { select },
+}))
+
+vi.mock('../../server/src/auth/state-store.js', () => ({
+  getAuthStateStore: vi.fn().mockResolvedValue(mockStore),
+  hashAccessToken: vi.fn((t: string) => `hash:${t}`),
 }))
 
 const { authMiddleware } = await import('../../server/src/auth/middleware.js')
@@ -45,6 +64,7 @@ beforeEach(() => {
     tenantId: 'entra-tenant-1',
     email: 'user@example.test',
   })
+  mockStore.isAccessTokenRevoked.mockResolvedValue(false)
 })
 
 describe('server PKCE', () => {
@@ -99,5 +119,19 @@ describe('server auth middleware', () => {
     expect(result).toEqual({ body: { error: 'Forbidden' }, status: 403 })
     expect(response).toHaveBeenCalledWith({ error: 'Forbidden' }, 403)
     expect(next).not.toHaveBeenCalled()
+  })
+
+  it('denies a revoked access token before JWT validation', async () => {
+    mockStore.isAccessTokenRevoked.mockResolvedValue(true)
+    const { c, response } = makeContext()
+    const next = vi.fn()
+
+    const result = await authMiddleware(c as never, next)
+
+    // Revoked tokens return 401 Unauthorized per RFC 6750 §3.1
+    expect(result).toEqual({ body: { error: 'Unauthorized' }, status: 401 })
+    expect(next).not.toHaveBeenCalled()
+    // validateEntraIdToken must NOT be called after a revocation hit
+    expect(validateEntraIdToken).not.toHaveBeenCalled()
   })
 })

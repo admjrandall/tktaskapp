@@ -1,6 +1,5 @@
 // ── COMPONENTS ─────────────────────────────────────────────────────────────
-// Rebuilt for Phase 1 design system. Exports are API-stable — render-pipeline
-// and hooks-wiring depend on these names.
+// Exports are API-stable — render-pipeline and hooks-wiring depend on these names.
 
 import { Icons } from './icons.js'
 import {

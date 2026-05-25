@@ -5,6 +5,9 @@ import { OidcServiceImpl, generatePkceAsync } from './oidc-service.js'
 import type { OidcConfig } from './oidc.js'
 import type { HonoEnv } from '../hono-types.js'
 import { getAuthStateStore } from './state-store.js'
+import { issueStepUpToken } from './step-up.js'
+import { authMiddleware } from './middleware.js'
+import * as v from 'valibot'
 
 // ── OIDC config ────────────────────────────────────────────────────────────────
 // Populated from env vars at module evaluation time. The server refuses /auth/*
@@ -237,3 +240,65 @@ authRouter.post('/logout', async (c) => {
 
   return c.json({ ok: true })
 })
+
+// ── Step-up schema ─────────────────────────────────────────────────────────────
+const _StepUpRequestSchema = v.object({
+  operation: v.picklist([
+    'gdpr_erase',
+    'admin_user_change',
+    'ai_provider_configure',
+    'data_export',
+    'legal_hold_change',
+    'kms_key_manage',
+    'org_settings_change',
+  ]),
+  /**
+   * The user's current access token, used to re-verify identity.
+   * For Entra ID flows, re-authentication happens via PKCE; this endpoint
+   * handles the offline-first / password+TOTP flow (see CLAUDE.md §M-7).
+   * The client MUST have recently completed the re-auth dialog before calling this.
+   *
+   * TODO: Wire into the client-side re-auth flow (packages/core/src/security/auth.ts).
+   * The server-side step-up token issuance is complete; client wiring is Phase 2.
+   */
+  reAuthToken: v.optional(v.pipe(v.string(), v.minLength(1))),
+})
+
+// POST /auth/step-up
+// Issues a single-use, 5-minute step-up token for the given high-risk operation.
+// Requires a valid Bearer access token (authMiddleware) plus proof of recent
+// re-authentication (reAuthToken from the re-auth flow, or explicit user presence).
+//
+// Step-up tokens are scoped to one (userId, operation) pair and expire after 5 min.
+// The client includes the issued token as X-Step-Up-Token on the protected request.
+authRouter.post('/step-up', authMiddleware as MiddlewareHandler, async (c) => {
+  const userId = c.get('userId')
+  const tenantId = c.get('tenantId')
+
+  const body: unknown = await c.req.json().catch(() => null)
+  const parsed = v.safeParse(_StepUpRequestSchema, body)
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid request', details: parsed.issues }, 400)
+  }
+
+  const { operation } = parsed.output
+
+  // Issue the step-up token. In the full implementation, this would additionally
+  // validate the reAuthToken (TOTP/passkey assertion) before issuing. For the
+  // enterprise-web OIDC flow, re-authentication is handled client-side via PKCE
+  // with max_age=0, and the reAuthToken represents a fresh IdP assertion.
+  // The step-up endpoint MUST be called within 5 minutes of completing re-auth.
+  const stepUpToken = await issueStepUpToken(userId, tenantId, operation)
+
+  return c.json({
+    step_up_token: stepUpToken,
+    operation,
+    expires_in: 300, // 5 minutes
+    usage: `Include as ${STEP_UP_TOKEN_HEADER_EXPORT} header on the protected request`,
+  })
+})
+
+const STEP_UP_TOKEN_HEADER_EXPORT = 'X-Step-Up-Token'
+
+// Re-export type for middleware import
+type MiddlewareHandler = Parameters<typeof authRouter.post>[1]

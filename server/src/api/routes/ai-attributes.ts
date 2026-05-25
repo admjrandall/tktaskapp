@@ -12,6 +12,7 @@ import type { HonoEnv } from '../../hono-types.js'
 import { safeParseV } from '../../schemas/index.js'
 import { sql } from 'drizzle-orm'
 import { evaluateAiGatewayRequest } from '../../ai-gateway/policy-engine.js'
+import { callLlm, LlmUnconfiguredError } from '../../ai-gateway/llm-client.js'
 
 export const aiAttributesRouter = new Hono<HonoEnv>()
 
@@ -148,13 +149,44 @@ aiAttributesRouter.post(
       }
 
       const t0 = Date.now()
-      // Actual AI call would go through the AI gateway service here.
-      // Placeholder: return empty result — real implementation wires to server-side LLM client.
-      const computedValue = '[server-side compute not yet wired]'
+      const sanitisedMessage = gatewayDecision.sanitisedMessage ?? prompt
+      let computedValue: string
+      let inputTokens = 0
+      let outputTokens = 0
+      let resolvedProvider = modelId
+      try {
+        const llmResp = await callLlm({
+          model: modelId,
+          systemPrompt: _stringField(def, 'system_prompt', '') || undefined,
+          userMessage: sanitisedMessage,
+          maxTokens: 512,
+          temperature: 0,
+        })
+        computedValue = llmResp.content
+        inputTokens = llmResp.inputTokens
+        outputTokens = llmResp.outputTokens
+        resolvedProvider = llmResp.provider
+      } catch (err) {
+        if (err instanceof LlmUnconfiguredError) {
+          return c.json(
+            { error: 'No AI provider configured on this server', code: 'AI_UNCONFIGURED' },
+            501,
+          )
+        }
+        throw err
+      }
       const durationMs = Date.now() - t0
 
       // Persist computed value
       const computedAt = new Date().toISOString()
+      const provenance = {
+        provider: resolvedProvider,
+        model: modelId,
+        inputTokens,
+        outputTokens,
+        computeDurationMs: durationMs,
+        computedAt,
+      }
       await withTenant(tenantId, async (tx) => {
         await tx.execute(sql`
         INSERT INTO ai_attribute_values
@@ -163,7 +195,7 @@ aiAttributesRouter.post(
           ${defId}::uuid, ${recordId}::uuid, ${tenantId}::uuid,
           ${_stringField(def, 'entity_type', store)},
           ${computedValue},
-          ${JSON.stringify({ provider: modelId, computeDurationMs: durationMs, computedAt })}::jsonb,
+          ${JSON.stringify(provenance)}::jsonb,
           ${computedAt}::timestamptz
         )
         ON CONFLICT (def_id, record_id, org_id) DO UPDATE
@@ -180,13 +212,19 @@ aiAttributesRouter.post(
         eventType: 'ai_attribute_computed',
         resourceType: 'ai_attribute_definition',
         resourceId: defId,
-        details: { recordId, store, durationMs: String(durationMs) },
+        details: {
+          recordId,
+          store,
+          durationMs: String(durationMs),
+          inputTokens: String(inputTokens),
+          outputTokens: String(outputTokens),
+        },
       })
 
       return c.json(
         {
           value: computedValue,
-          provenance: { provider: modelId, computeDurationMs: durationMs, computedAt },
+          provenance,
           cached: false,
         },
         200,

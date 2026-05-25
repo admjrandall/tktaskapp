@@ -1,10 +1,10 @@
 import type { BuildProfile } from './types.js'
 
-// Stub — Capacitor implementation required before this profile is production-capable.
-// See apps/mobile/README.md for what must exist first.
+// Mobile offline delivery — Capacitor WebView wrapping the enterprise-web build.
+// See apps/mobile/ for iOS/Android packaging configuration.
 export const MOBILE_OFFLINE_PROFILE = {
   id: 'mobile-offline',
-  displayName: 'Mobile Offline (Capacitor — stub)',
+  displayName: 'Mobile Offline (Capacitor)',
   allowExternalNetwork: false,
   allowCloudAI: false,
   allowOllama: false,

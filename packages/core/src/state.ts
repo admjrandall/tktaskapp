@@ -22,7 +22,6 @@ export type PersonaId =
   | 'investigator'
   | 'builder'
   | 'inspector'
-  // Phase 5 — OT/ICS vertical pack
   | 'operator'
   | 'field-engineer'
 
@@ -65,11 +64,9 @@ export interface AppState {
   conversations: Record<string, unknown>[]
   activeConversationId: string | null
 
-  // Phase 1: deals + pipelines
   deals: Record<string, unknown>[]
   pipelines: Record<string, unknown>[]
 
-  // Workspace / persona state (Phase 1)
   currentPersona: PersonaId | null
   workspaceLayout: Record<string, CanvasBlock>
   aiAttributeValues: Record<string, unknown>[]

@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto'
 import type { Context, Next } from 'hono'
 import { validateEntraIdToken } from './oidc.js'
+import { getAuthStateStore } from './state-store.js'
 import { db } from '../db/index.js'
 import { tenantUsers } from '../db/schema/users.js'
 import { eq, and, isNull } from 'drizzle-orm'
@@ -11,6 +13,23 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   }
 
   const token = authHeader.slice(7)
+
+  // ── Revocation check — must run before JWT validation ────────────────────────
+  // An explicitly revoked token must be rejected even if the JWT signature is valid.
+  const tokenHash = createHash('sha256').update(token, 'utf8').digest('base64url')
+  try {
+    const store = await getAuthStateStore()
+    const revoked = await store.isAccessTokenRevoked(tokenHash)
+    if (revoked) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+  } catch {
+    // Revocation store unavailable — deny in production; warn and continue in dev.
+    if (process.env['NODE_ENV'] === 'production') {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+  }
+
   try {
     const claims = await validateEntraIdToken(token)
 
@@ -39,6 +58,8 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
     c.set('role', user.role)
     c.set('externalId', claims.externalId)
     c.set('email', claims.email)
+    // Expose token hash so step-up middleware can revoke it on challenge failure
+    c.set('tokenHash', tokenHash)
 
     await next()
   } catch {

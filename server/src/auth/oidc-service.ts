@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type {
   OidcService,
@@ -6,6 +7,7 @@ import type {
   AuthorizationUrlResult,
   TokenClaims,
 } from './oidc.js'
+import { getAuthStateStore } from './state-store.js'
 
 export class OidcServiceImpl implements OidcService {
   async buildAuthorizationUrl(config: OidcConfig, state: string): Promise<AuthorizationUrlResult> {
@@ -105,24 +107,53 @@ export class OidcServiceImpl implements OidcService {
     return _postTokenEndpoint(tenantId, body)
   }
 
-  async revokeToken(token: string, config: OidcConfig): Promise<void> {
-    const tenantId = process.env['ENTRA_TENANT_ID'] ?? 'common'
-    const clientSecret = process.env['ENTRA_CLIENT_SECRET'] ?? ''
+  async revokeToken(
+    token: string,
+    config: OidcConfig,
+    opts: { userId?: string; reason?: string } = {},
+  ): Promise<void> {
+    // ── Step 1: Add to local access-token blocklist ───────────────────────────
+    // This is the reliable revocation path. The IdP call below is best-effort.
+    const payload = _decodePayloadUnsafe(token)
+    const exp = typeof payload['exp'] === 'number' ? payload['exp'] : 0
+    const ttl = Math.max(60, exp - Math.floor(Date.now() / 1000))
+    const tokenHash = createHash('sha256').update(token, 'utf8').digest('base64url')
 
-    const body = new URLSearchParams({
-      token,
-      client_id: config.clientId,
-      client_secret: clientSecret,
-    })
+    try {
+      const store = await getAuthStateStore()
+      await store.revokeAccessToken(tokenHash, ttl, opts.userId, opts.reason ?? 'logout')
+    } catch (err) {
+      // Local revocation failure must surface — this is not best-effort
+      throw new Error(`Failed to write token to revocation store: ${String(err)}`)
+    }
 
-    const resp = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/logout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    })
-    // Revocation endpoint returns 200 even on unknown tokens per RFC 7009
-    if (!resp.ok && resp.status !== 400) {
-      throw new Error(`Token revocation failed: ${resp.status}`)
+    // ── Step 2: Best-effort IdP notification ─────────────────────────────────
+    // Microsoft Entra ID v2.0 does not expose a standard RFC 7009 /revoke endpoint
+    // for individual access tokens. For refresh-token revocation, the correct endpoint
+    // is POST /oauth2/v2.0/token with token_type_hint=refresh_token.
+    // For full session revocation, use Microsoft Graph: POST /users/{id}/revokeSignInSessions.
+    // Either way, our local blocklist (Step 1) is the enforcement mechanism.
+    const isLikelyRefreshToken =
+      typeof payload['oid'] === 'undefined' && typeof payload['exp'] !== 'undefined'
+    if (isLikelyRefreshToken && config.clientId) {
+      const tenantId = process.env['ENTRA_TENANT_ID'] ?? 'common'
+      const body = new URLSearchParams({
+        token,
+        token_type_hint: 'refresh_token',
+        client_id: config.clientId,
+        client_secret: process.env['ENTRA_CLIENT_SECRET'] ?? '',
+      })
+      // Per RFC 7009 §2.2, the server MUST respond 200 even for unrecognised tokens.
+      // Non-200 is a server fault, but we treat it as non-fatal since Step 1 succeeded.
+      try {
+        await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/revoke`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body,
+        })
+      } catch {
+        // IdP unreachable — local revocation in Step 1 still enforces the block
+      }
     }
   }
 }

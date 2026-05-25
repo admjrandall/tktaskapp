@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto'
+import { db } from '../db/index.js'
+import { revokedAccessTokens } from '../db/schema/revoked-tokens.js'
+import { lt } from 'drizzle-orm'
 
 interface AuthStateRedisClient {
   get: (key: string) => Promise<string | null>
@@ -17,10 +20,20 @@ export interface AuthStateStore {
   consumePkceState(state: string): Promise<PkceStateRecord | null>
   rememberRefreshTokenUse(token: string, ttlSeconds: number): Promise<boolean>
   revokeRefreshToken(token: string, ttlSeconds: number): Promise<void>
+  /** Add an access token hash to the revocation blocklist. TTL = remaining token lifetime. */
+  revokeAccessToken(
+    tokenHash: string,
+    ttlSeconds: number,
+    userId?: string,
+    reason?: string,
+  ): Promise<void>
+  /** Returns true if the access token hash is on the revocation blocklist. */
+  isAccessTokenRevoked(tokenHash: string): Promise<boolean>
 }
 
 const _memoryPkce = new Map<string, PkceStateRecord>()
 const _memoryRefresh = new Map<string, number>()
+const _memoryRevoked = new Map<string, number>()
 let _redis: AuthStateRedisClient | null = null
 
 function _redisUrl(): string {
@@ -58,6 +71,9 @@ function _cleanExpiredMemory(): void {
   for (const [key, expiresAt] of _memoryRefresh) {
     if (expiresAt <= now) _memoryRefresh.delete(key)
   }
+  for (const [key, expiresAt] of _memoryRevoked) {
+    if (expiresAt <= now) _memoryRevoked.delete(key)
+  }
 }
 
 class RedisAuthStateStore implements AuthStateStore {
@@ -91,6 +107,36 @@ class RedisAuthStateStore implements AuthStateStore {
   async revokeRefreshToken(token: string, ttlSeconds: number): Promise<void> {
     await this.redis.set(`refresh-used:${_hashToken(token)}`, 'revoked', 'EX', ttlSeconds)
   }
+
+  async revokeAccessToken(
+    tokenHash: string,
+    ttlSeconds: number,
+    userId?: string,
+    reason = 'logout',
+  ): Promise<void> {
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000)
+    // Write to Redis for fast hot-path checks
+    await this.redis.set(`revoked-access:${tokenHash}`, '1', 'EX', ttlSeconds)
+    // Write to DB for durable audit trail (best-effort; Redis is authoritative for checks)
+    try {
+      await db
+        .insert(revokedAccessTokens)
+        .values({
+          tokenHash,
+          expiresAt,
+          reason,
+          ...(userId ? { userId } : {}),
+        })
+        .onConflictDoNothing()
+    } catch {
+      // DB write failure does not block revocation — Redis entry is sufficient
+    }
+  }
+
+  async isAccessTokenRevoked(tokenHash: string): Promise<boolean> {
+    const val = await this.redis.get(`revoked-access:${tokenHash}`)
+    return val !== null
+  }
 }
 
 class MemoryAuthStateStore implements AuthStateStore {
@@ -120,6 +166,35 @@ class MemoryAuthStateStore implements AuthStateStore {
     _memoryRefresh.set(_hashToken(token), Date.now() + ttlSeconds * 1000)
     return Promise.resolve()
   }
+
+  async revokeAccessToken(
+    tokenHash: string,
+    ttlSeconds: number,
+    userId?: string,
+    reason = 'logout',
+  ): Promise<void> {
+    const expiresAt = Date.now() + ttlSeconds * 1000
+    _memoryRevoked.set(tokenHash, expiresAt)
+    // Best-effort DB audit trail even in memory mode
+    try {
+      await db
+        .insert(revokedAccessTokens)
+        .values({
+          tokenHash,
+          expiresAt: new Date(expiresAt),
+          reason,
+          ...(userId ? { userId } : {}),
+        })
+        .onConflictDoNothing()
+    } catch {
+      // DB unavailable in test environments — in-memory is sufficient
+    }
+  }
+
+  isAccessTokenRevoked(tokenHash: string): Promise<boolean> {
+    _cleanExpiredMemory()
+    return Promise.resolve(_memoryRevoked.has(tokenHash))
+  }
 }
 
 export async function getAuthStateStore(): Promise<AuthStateStore> {
@@ -129,4 +204,22 @@ export async function getAuthStateStore(): Promise<AuthStateStore> {
     throw new Error('AUTH_STATE_REDIS_URL is required for production auth state')
   }
   return new MemoryAuthStateStore()
+}
+
+/**
+ * Delete expired rows from revoked_access_tokens.
+ * Call periodically (e.g. at server startup and on a slow background interval).
+ * Safe to call concurrently — DELETE WHERE is idempotent.
+ */
+export async function pruneExpiredRevocations(): Promise<void> {
+  try {
+    await db.delete(revokedAccessTokens).where(lt(revokedAccessTokens.expiresAt, new Date()))
+  } catch {
+    // Non-fatal — pruning is a maintenance operation, not a correctness gate
+  }
+}
+
+/** Hash a raw access token for storage/lookup. Returns base64url-encoded SHA-256. */
+export function hashAccessToken(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('base64url')
 }

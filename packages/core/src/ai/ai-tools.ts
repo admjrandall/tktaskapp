@@ -241,6 +241,7 @@ export async function routeToolCall(tc: AnyRecord, ctx: string): Promise<void> {
   const tool = String(tc['tool'])
   const args = (tc['args'] || {}) as AnyRecord
   if (!AI_TOOLS[tool]) {
+    auditLog('ai_tool_unknown', { tool })
     aiRuntime.history.push({
       role: 'assistant',
       content: `(Unknown tool "${tool}". I'll answer in plain text instead.)`,

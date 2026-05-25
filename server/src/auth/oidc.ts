@@ -1,5 +1,4 @@
-// OIDC/PKCE authentication server — interface stub.
-// TODO: Implement when server-side identity infrastructure is ready.
+// OIDC/PKCE authentication server — interface and Entra ID implementation.
 //
 // Section 11.1 — Identity: OIDC with PKCE mandatory
 //
@@ -117,13 +116,9 @@ export interface OidcService {
   revokeToken(token: string, config: OidcConfig): Promise<void>
 }
 
-// TODO: implement OidcServiceImpl implements OidcService
-//   - Use a well-audited OIDC client library (e.g. openid-client)
-//   - Persist revocation list in server DB with TTL equal to token lifetime
-//   - server/src/auth/dpop.ts — RFC 9449 DPoP token binding (near-term)
-//   - server/src/auth/saml.ts — SAML 2.0 SP-initiated (only if buyer requires; prefer OIDC)
-//   - server/src/auth/scim.ts — SCIM 2.0 provisioning/deprovisioning
-//   - server/src/auth/step-up.ts — re-authentication gate for high-risk operations
+// OidcServiceImpl is in server/src/auth/oidc-service.ts.
+// Step-up re-authentication gate is in server/src/auth/step-up.ts.
+// Future: server/src/auth/dpop.ts — RFC 9449 DPoP token binding (high-assurance customers)
 
 // ── Entra ID token validation ─────────────────────────────────────────────────
 

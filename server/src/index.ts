@@ -49,6 +49,7 @@ import { adminRouter } from './api/routes/admin.js'
 import { syncRouter } from './api/routes/sync.js'
 import { closeDb } from './db/index.js'
 import { startDestructionScheduler, stopDestructionScheduler } from './kms/destruction-scheduler.js'
+import { pruneExpiredRevocations } from './auth/state-store.js'
 import { otel } from './observability/otel.js'
 import { incrementActiveConnections, decrementActiveConnections } from './observability/metrics.js'
 
@@ -221,6 +222,10 @@ app.onError((err, c) => {
 const PORT = Number(process.env['PORT'] ?? 3000)
 
 const destructionTimer = startDestructionScheduler()
+
+// Prune expired access-token revocations at startup, then every 6 hours
+void pruneExpiredRevocations()
+setInterval(() => void pruneExpiredRevocations(), 6 * 60 * 60 * 1000)
 
 const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
   otel.log({

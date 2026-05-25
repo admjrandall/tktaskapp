@@ -1,10 +1,10 @@
 import type { BuildProfile } from './types.js'
 
-// Stub — Power Apps Code App (Dataverse adapter) not yet implemented.
-// See apps/dataverse/ for the app entry and packages/adapter-dataverse/ for the adapter stub.
+// Power Apps Code App delivery — Dataverse adapter.
+// See apps/dataverse/ for the app entry and packages/adapter-dataverse/ for the adapter.
 export const DATAVERSE_PROFILE = {
   id: 'dataverse',
-  displayName: 'Dataverse / Power Apps Code App (stub)',
+  displayName: 'Dataverse / Power Apps Code App',
   allowExternalNetwork: true,
   allowCloudAI: true,
   allowOllama: false,

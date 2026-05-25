@@ -261,7 +261,7 @@ export async function exportAuditJSON(): Promise<string> {
  * Verify the integrity of the local hash chain.
  * Returns { valid: true } if every entry's prevHash + signedDigest checks out,
  * or { valid: false, firstBrokenAt: chainPosition } on the first mismatch.
- * Entries without chain fields (written before Phase 4) are skipped.
+ * Entries without chain fields (written before hash-chaining was introduced) are skipped.
  */
 export async function verifyAuditChain(): Promise<{
   valid: boolean

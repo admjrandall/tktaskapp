@@ -34,16 +34,14 @@ export const STORES: string[] = [
   'timeEntries',
   'notifications',
   'trash',
-  // Phase 1 additions (C.1)
   'deals',
   'pipelines',
 ]
 
-// IDB-backed stores for large content — each record individually AES-GCM encrypted (C.1)
+// IDB-backed stores for large content — each record individually AES-GCM encrypted
 export const IDB_STORES: string[] = [
   'documents',
   'conversations',
-  // Phase 1 additions (C.1)
   'customFieldDefs',
   'aiAttributeDefs',
   'aiAttributeValues',

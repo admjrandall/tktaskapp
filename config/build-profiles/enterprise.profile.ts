@@ -1,12 +1,10 @@
 import type { BuildProfile } from './types.js'
 
-// Stub — enterprise architecture not yet implemented.
-// Requires: OIDC/PKCE identity, OPA/Cedar policy engine, per-user KMS keys,
-// server-side record store, OpenTelemetry instrumentation, centralized audit.
-// See ENTERPRISE-ASSESSMENT.md and docs/architecture/ for the full design.
+// Enterprise PWA delivery — Hono server, OIDC/PKCE, OPA policy engine,
+// per-user KMS keys, OpenTelemetry instrumentation, centralised audit log.
 export const ENTERPRISE_PROFILE = {
   id: 'enterprise',
-  displayName: 'Enterprise (stub — server architecture required)',
+  displayName: 'Enterprise Web PWA',
   allowExternalNetwork: true,
   allowCloudAI: true,
   allowOllama: true,

@@ -14,7 +14,6 @@ export * from './notification.schema.js'
 export * from './department.schema.js'
 export * from './conversation.schema.js'
 export * from './standalone-note.schema.js'
-// Phase 1 additions (C.1)
 export * from './deal.schema.js'
 export * from './pipeline.schema.js'
 export * from './custom-field.schema.js'

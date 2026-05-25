@@ -1,5 +1,5 @@
 // ── TOPBAR ────────────────────────────────────────────────────────────────────
-// Rebuilt for Phase 1: search centerpiece, AI button, persona avatar, lockdown banner.
+// Search centerpiece, AI button, persona avatar, lockdown banner.
 // Export API is stable — hooks-wiring.ts and render-pipeline.ts depend on it.
 
 import { Icons } from '../ui/icons.js'

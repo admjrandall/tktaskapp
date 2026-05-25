@@ -1,5 +1,4 @@
-// OpenTelemetry instrumentation — interface stub.
-// TODO: Implement when server/ is being built out.
+// OpenTelemetry instrumentation.
 //
 // Section 11.4 — Observability: OpenTelemetry from day one
 //
@@ -32,7 +31,7 @@
 // Vendor-neutral deployment:
 //   Emit to OTel Collector. Collector routes to Datadog / Grafana / Honeycomb /
 //   Dynatrace / Splunk depending on the deployment environment.
-//   See: infra/k8s/deployment.yaml for the collector sidecar (Phase 14).
+//   See: infra/k8s/deployment.yaml for the collector sidecar configuration.
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type DeploymentEnvironment = 'development' | 'staging' | 'production'
