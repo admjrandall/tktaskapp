@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import {
-  DataverseAdapter,
-  DataverseNotImplementedError,
-} from '../../packages/adapter-dataverse/src/index.js'
+import { DataverseAdapter } from '../../packages/adapter-dataverse/src/index.js'
 import { runAdapterContractSuite } from './adapter-contract.js'
 
 // ── Fetch mock ────────────────────────────────────────────────────────────────
@@ -69,24 +66,6 @@ describe('DataverseAdapter constructor', () => {
       () =>
         new DataverseAdapter({ environmentUrl: '', getAccessToken: () => 'tok', entityMap: {} }),
     ).not.toThrow()
-  })
-})
-
-// ── DataverseNotImplementedError ──────────────────────────────────────────────
-
-describe('DataverseNotImplementedError', () => {
-  it('has name "DataverseNotImplementedError"', () => {
-    expect(new DataverseNotImplementedError('pull').name).toBe('DataverseNotImplementedError')
-  })
-
-  it('message includes the method name', () => {
-    expect(new DataverseNotImplementedError('pull').message).toContain('pull')
-    expect(new DataverseNotImplementedError('push').message).toContain('push')
-    expect(new DataverseNotImplementedError('clear').message).toContain('clear')
-  })
-
-  it('is an instance of Error', () => {
-    expect(new DataverseNotImplementedError('pull')).toBeInstanceOf(Error)
   })
 })
 

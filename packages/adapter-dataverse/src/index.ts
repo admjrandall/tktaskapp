@@ -194,13 +194,3 @@ export class DataverseAdapter extends SyncAdapter {
     }
   }
 }
-
-export class DataverseNotImplementedError extends Error {
-  constructor(method: string) {
-    super(
-      `DataverseAdapter.${method}() is not yet implemented. ` +
-        'See packages/adapter-dataverse/src/index.ts for the implementation plan.',
-    )
-    this.name = 'DataverseNotImplementedError'
-  }
-}
