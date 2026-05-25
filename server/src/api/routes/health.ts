@@ -40,7 +40,7 @@ function _withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 async function _checkKmsHealth(): Promise<boolean> {
-  const vaultUrl = process.env['AZURE_KEY_VAULT_URL']
+  const vaultUrl = process.env['AZURE_KV_URL'] ?? process.env['AZURE_KEY_VAULT_URL']
   if (!vaultUrl) return false
   try {
     const credential = new DefaultAzureCredential()

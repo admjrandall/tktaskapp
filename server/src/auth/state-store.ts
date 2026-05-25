@@ -15,6 +15,13 @@ export interface PkceStateRecord {
   expiresAt: number
   /** RFC 9700 §2.3.1 — nonce bound to this PKCE flow to prevent ID token replay. */
   nonce: string
+  stepUp?: {
+    operation: string
+    userId: string
+    tenantId: string
+    externalId: string
+    postMessageOrigin: string
+  }
 }
 
 export interface AuthStateStore {
@@ -31,11 +38,23 @@ export interface AuthStateStore {
   ): Promise<void>
   /** Returns true if the access token hash is on the revocation blocklist. */
   isAccessTokenRevoked(tokenHash: string): Promise<boolean>
+  saveStreamTicket(ticket: string, record: StreamTicketRecord, ttlSeconds: number): Promise<void>
+  consumeStreamTicket(ticket: string): Promise<StreamTicketRecord | null>
+}
+
+export interface StreamTicketRecord {
+  userId: string
+  tenantId: string
+  role: string
+  externalId: string
+  email: string
+  expiresAt: number
 }
 
 const _memoryPkce = new Map<string, PkceStateRecord>()
 const _memoryRefresh = new Map<string, number>()
 const _memoryRevoked = new Map<string, number>()
+const _memoryStreamTickets = new Map<string, StreamTicketRecord>()
 let _redis: AuthStateRedisClient | null = null
 
 function _redisUrl(): string {
@@ -75,6 +94,9 @@ function _cleanExpiredMemory(): void {
   }
   for (const [key, expiresAt] of _memoryRevoked) {
     if (expiresAt <= now) _memoryRevoked.delete(key)
+  }
+  for (const [key, record] of _memoryStreamTickets) {
+    if (record.expiresAt <= now) _memoryStreamTickets.delete(key)
   }
 }
 
@@ -139,6 +161,24 @@ class RedisAuthStateStore implements AuthStateStore {
     const val = await this.redis.get(`revoked-access:${tokenHash}`)
     return val !== null
   }
+
+  async saveStreamTicket(
+    ticket: string,
+    record: StreamTicketRecord,
+    ttlSeconds: number,
+  ): Promise<void> {
+    await this.redis.set(`stream-ticket:${ticket}`, JSON.stringify(record), 'EX', ttlSeconds, 'NX')
+  }
+
+  async consumeStreamTicket(ticket: string): Promise<StreamTicketRecord | null> {
+    const key = `stream-ticket:${ticket}`
+    const raw = await this.redis.get(key)
+    if (!raw) return null
+    await this.redis.del(key)
+    const record = JSON.parse(raw) as StreamTicketRecord
+    if (record.expiresAt <= Date.now()) return null
+    return record
+  }
 }
 
 class MemoryAuthStateStore implements AuthStateStore {
@@ -196,6 +236,20 @@ class MemoryAuthStateStore implements AuthStateStore {
   isAccessTokenRevoked(tokenHash: string): Promise<boolean> {
     _cleanExpiredMemory()
     return Promise.resolve(_memoryRevoked.has(tokenHash))
+  }
+
+  saveStreamTicket(ticket: string, record: StreamTicketRecord): Promise<void> {
+    _cleanExpiredMemory()
+    _memoryStreamTickets.set(ticket, record)
+    return Promise.resolve()
+  }
+
+  consumeStreamTicket(ticket: string): Promise<StreamTicketRecord | null> {
+    _cleanExpiredMemory()
+    const record = _memoryStreamTickets.get(ticket) ?? null
+    _memoryStreamTickets.delete(ticket)
+    if (!record || record.expiresAt <= Date.now()) return Promise.resolve(null)
+    return Promise.resolve(record)
   }
 }
 

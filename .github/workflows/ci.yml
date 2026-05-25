@@ -35,17 +35,22 @@ jobs:
       - name: Test
         run: pnpm run test
 
+      - name: Validate committed SQL migrations
+        run: pnpm run validate:migrations
+
       - name: Build offline (browser-ai profile)
         run: pnpm run build:offline
+
+      - name: Build offline (no-ai profile)
+        run: pnpm run build:offline:no-ai
+
+      - name: Build offline (internal-ai profile)
+        run: pnpm run build:offline:internal-ai
 
       - name: Assert — no forbidden strings in offline bundle
         run: pnpm run assert:offline-bundle
 
       - name: Assert — bundle size budgets
-        # NOTE: currently over budget (365 KB raw vs 320 KB budget).
-        # This step is non-blocking until Phase 13 bundle optimisation is complete.
-        # Remove continue-on-error once the budget is met.
-        continue-on-error: true
         run: pnpm run assert:bundle-size
 
       - name: Upload offline build artifact

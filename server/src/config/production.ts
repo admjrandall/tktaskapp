@@ -6,7 +6,7 @@ const REQUIRED_PRODUCTION_ENV = [
   'ALLOW_ORIGINS',
   'AUTH_STATE_REDIS_URL',
   'AI_GATEWAY_REDIS_URL',
-  'AZURE_KEY_VAULT_URL',
+  'AZURE_KV_URL',
 ] as const
 
 export function validateProductionConfig(): void {
@@ -20,6 +20,11 @@ export function validateProductionConfig(): void {
   const origins = process.env['ALLOW_ORIGINS'] ?? ''
   if (origins.includes('*')) {
     throw new Error('ALLOW_ORIGINS must not contain wildcards in production')
+  }
+
+  const cspConnectSrc = process.env['ENTERPRISE_CSP_CONNECT_SRC'] ?? ''
+  if (cspConnectSrc.includes('*')) {
+    throw new Error('ENTERPRISE_CSP_CONNECT_SRC must not contain wildcards in production')
   }
 
   const redirect = process.env['OIDC_REDIRECT_URI'] ?? ''

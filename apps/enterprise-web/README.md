@@ -68,7 +68,9 @@ Cache policy enforced by the server:
 - `/index.html` — `Cache-Control: no-cache, no-store, must-revalidate`
 - `/sw.js` — `Cache-Control: no-cache, no-store, must-revalidate` + `Service-Worker-Allowed: /`
 
-TLS termination should be handled by the reverse proxy (Nginx, Caddy, Azure App Gateway, Cloudflare, etc.) — not by the Node server directly. HSTS should be set by the reverse proxy.
+TLS termination should be handled by the reverse proxy (Nginx, Caddy, Azure App Gateway, Cloudflare, etc.) — not by the Node server directly. The Node server sets enterprise security headers for served pages, including CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, and HSTS outside development. Keep any reverse-proxy headers at least as strict.
+
+Set `ENTERPRISE_CSP_CONNECT_SRC` to explicitly enumerate approved private AI or internal gateway origins. Wildcards are rejected in production.
 
 ---
 

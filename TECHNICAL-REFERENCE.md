@@ -396,6 +396,7 @@ All documented in `server/.env.example`:
 cd server
 cp .env.example .env          # fill in credentials
 pnpm install
+pnpm db:validate              # verify committed SQL migration integrity
 pnpm db:migrate               # apply all migrations
 pnpm db:seed                  # optional: dev seed data
 pnpm dev                      # tsx watch
@@ -416,12 +417,17 @@ cd server && pnpm db:migrate
 
 Drizzle applies only unapplied migrations from `server/drizzle/`. The migration history is tracked in the `__drizzle_migrations` table.
 
+Production migrations are committed SQL artifacts. The repository does not install
+`drizzle-kit` or run migration generation in CI because production deployment must
+consume deterministic, reviewed SQL. Schema changes must update `server/drizzle/*.sql`
+and `server/drizzle/meta/_journal.json`, then pass `pnpm run validate:migrations`.
+
 ### Adding a new CRM entity
 
 1. Create `server/src/db/schema/<entity>.ts` — Drizzle table definition with `tenantId`, `deletedAt`
 2. Export from `server/src/db/schema/index.ts`
-3. Generate migration: `pnpm db:generate`
-4. Edit generated SQL to add `ENABLE ROW LEVEL SECURITY` and `CREATE POLICY tenant_isolation`
+3. Add a new ordered SQL migration in `server/drizzle/` and journal entry in `server/drizzle/meta/_journal.json`
+4. Include `ENABLE ROW LEVEL SECURITY`, `FORCE ROW LEVEL SECURITY`, tenant policies, indexes, and rollback notes in the migration review
 5. Create `server/src/services/<entity>.service.ts` with `list`, `getById`, `create`, `update`, `delete`
 6. Create `server/src/api/routes/<entity>.ts` Hono router; add `opaMiddleware(action)` per route
 7. Mount router in `server/src/index.ts`: `app.route('/api/v1/<entity>', <entity>Router)`

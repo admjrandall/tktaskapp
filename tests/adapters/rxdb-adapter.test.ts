@@ -56,6 +56,8 @@ function makeFetch(opts: FetchMockOpts = {}) {
       body = { documents: opts.pullDocuments ?? [], checkpoint: opts.pullCheckpoint ?? null }
     } else if (u.includes('/api/v1/sync/push')) {
       body = { conflicts: opts.pushConflicts ?? [] }
+    } else if (u.includes('/api/v1/sync/stream-ticket')) {
+      body = { ticket: 'stream-ticket-1', expiresAt: Date.now() + 60_000 }
     } else {
       body = {}
     }
@@ -226,16 +228,33 @@ describe('RxDBAdapter push()', () => {
 // ── stream() ─────────────────────────────────────────────────────────────────
 
 describe('RxDBAdapter stream()', () => {
-  it('opens an EventSource to /api/v1/sync/stream', () => {
+  it('opens an EventSource to /api/v1/sync/stream', async () => {
     const adapter = new RxDBAdapter(config)
     adapter.stream(() => {})
+    await Promise.resolve()
     expect(lastEs?.url).toBe(`${BASE_URL}/api/v1/sync/stream`)
   })
 
-  it('calls onRemoteChange with per-store records when a sync event arrives', () => {
+  it('uses an opaque stream ticket instead of putting a bearer token in the URL', async () => {
+    const adapter = new RxDBAdapter({ serverUrl: BASE_URL, authHeader: 'Bearer access-token' })
+    adapter.stream(() => {})
+    await vi.waitFor(() => expect(lastEs).not.toBeNull())
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE_URL}/api/v1/sync/stream-ticket`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ Authorization: 'Bearer access-token' }),
+      }),
+    )
+    expect(lastEs?.url).toBe(`${BASE_URL}/api/v1/sync/stream?ticket=stream-ticket-1`)
+    expect(lastEs?.url).not.toContain('access-token')
+  })
+
+  it('calls onRemoteChange with per-store records when a sync event arrives', async () => {
     const onRemoteChange = vi.fn()
     const adapter = new RxDBAdapter(config)
     adapter.stream(onRemoteChange)
+    await Promise.resolve()
     const now = new Date().toISOString()
     lastEs!.emit(
       'sync',
@@ -253,18 +272,20 @@ describe('RxDBAdapter stream()', () => {
     expect((arg['tasks']![0] as Record<string, unknown>)['title']).toBe('Test')
   })
 
-  it('ignores malformed JSON events without throwing', () => {
+  it('ignores malformed JSON events without throwing', async () => {
     const onRemoteChange = vi.fn()
     const adapter = new RxDBAdapter(config)
     adapter.stream(onRemoteChange)
+    await Promise.resolve()
 
     expect(() => lastEs!.emit('sync', '{not valid json')).not.toThrow()
     expect(onRemoteChange).not.toHaveBeenCalled()
   })
 
-  it('closes the EventSource when the returned unsubscribe function is called', () => {
+  it('closes the EventSource when the returned unsubscribe function is called', async () => {
     const adapter = new RxDBAdapter(config)
     const unsub = adapter.stream(() => {})
+    await Promise.resolve()
     unsub()
     expect(lastEs!.close).toHaveBeenCalledOnce()
   })

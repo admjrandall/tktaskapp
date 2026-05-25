@@ -575,21 +575,60 @@ export async function requestStepUpToken(operation: string): Promise<string> {
   if (!_serverUrl || !_getAccessToken) {
     throw new Error('Step-up hooks not configured — enterprise server required')
   }
+  const serverUrl = _serverUrl
   const accessToken = _getAccessToken()
   if (!accessToken) throw new Error('No access token — please log in')
 
-  const resp = await fetch(`${_serverUrl}/auth/step-up`, {
+  const popup = window.open('about:blank', 'taskapp-step-up', 'width=520,height=720')
+  if (!popup) throw new Error('Step-up popup was blocked')
+
+  const resp = await fetch(`${_serverUrl}/auth/step-up/start`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ operation }),
+    body: JSON.stringify({ operation, postMessageOrigin: window.location.origin }),
   })
-  if (!resp.ok) throw new Error(`Step-up request failed: ${resp.status}`)
-  const data = (await resp.json()) as { step_up_token?: string }
-  if (!data.step_up_token) throw new Error('Server did not return a step-up token')
-  return data.step_up_token
+  if (!resp.ok) {
+    popup.close()
+    throw new Error(`Step-up request failed: ${resp.status}`)
+  }
+  const data = (await resp.json()) as { authorization_url?: string }
+  const authorizationUrl = data.authorization_url
+  if (!authorizationUrl) {
+    popup.close()
+    throw new Error('Server did not return a step-up authorization URL')
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const timeout = window.setTimeout(
+      () => {
+        cleanup()
+        popup.close()
+        reject(new Error('Step-up authentication timed out'))
+      },
+      5 * 60 * 1000,
+    )
+
+    const cleanup = () => {
+      window.clearTimeout(timeout)
+      window.removeEventListener('message', onMessage)
+    }
+
+    const onMessage = (event: MessageEvent) => {
+      const serverOrigin = new URL(serverUrl).origin
+      if (event.origin !== serverOrigin) return
+      const payload = event.data as { type?: unknown; token?: unknown }
+      if (payload.type !== 'tk-step-up-token' || typeof payload.token !== 'string') return
+      cleanup()
+      popup.close()
+      resolve(payload.token)
+    }
+
+    window.addEventListener('message', onMessage)
+    popup.location.href = authorizationUrl
+  })
 }
 
 /**

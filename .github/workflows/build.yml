@@ -31,8 +31,14 @@ jobs:
       - name: Build offline
         run: pnpm run build:offline
 
-      - name: Build pwa-sync
-        run: pnpm run build:sync
+      - name: Build offline no-ai
+        run: pnpm run build:offline:no-ai
+
+      - name: Build offline internal-ai
+        run: pnpm run build:offline:internal-ai
+
+      - name: Build enterprise
+        run: pnpm run build:enterprise
 
       - name: Build dataverse
         run: pnpm run build:dataverse
@@ -44,11 +50,25 @@ jobs:
           path: dist/offline/index.html
           retention-days: 30
 
-      - name: Upload sync build
+      - name: Upload offline no-ai build
         uses: actions/upload-artifact@v4
         with:
-          name: dist-sync
-          path: dist/sync/
+          name: dist-offline-no-ai
+          path: dist/offline-no-ai/index.html
+          retention-days: 30
+
+      - name: Upload offline internal-ai build
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-offline-internal-ai
+          path: dist/offline-internal-ai/index.html
+          retention-days: 30
+
+      - name: Upload enterprise build
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-enterprise
+          path: dist/enterprise/
           retention-days: 30
 
       - name: Upload dataverse build

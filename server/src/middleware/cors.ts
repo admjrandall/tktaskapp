@@ -56,7 +56,7 @@ export function corsPreflight(requestOrigin: string): Record<string, string> {
   return {
     ...corsHeaders(requestOrigin),
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Request-ID',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Request-ID, X-Step-Up-Token',
     'Access-Control-Max-Age': '86400',
   }
 }

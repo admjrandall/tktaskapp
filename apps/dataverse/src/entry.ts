@@ -47,10 +47,8 @@ const entityMap: Record<string, string> = {
   files: 'tktaskapp_files',
   tags: 'tktaskapp_tags',
   notifications: 'tktaskapp_notifications',
-  // Phase 1 additions (C.1)
   deals: 'tktaskapp_deals',
   pipelines: 'tktaskapp_pipelines',
-  // Phase 5 additions (C.1 IDB stores provisioned in Dataverse)
   customFieldDefs: 'tktaskapp_customfielddefs',
   aiAttributeDefs: 'tktaskapp_aiattributedefs',
   aiAttributeValues: 'tktaskapp_aiattributevalues',

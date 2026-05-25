@@ -6,8 +6,10 @@
 // All endpoints: withTenant() + writeAuditEvent(). Never expose raw errors.
 
 import { Hono } from 'hono'
+import { randomBytes } from 'node:crypto'
 import { streamSSE } from 'hono/streaming'
 import * as v from 'valibot'
+import { getAuthStateStore } from '../../auth/state-store.js'
 import { withTenant, writeAuditEvent } from '../../services/base.js'
 import { opaMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
@@ -16,6 +18,8 @@ import { safeParseV } from '../../schemas/index.js'
 import { sql } from 'drizzle-orm'
 
 export const syncRouter = new Hono<HonoEnv>()
+
+const STREAM_TICKET_TTL_SECONDS = 60
 
 // ── Wire document shape (C.3) ─────────────────────────────────────────────────
 interface DocWithRev {
@@ -40,6 +44,29 @@ const PushRowSchema = v.object({
 
 const PushSchema = v.object({
   changeRows: v.array(PushRowSchema),
+})
+
+// ── POST /stream-ticket ──────────────────────────────────────────────────────
+syncRouter.post('/stream-ticket', opaMiddleware('sync:stream'), async (c) => {
+  const ticket = randomBytes(32).toString('base64url')
+  const expiresAt = Date.now() + STREAM_TICKET_TTL_SECONDS * 1000
+  const store = await getAuthStateStore()
+
+  await store.saveStreamTicket(
+    ticket,
+    {
+      userId: c.get('userId'),
+      tenantId: c.get('tenantId'),
+      role: c.get('role'),
+      externalId: c.get('externalId'),
+      email: c.get('email'),
+      expiresAt,
+    },
+    STREAM_TICKET_TTL_SECONDS,
+  )
+
+  c.header('Cache-Control', 'no-store')
+  return c.json({ ticket, expiresAt }, 201)
 })
 
 // ── Revision generation ───────────────────────────────────────────────────────
@@ -193,7 +220,7 @@ syncRouter.post('/push', opaMiddleware('create'), async (c) => {
 })
 
 // ── GET /stream (SSE) ─────────────────────────────────────────────────────────
-syncRouter.get('/stream', opaMiddleware('read'), (c) => {
+syncRouter.get('/stream', opaMiddleware('sync:stream'), (c) => {
   const tenantId = c.get('tenantId')
   return streamSSE(c, async (stream) => {
     // Poll every 30s and emit any documents changed since last checkpoint

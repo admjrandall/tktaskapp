@@ -99,13 +99,28 @@ export function renderConfirmDialog(d: ConfirmDialog): string {
 }
 
 export function bindConfirmDialog(d: ConfirmDialog): void {
+  const previousFocus =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
+  let removeTrap: (() => void) | null = null
+  const restoreFocus = () => {
+    if (previousFocus?.isConnected) previousFocus.focus()
+  }
+  const cleanup = () => {
+    removeTrap?.()
+    removeTrap = null
+    document.removeEventListener('keydown', handleEsc)
+  }
   const cancel = () => {
+    cleanup()
     closeConfirm()
     d?.onCancel?.()
+    restoreFocus()
   }
   const confirm = () => {
+    cleanup()
     closeConfirm()
     d?.onConfirm?.()
+    restoreFocus()
   }
   document.getElementById('confirm-ok')?.addEventListener('click', confirm)
   document.getElementById('confirm-cancel')?.addEventListener('click', cancel)
@@ -113,12 +128,11 @@ export function bindConfirmDialog(d: ConfirmDialog): void {
     if ((e.target as HTMLElement | null)?.id === 'confirm-backdrop') cancel()
   })
   const dialogEl = document.querySelector<HTMLElement>('[role="alertdialog"]')
-  if (dialogEl) trapFocus(dialogEl)
+  if (dialogEl) removeTrap = trapFocus(dialogEl)
   document.getElementById('confirm-cancel')?.focus()
   const handleEsc = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.stopImmediatePropagation()
-      document.removeEventListener('keydown', handleEsc)
       cancel()
     }
   }

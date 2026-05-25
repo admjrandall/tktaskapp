@@ -8,6 +8,29 @@ import { eq, and, isNull } from 'drizzle-orm'
 
 export async function authMiddleware(c: Context, next: Next): Promise<Response | undefined> {
   const authHeader = c.req.header('Authorization')
+  const streamTicket =
+    c.req.method === 'GET' && c.req.path === '/api/v1/sync/stream'
+      ? c.req.query('ticket')
+      : undefined
+
+  if (streamTicket) {
+    try {
+      const store = await getAuthStateStore()
+      const ticket = await store.consumeStreamTicket(streamTicket)
+      if (!ticket) return c.json({ error: 'Unauthorized' }, 401)
+      c.set('userId', ticket.userId)
+      c.set('tenantId', ticket.tenantId)
+      c.set('role', ticket.role)
+      c.set('externalId', ticket.externalId)
+      c.set('email', ticket.email)
+      c.set('tokenHash', '')
+      await next()
+      return undefined
+    } catch {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+  }
+
   if (!authHeader?.startsWith('Bearer ')) {
     return c.json({ error: 'Unauthorized' }, 401)
   }

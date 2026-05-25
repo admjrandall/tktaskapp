@@ -13,8 +13,9 @@
  *      acr_values="<required_acr>",
  *      max_age=0
  *   3. Client shows the re-auth dialog (password + MFA if enrolled).
- *   4. Client calls POST /auth/step-up with password + optional TOTP/passkey.
- *   5. Server validates, issues a short-lived step-up token (stored in Redis/memory).
+ *   4. Client calls POST /auth/step-up/start, completes a nonce-bound OIDC
+ *      prompt=login flow, and receives the token by same-origin postMessage.
+ *   5. Server issues a short-lived step-up token (stored in Redis/memory).
  *   6. Client retries the original request with X-Step-Up-Token header.
  *
  * Step-up tokens are single-use, 5-minute TTL, scoped to a specific operation.
@@ -88,7 +89,7 @@ function _redisKey(tokenHash: string): string {
 
 /**
  * Issue a step-up token for the given user and operation.
- * Called by POST /auth/step-up after successful re-authentication.
+ * Called after successful nonce-bound OIDC re-authentication.
  * Returns the raw token (caller sends it to the client in the response body).
  */
 export async function issueStepUpToken(
@@ -212,7 +213,7 @@ export function requireStepUp(operation: StepUpOperation): MiddlewareHandler<Hon
         {
           error: 'step_up_required',
           operation,
-          description: `Re-authentication is required for ${operation}. POST /auth/step-up to obtain a step-up token.`,
+          description: `Re-authentication is required for ${operation}. POST /auth/step-up/start to obtain a step-up token.`,
         },
         401,
       )
@@ -256,7 +257,7 @@ export function requireStepUp(operation: StepUpOperation): MiddlewareHandler<Hon
           error: 'step_up_invalid',
           operation,
           description:
-            'The step-up token was invalid, expired, or already used. POST /auth/step-up to obtain a new one.',
+            'The step-up token was invalid, expired, or already used. POST /auth/step-up/start to obtain a new one.',
         },
         401,
       )

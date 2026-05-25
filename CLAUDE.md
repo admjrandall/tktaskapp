@@ -112,10 +112,10 @@ d:\techkeycrmapp\
 │   │   ├── personas/             ← PERSONA_PRESETS for all 5 persona IDs
 │   │   │   ├── index.ts
 │   │   │   └── ot-ics-extension-objects.ts  ← OT/ICS-specific extension object schemas
-│   │   ├── application/          ← placeholder — application layer (Phase 1)
-│   │   ├── domain/               ← placeholder — domain layer (Phase 1)
-│   │   ├── migrations/           ← placeholder — migrations layer (Phase 1)
-│   │   ├── platform/             ← placeholder — platform layer (Phase 1)
+│   │   ├── application/          ← application services
+│   │   ├── domain/               ← domain model and business rules
+│   │   ├── migrations/           ← client-side migration helpers
+│   │   ├── platform/             ← runtime/platform capability helpers
 │   │   └── ai/                   ← AI subsystem
 │   │       ├── ai-prefs.ts, ai-runtime.ts, ai-tools.ts, ai-settings.ts, ai-ui.ts
 │   │       ├── attributes-engine.ts   ← AI-driven attribute inference engine
@@ -225,7 +225,7 @@ pnpm run build:offline    # builds dist/offline/index.html + regenerates CSP
 pnpm run build:enterprise # builds dist/enterprise/ (hashed assets, PWA)
 pnpm run build:mobile     # alias for build:enterprise (Capacitor uses dist/enterprise)
 pnpm run build:dataverse  # builds Power Apps Code App bundle
-pnpm run build:all        # build:offline + build:enterprise + build:mobile + build:dataverse
+pnpm run build:all        # all offline profiles + enterprise + mobile + dataverse
 pnpm run typecheck        # TypeScript type check (no emit)
 ```
 
@@ -247,11 +247,11 @@ Do not describe the whole monorepo as "offline-only." Use "offline-first" for th
 
 The offline-web target has three sub-profiles, all built from `apps/offline-web/`:
 
-| Profile                  | Entry                  | Build command            | AI                                                               |
-| ------------------------ | ---------------------- | ------------------------ | ---------------------------------------------------------------- |
-| **browser-ai** (default) | `entry-browser-ai.ts`  | `pnpm run build:offline` | Chrome Gemini Nano or Edge Phi-4-mini only — no Ollama, no cloud |
-| **no-ai**                | `entry-no-ai.ts`       | Phase 1                  | Zero AI code in bundle                                           |
-| **internal-ai**          | `entry-internal-ai.ts` | Phase 1                  | Browser AI + private Ollama endpoints                            |
+| Profile                  | Entry                  | Build command                        | AI                                                               |
+| ------------------------ | ---------------------- | ------------------------------------ | ---------------------------------------------------------------- |
+| **browser-ai** (default) | `entry-browser-ai.ts`  | `pnpm run build:offline`             | Chrome Gemini Nano or Edge Phi-4-mini only — no Ollama, no cloud |
+| **no-ai**                | `entry-no-ai.ts`       | `pnpm run build:offline:no-ai`       | Zero AI code in bundle                                           |
+| **internal-ai**          | `entry-internal-ai.ts` | `pnpm run build:offline:internal-ai` | Browser AI + private Ollama endpoints                            |
 
 For the **browser-ai** profile, `OT_AI_CONNECT_SRC` only affects the CSP `connect-src` directive — it does **not** enable Ollama or any other tier (the deployment policy is hard-coded to `allowedTiers: ['browser']`):
 
@@ -259,7 +259,7 @@ For the **browser-ai** profile, `OT_AI_CONNECT_SRC` only affects the CSP `connec
 OT_AI_CONNECT_SRC="https://ai-server.internal" pnpm run build:offline
 ```
 
-For the **internal-ai** profile (Phase 1), `OT_AI_CONNECT_SRC` both sets the CSP origins and enables connections to those Ollama-compatible endpoints:
+For the **internal-ai** profile, `OT_AI_CONNECT_SRC` both sets the CSP origins and enables connections to those Ollama-compatible endpoints:
 
 ```bash
 OT_AI_CONNECT_SRC="http://ai-server.internal:11434" pnpm run build:offline:internal-ai
@@ -473,7 +473,7 @@ The core supports three tiers, but build profiles may restrict them:
 
 The **browser-ai** profile (`entry-browser-ai.ts`) sets `OT_ONLY_DEPLOYMENT_POLICY` (`allowedTiers: ['browser']`). Cloud AI, WebGPU/transformers.js, Hugging Face model downloads, and in-app Ollama model pulls are all disabled. When the AI wizard is opened it redirects to a built-in AI setup modal that shows a one-time download disclaimer (only when the model still needs downloading), then a progress bar, then navigates to chat when ready. The disclaimer is not shown again after first acknowledgement.
 
-`apps/offline-web/vite.config.ts` aliases the WebGPU/transformers.js browser provider and all three cloud providers to disabled stubs. `browser-nano.ts` (browser Prompt API — Chrome Gemini Nano / Edge Phi-4-mini) is **not** aliased — it remains active in the bundle for all three profiles.
+`apps/offline-web/vite.config.ts` aliases WebGPU/transformers.js, Ollama, and cloud providers to disabled stubs for the browser-AI profile. `browser-nano.ts` (browser Prompt API — Chrome Gemini Nano / Edge Phi-4-mini) remains active only where the profile permits browser AI. `vite.no-ai.config.ts` aliases every AI provider to disabled stubs. `vite.internal-ai.config.ts` keeps browser Nano and Ollama active while disabling WebGPU/transformers.js and public cloud providers.
 
 Cloud API keys stored encrypted in IDB under `__ai_secrets__`. Prefs in `localStorage` key `taskapp_ai_prefs_v2`.
 
@@ -567,7 +567,8 @@ All CRM routes are mounted at `/api/v1/<entity>`. Public routes: `GET /healthz`,
 | `/auth/callback`           | OIDC code exchange (public)                                 |
 | `/auth/refresh`            | Refresh-token rotation (cookie)                             |
 | `/auth/logout`             | Token revocation + cookie clear                             |
-| `/auth/step-up`            | Issue single-use step-up token (requires Bearer)            |
+| `/auth/step-up/start`      | Starts nonce-bound OIDC re-authentication for step-up       |
+| `/auth/step-up`            | Fail-closed compatibility response; does not issue tokens   |
 | `/api/v1/clients`          | Clients                                                     |
 | `/api/v1/departments`      | Departments                                                 |
 | `/api/v1/projects`         | Projects                                                    |
@@ -610,14 +611,16 @@ Audit events write to the existing `audit_events` table via `writeAuditEvent()` 
 
 `server/src/auth/state-store.ts` — `AuthStateStore` interface with three implementations:
 
-- `RedisAuthStateStore` — primary (requires `AUTH_STATE_REDIS_URL`); stores PKCE state, refresh-token replay guard, revoked access tokens
+- `RedisAuthStateStore` — primary (requires `AUTH_STATE_REDIS_URL`); stores PKCE state, refresh-token replay guard, revoked access tokens, and one-time SSE stream tickets
 - `MemoryAuthStateStore` — dev/test fallback; in-memory maps with TTL bookkeeping + best-effort DB audit writes
 - `pruneExpiredRevocations()` — maintenance helper; deletes expired rows from `revoked_access_tokens`
 - `hashAccessToken(token)` — exported SHA-256 base64url helper shared by middleware and revocation callers
 
-`server/src/auth/routes.ts` — OIDC/PKCE flow routes plus `POST /auth/step-up`:
+`server/src/auth/routes.ts` — OIDC/PKCE flow routes plus nonce-bound step-up:
 
-- `POST /auth/step-up` — requires a valid Bearer token; validates `operation` (Valibot); issues a single-use step-up token via `issueStepUpToken()`; returns `{ step_up_token, operation, expires_in: 300 }`
+- `POST /auth/step-up/start` — requires a valid Bearer token; validates `operation` and `postMessageOrigin`; creates PKCE state with step-up metadata and returns an authorization URL using `prompt=login` and `max_age=0`
+- `GET /auth/callback` — validates PKCE state, nonce, tenant, and subject; for step-up flows, returns a nonce-protected `postMessage` completion page and never places tokens in URLs
+- `POST /auth/step-up` — returns `nonce_bound_step_up_required` for obsolete clients and never mints a token from a bearer token alone
 
 ### Step-up authentication (RFC 9470)
 
@@ -629,8 +632,8 @@ Audit events write to the existing `audit_events` table via `writeAuditEvent()` 
 
 1. Client calls the protected route — middleware checks for `X-Step-Up-Token` header
 2. If missing: responds with `HTTP 401` + `WWW-Authenticate: Bearer error="insufficient_user_authentication", acr_values="phrh", max_age=0` (RFC 9470 §3)
-3. Client re-authenticates (password + TOTP/passkey if enrolled); POSTs to `/auth/step-up`
-4. Server calls `issueStepUpToken(userId, tenantId, operation)` → raw token stored as SHA-256 hash in Redis (or memory fallback); TTL = 5 min
+3. Client opens `/auth/step-up/start`, completes OIDC re-authentication, and receives the token via same-origin `postMessage`
+4. Server calls `issueStepUpToken(userId, tenantId, operation)` after nonce, tenant, and subject validation; raw token is stored as SHA-256 hash in Redis (or memory fallback); TTL = 5 min
 5. Client retries with `X-Step-Up-Token: <token>`
 6. `requireStepUp(operation)` middleware consumes and validates the token (single-use — deleted on first check); passes or returns 401
 
@@ -734,8 +737,8 @@ pnpm dev           # tsx watch src/index.ts
 pnpm build         # tsc → dist/
 pnpm start         # node dist/index.js
 pnpm typecheck     # tsc --noEmit
-pnpm db:generate   # drizzle-kit generate
-pnpm db:migrate    # drizzle-kit migrate
+pnpm db:validate   # validate committed SQL migrations
+pnpm db:migrate    # apply committed SQL migrations from server/drizzle/
 pnpm db:seed       # tsx src/db/seed.ts
 pnpm test          # vitest
 ```
@@ -750,7 +753,8 @@ pnpm test          # vitest
 6. High-risk operations (GDPR erase, AI config, key management, org settings) must use `requireStepUp(operation)` middleware — never bypass it.
 7. Access token revocation (`revokeAccessToken`) must write to the `AuthStateStore` on explicit logout or admin suspension — never just discard the token.
 8. `KMS_PROVIDER` env var selects the KMS backend — never hardcode `AzureKeyVaultKeyService` or `AwsKmsKeyService` directly; always call `getKmsService()`.
-9. Do not edit files in `packages/core/src/` from server code — frontend and server are separate packages.
+9. Production schema changes are committed SQL migrations in `server/drizzle/`; do not add `drizzle-kit`, `pnpm dlx drizzle-kit`, or generated migration tooling to the trusted dependency graph.
+10. Do not edit files in `packages/core/src/` from server code — frontend and server are separate packages.
 
 ---
 

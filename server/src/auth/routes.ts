@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { randomBytes } from 'node:crypto'
 import type { Context, MiddlewareHandler } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { OidcServiceImpl, generatePkceAsync } from './oidc-service.js'
@@ -6,6 +7,7 @@ import type { OidcConfig } from './oidc.js'
 import type { HonoEnv } from '../hono-types.js'
 import { getAuthStateStore } from './state-store.js'
 import { issueStepUpToken } from './step-up.js'
+import type { StepUpOperation } from './step-up.js'
 import { authMiddleware } from './middleware.js'
 import { validateIdToken } from './oidc.js'
 import * as v from 'valibot'
@@ -51,6 +53,28 @@ function _isAllowedRedirect(redirectTo: string, requestOrigin: string): boolean 
   } catch {
     return false
   }
+}
+
+function _isAllowedOrigin(origin: string): boolean {
+  const allowed = (process.env['ALLOW_ORIGINS'] ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  try {
+    const url = new URL(origin)
+    return allowed.includes(`${url.protocol}//${url.host}`)
+  } catch {
+    return false
+  }
+}
+
+function _stepUpCompleteHtml(token: string, origin: string, scriptNonce: string): string {
+  const payload = JSON.stringify({ type: 'tk-step-up-token', token })
+  const targetOrigin = JSON.stringify(origin)
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Step-up complete</title></head><body><script nonce="${scriptNonce}">
+if (window.opener) window.opener.postMessage(${payload}, ${targetOrigin});
+window.close();
+</script><p>Re-authentication complete. You can close this window.</p></body></html>`
 }
 
 // ── Cookie helpers ─────────────────────────────────────────────────────────────
@@ -187,6 +211,27 @@ authRouter.get('/callback', async (c) => {
     }
   }
 
+  if (pending.stepUp) {
+    const identity = tokens.idToken ? await validateIdToken(tokens.idToken, pending.nonce) : null
+    if (
+      !identity ||
+      identity.oid !== pending.stepUp.externalId ||
+      identity.tenantId !== pending.stepUp.tenantId
+    ) {
+      return c.json({ error: 'Step-up identity validation failed' }, 401)
+    }
+
+    const token = await issueStepUpToken(
+      pending.stepUp.userId,
+      pending.stepUp.tenantId,
+      pending.stepUp.operation as StepUpOperation,
+    )
+    const scriptNonce = randomBytes(16).toString('base64url')
+    c.header('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${scriptNonce}'`)
+    c.header('Referrer-Policy', 'no-referrer')
+    return c.html(_stepUpCompleteHtml(token, pending.stepUp.postMessageOrigin, scriptNonce))
+  }
+
   if (tokens.refreshToken) {
     _setRefreshCookie(c, tokens.refreshToken)
   }
@@ -269,50 +314,99 @@ const _StepUpRequestSchema = v.object({
     'kms_key_manage',
     'org_settings_change',
   ]),
-  /**
-   * The user's current access token, used to re-verify identity.
-   * For Entra ID flows, re-authentication happens via PKCE; this endpoint
-   * handles the offline-first / password+TOTP flow (see CLAUDE.md §M-7).
-   * The client MUST have recently completed the re-auth dialog before calling this.
-   *
-   * TODO: Wire into the client-side re-auth flow (packages/core/src/security/auth.ts).
-   * The server-side step-up token issuance is complete; client wiring is Phase 2.
-   */
-  reAuthToken: v.optional(v.pipe(v.string(), v.minLength(1))),
+  reAuthToken: v.pipe(v.string(), v.minLength(1)),
+})
+
+const _StepUpStartSchema = v.object({
+  operation: _StepUpRequestSchema.entries.operation,
+  postMessageOrigin: v.pipe(v.string(), v.minLength(1)),
 })
 
 // POST /auth/step-up
-// Issues a single-use, 5-minute step-up token for the given high-risk operation.
+// Retained as a fail-closed response for obsolete clients. A bearer token alone
+// is not fresh authentication proof.
 // Requires a valid Bearer access token (authMiddleware) plus proof of recent
 // re-authentication (reAuthToken from the re-auth flow, or explicit user presence).
 //
 // Step-up tokens are scoped to one (userId, operation) pair and expire after 5 min.
 // The client includes the issued token as X-Step-Up-Token on the protected request.
 authRouter.post('/step-up', authMiddleware as MiddlewareHandler, async (c) => {
-  const userId = c.get('userId')
-  const tenantId = c.get('tenantId')
-
   const body: unknown = await c.req.json().catch(() => null)
   const parsed = v.safeParse(_StepUpRequestSchema, body)
   if (!parsed.success) {
     return c.json({ error: 'Invalid request', details: parsed.issues }, 400)
   }
 
-  const { operation } = parsed.output
-
-  // Issue the step-up token. In the full implementation, this would additionally
-  // validate the reAuthToken (TOTP/passkey assertion) before issuing. For the
-  // enterprise-web OIDC flow, re-authentication is handled client-side via PKCE
-  // with max_age=0, and the reAuthToken represents a fresh IdP assertion.
-  // The step-up endpoint MUST be called within 5 minutes of completing re-auth.
-  const stepUpToken = await issueStepUpToken(userId, tenantId, operation)
-
-  return c.json({
-    step_up_token: stepUpToken,
-    operation,
-    expires_in: 300, // 5 minutes
-    usage: `Include as ${STEP_UP_TOKEN_HEADER_EXPORT} header on the protected request`,
-  })
+  return c.json(
+    {
+      error: 'nonce_bound_step_up_required',
+      description: 'Start step-up authentication with POST /auth/step-up/start.',
+    },
+    400,
+  )
 })
 
-const STEP_UP_TOKEN_HEADER_EXPORT = 'X-Step-Up-Token'
+authRouter.post('/step-up/start', authMiddleware as MiddlewareHandler, async (c) => {
+  const config = _oidcConfig()
+  const userId = c.get('userId')
+  const tenantId = c.get('tenantId')
+  const externalId = c.get('externalId')
+
+  const body: unknown = await c.req.json().catch(() => null)
+  const parsed = v.safeParse(_StepUpStartSchema, body)
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid request', details: parsed.issues }, 400)
+  }
+  if (!_isAllowedOrigin(parsed.output.postMessageOrigin)) {
+    return c.json({ error: 'Step-up return origin not allowed' }, 400)
+  }
+
+  const { codeVerifier, codeChallenge } = await generatePkceAsync()
+  const stateBytes = new Uint8Array(32)
+  crypto.getRandomValues(stateBytes)
+  const state = Buffer.from(stateBytes).toString('base64url')
+  const nonceBytes = new Uint8Array(32)
+  crypto.getRandomValues(nonceBytes)
+  const nonce = Buffer.from(nonceBytes).toString('base64url')
+
+  await (
+    await getAuthStateStore()
+  ).savePkceState(
+    state,
+    {
+      codeVerifier,
+      redirectTo: '/',
+      expiresAt: Date.now() + PKCE_TTL_SECONDS * 1000,
+      nonce,
+      stepUp: {
+        operation: parsed.output.operation,
+        userId,
+        tenantId,
+        externalId,
+        postMessageOrigin: parsed.output.postMessageOrigin,
+      },
+    },
+    PKCE_TTL_SECONDS,
+  )
+
+  const redirectUri =
+    process.env['OIDC_REDIRECT_URI'] ?? `${new URL(c.req.url).origin}/auth/callback`
+  const tenant = process.env['ENTRA_TENANT_ID'] ?? 'common'
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: config.clientId,
+    redirect_uri: redirectUri,
+    scope: 'openid profile email',
+    state,
+    nonce,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    prompt: 'login',
+    max_age: '0',
+  })
+
+  return c.json({
+    authorization_url: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?${params.toString()}`,
+    expires_in: PKCE_TTL_SECONDS,
+  })
+})

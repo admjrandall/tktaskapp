@@ -9,10 +9,12 @@
   },
   "scripts": {
     "build:offline": "vite build --config apps/offline-web/vite.config.ts && node generate-csp.mjs dist/offline/index.html",
+    "build:offline:no-ai": "vite build --config apps/offline-web/vite.no-ai.config.ts && node scripts/normalize-offline-profile-output.mjs dist/offline-no-ai && node generate-csp.mjs dist/offline-no-ai/index.html",
+    "build:offline:internal-ai": "vite build --config apps/offline-web/vite.internal-ai.config.ts && node scripts/normalize-offline-profile-output.mjs dist/offline-internal-ai && node generate-csp.mjs dist/offline-internal-ai/index.html",
     "build:enterprise": "vite build --config apps/enterprise-web/vite.config.ts",
     "build:dataverse": "vite build --config apps/dataverse/vite.config.ts",
     "build:mobile": "pnpm run build:enterprise",
-    "build:all": "pnpm run build:offline && pnpm run build:enterprise && pnpm run build:mobile && pnpm run build:dataverse",
+    "build:all": "pnpm run build:offline && pnpm run build:offline:no-ai && pnpm run build:offline:internal-ai && pnpm run build:enterprise && pnpm run build:mobile && pnpm run build:dataverse",
     "typecheck": "tsc --noEmit",
     "lint": "eslint packages apps config server",
     "lint:server": "eslint server/src",
@@ -24,6 +26,7 @@
     "prepare": "husky",
     "assert:offline-bundle": "node scripts/assert-offline-bundle.mjs",
     "assert:bundle-size": "node scripts/assert-bundle-size.mjs",
+    "validate:migrations": "node scripts/validate-migrations.mjs",
     "render:k8s:network-policy": "node scripts/render-k8s-network-policy.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version"
@@ -49,7 +52,7 @@
     "@types/node": "^25.9.1",
     "@types/pg": "^8.11.13",
     "@types/qrcode-generator": "^1.0.6",
-    "drizzle-orm": "^0.43.1",
+    "drizzle-orm": "^0.45.2",
     "eslint": "^10.4.0",
     "eslint-plugin-security": "^4.0.0",
     "husky": "^9.1.7",
@@ -59,7 +62,7 @@
     "turbo": "^2.9.14",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.4",
-    "vite": "^8.0.13",
+    "vite": "^8.0.14",
     "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^4.1.7"
   },
@@ -71,6 +74,11 @@
     "dompurify": "^3.4.5",
     "qrcode-generator": "^2.0.4",
     "valibot": "^1.4.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "^0.28.0"
+    }
   },
   "packageManager": "pnpm@11.1.2+sha512.415a1cc25974731e75455c1468371be74c5aa5fb7621b50d4056d222451609f11412f23fd602e6169f1e060466641f798597e1be961a10688836a67b16569499"
 }

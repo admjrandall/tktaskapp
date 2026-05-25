@@ -15,6 +15,8 @@ import {
 } from '../../../packages/core/src/deployment-policy.js'
 import { init } from '../../../packages/core/src/main.js'
 import { setNativeVaultWriter } from '../../../packages/core/src/security/vault.js'
+import { setStepUpHooks } from '../../../packages/core/src/security/auth.js'
+import { setAdminConsoleHooks } from '../../../packages/core/src/views/admin-console.js'
 import { initMobileGestures } from './gestures.js'
 
 // ── Server URL ─────────────────────────────────────────────────────────────────
@@ -43,6 +45,10 @@ class AuthClient {
       return `Bearer ${this._accessToken}`
     }
     return `Bearer ${await this._refresh()}`
+  }
+
+  getAccessToken(): string | null {
+    return this._accessToken
   }
 
   private _refresh(): Promise<string> {
@@ -160,6 +166,14 @@ async function bootstrap(): Promise<void> {
   }
 
   setDeploymentPolicy(ENTERPRISE_DEPLOYMENT_POLICY)
+  setStepUpHooks({
+    serverUrl,
+    getAccessToken: () => authClient.getAccessToken(),
+  })
+  setAdminConsoleHooks({
+    serverUrl,
+    getAccessToken: () => authClient.getAccessToken(),
+  })
 
   // On Capacitor native (iOS / Android), mirror vault writes to the platform
   // private filesystem using the concrete CapacitorVaultAdapter (MASVS-STORAGE-1).

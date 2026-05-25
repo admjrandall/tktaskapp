@@ -20,17 +20,17 @@
     "@opentelemetry/exporter-trace-otlp-http": "^0.218.0",
     "@opentelemetry/api": "^1",
     "@open-policy-agent/opa-wasm": "^1",
-    "jose": "^5",
+    "jose": "^6.2.3",
     "valibot": "^1.4.0",
     "ioredis": "^5",
     "@aws-sdk/client-kms": "^3"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31",
     "@types/pg": "^8",
+    "esbuild": "^0.28.0",
     "tsx": "^4",
-    "typescript": "^5",
-    "vitest": "^2"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -38,9 +38,8 @@
     "start": "node dist/server.js",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "db:generate": "drizzle-kit generate",
+    "db:validate": "node ../scripts/validate-migrations.mjs",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed.ts",
     "test": "vitest run --passWithNoTests"
   }

@@ -12,13 +12,11 @@ This target is the local, no-CRM-server deployment of Task App CRM. It is one de
 
 This app target produces three distinct build artifacts depending on which entry file and Vite config are used.
 
-| Profile                    | Entry file                 | Build command                                    | Output artifact                       |
-| -------------------------- | -------------------------- | ------------------------------------------------ | ------------------------------------- |
-| **No AI**                  | `src/entry-no-ai.ts`       | `pnpm run build:offline:no-ai` _(Phase 1)_       | `dist/offline-no-ai/index.html`       |
-| **Browser AI** _(default)_ | `src/entry-browser-ai.ts`  | `pnpm run build:offline`                         | `dist/offline/index.html`             |
-| **Internal AI**            | `src/entry-internal-ai.ts` | `pnpm run build:offline:internal-ai` _(Phase 1)_ | `dist/offline-internal-ai/index.html` |
-
-> Phase 1 wires these entries to typed build-profile objects from `config/build-profiles/` and creates dedicated Vite configs for each variant.
+| Profile                    | Entry file                 | Build command                        | Output artifact                       |
+| -------------------------- | -------------------------- | ------------------------------------ | ------------------------------------- |
+| **No AI**                  | `src/entry-no-ai.ts`       | `pnpm run build:offline:no-ai`       | `dist/offline-no-ai/index.html`       |
+| **Browser AI** _(default)_ | `src/entry-browser-ai.ts`  | `pnpm run build:offline`             | `dist/offline/index.html`             |
+| **Internal AI**            | `src/entry-internal-ai.ts` | `pnpm run build:offline:internal-ai` | `dist/offline-internal-ai/index.html` |
 
 ---
 
@@ -26,7 +24,7 @@ This app target produces three distinct build artifacts depending on which entry
 
 - **All AI tiers disabled.** The bundle contains zero AI code.
 - Intended for maximum-security deployments where AI functionality is not required or not permitted.
-- Phase 1 will add a dedicated Vite config that aliases every AI provider to disabled stubs, ensuring no AI library code reaches the bundle.
+- The dedicated Vite config aliases every AI provider to disabled stubs, ensuring no AI library code reaches the bundle.
 - **CSP:** `connect-src 'self'` only — no external endpoints.
 
 ### Browser AI (`entry-browser-ai.ts`) — current default

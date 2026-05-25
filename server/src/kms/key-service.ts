@@ -418,7 +418,7 @@ export function getKmsService(): KeyService {
     if (!region) throw new Error('KMS_PROVIDER=aws requires AWS_REGION env var')
     return new AwsKmsKeyService(region)
   }
-  const vaultUrl = process.env['AZURE_KV_URL']
+  const vaultUrl = process.env['AZURE_KV_URL'] ?? process.env['AZURE_KEY_VAULT_URL']
   if (!vaultUrl) throw new Error('KMS_PROVIDER=azure requires AZURE_KV_URL env var')
   return new AzureKeyVaultKeyService(vaultUrl)
 }

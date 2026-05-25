@@ -37,6 +37,7 @@ vi.mock('../../server/src/auth/state-store.js', () => ({
 }))
 
 const { authMiddleware } = await import('../../server/src/auth/middleware.js')
+const { authRouter } = await import('../../server/src/auth/routes.js')
 
 function makeContext() {
   const values = new Map<string, unknown>()
@@ -110,6 +111,29 @@ describe('step-up authentication (RFC 9470)', () => {
     const t1 = await issueStepUpToken('user-5', 'tenant-1', 'admin_user_change')
     const t2 = await issueStepUpToken('user-5', 'tenant-1', 'admin_user_change')
     expect(t1).not.toBe(t2)
+  })
+
+  it('does not issue a step-up token from a bearer token alone', async () => {
+    limit.mockResolvedValue([
+      {
+        id: 'internal-user-1',
+        orgId: 'internal-org-1',
+        role: 'admin',
+      },
+    ])
+
+    const response = await authRouter.request('/step-up', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ operation: 'gdpr_erase' }),
+    })
+    const body = (await response.json()) as Record<string, unknown>
+
+    expect(response.status).toBe(400)
+    expect(body['step_up_token']).toBeUndefined()
   })
 })
 

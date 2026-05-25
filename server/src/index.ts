@@ -26,6 +26,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import type { HonoEnv } from './hono-types.js'
 import { corsHeaders, corsPreflight } from './middleware/cors.js'
+import { securityHeaders } from './middleware/security-headers.js'
 import { authMiddleware } from './auth/middleware.js'
 import { authRouter } from './auth/routes.js'
 import { lockdownMiddleware } from './middleware/lockdown.js'
@@ -74,6 +75,8 @@ app.use('*', async (c, next) => {
   }
   await next()
 })
+
+app.use('*', securityHeaders())
 
 // ── Connection tracking ───────────────────────────────────────────────────────
 

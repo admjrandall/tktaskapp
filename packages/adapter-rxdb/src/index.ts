@@ -46,6 +46,11 @@ interface PushResponse {
   conflicts: Record<string, unknown>[]
 }
 
+interface StreamTicketResponse {
+  ticket: string
+  expiresAt: number
+}
+
 // ── Conflict resolution (C.3) ─────────────────────────────────────────────────
 // customFields: union, newer-wins per key
 // tags: union
@@ -192,13 +197,6 @@ export class RxDBAdapter extends SyncAdapter {
   }
 
   override stream(onRemoteChange: (changes: Record<string, unknown[]>) => void): () => void {
-    // EventSource does not support custom Authorization headers.
-    // Resolved access token is appended as ?token=<jwt> so the server can
-    // authenticate the SSE connection. withCredentials sends the session cookie
-    // for same-origin deployments as a fallback.
-    // The server's sync/stream route must accept ?token as an alternative to
-    // the Authorization header.
-
     const onMessage = (event: MessageEvent): void => {
       try {
         const payload = JSON.parse(event.data as string) as {
@@ -223,9 +221,21 @@ export class RxDBAdapter extends SyncAdapter {
       }
     }
 
-    const _openEventSource = (authToken?: string): EventSource => {
-      const url = authToken
-        ? `${this._base}/api/v1/sync/stream?token=${encodeURIComponent(authToken)}`
+    const _fetchStreamTicket = async (): Promise<string | null> => {
+      if (!this._getAuthHeader && !this._authHeader) return null
+      const res = await fetch(`${this._base}/api/v1/sync/stream-ticket`, {
+        method: 'POST',
+        headers: await this._headers(),
+        body: '{}',
+      })
+      if (!res.ok) throw new Error(`Sync stream ticket failed: ${String(res.status)}`)
+      const data = (await res.json()) as StreamTicketResponse
+      return data.ticket
+    }
+
+    const _openEventSource = (ticket?: string | null): EventSource => {
+      const url = ticket
+        ? `${this._base}/api/v1/sync/stream?ticket=${encodeURIComponent(ticket)}`
         : `${this._base}/api/v1/sync/stream`
       const source = new EventSource(url, { withCredentials: true })
       source.addEventListener('sync', onMessage as EventListener)
@@ -233,24 +243,40 @@ export class RxDBAdapter extends SyncAdapter {
     }
 
     let es: EventSource | null = null
+    let closed = false
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-    if (this._getAuthHeader) {
-      this._getAuthHeader()
-        .then((header) => {
-          const token = header.startsWith('Bearer ') ? header.slice(7) : header
-          es = _openEventSource(token)
+    const _connect = (): void => {
+      _fetchStreamTicket()
+        .then((ticket) => {
+          if (closed) return
+          es = _openEventSource(ticket)
+          es.onerror = (): void => {
+            es?.close()
+            es = null
+            if (!closed && !reconnectTimer) {
+              reconnectTimer = setTimeout(() => {
+                reconnectTimer = null
+                _connect()
+              }, 5_000)
+            }
+          }
         })
         .catch(() => {
-          es = _openEventSource()
+          if (!closed && !reconnectTimer) {
+            reconnectTimer = setTimeout(() => {
+              reconnectTimer = null
+              _connect()
+            }, 5_000)
+          }
         })
-    } else {
-      const staticToken = this._authHeader?.startsWith('Bearer ')
-        ? this._authHeader.slice(7)
-        : this._authHeader
-      es = _openEventSource(staticToken)
     }
 
+    _connect()
+
     return () => {
+      closed = true
+      if (reconnectTimer) clearTimeout(reconnectTimer)
       es?.close()
       es = null
     }
