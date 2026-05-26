@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
-# PostToolUse hook: scans edited .ts/.tsx files for stub/placeholder patterns.
-# Reads Claude's tool-use JSON from stdin. Outputs warnings to stdout (Claude context).
-# Exit 0 = allow (with warnings); Exit 2 = block (hard stop).
+# PostToolUse hook: scans a single edited .ts/.tsx file for stub/placeholder patterns.
+# Reads Claude's tool-use JSON from stdin. Patterns loaded from stub-patterns.json.
+# Exit 0 = allow (stdout becomes Claude context); Exit 2 = block.
 
 param()
 
@@ -15,46 +15,28 @@ try {
 
 $file_path = $tool_use.tool_input.file_path
 if (-not $file_path) { exit 0 }
-
-# Only scan TypeScript/TSX files
 if ($file_path -notmatch '\.(ts|tsx)$') { exit 0 }
 if (-not (Test-Path $file_path)) { exit 0 }
 
-$BLOCKING_PATTERNS = @(
-    @{ Pattern = 'throw new Error\([''"]Not implemented'; Label = 'NOT_IMPLEMENTED stub' },
-    @{ Pattern = 'throw new Error\([''"]TODO';            Label = 'TODO throw stub' },
-    @{ Pattern = '^\s*//\s*TODO:\s*implement';            Label = 'TODO: implement comment' },
-    @{ Pattern = '^\s*return null;\s*//\s*(stub|placeholder|todo|fixme)'; Label = 'null-return stub' }
-)
-
-$WARNING_PATTERNS = @(
-    @{ Pattern = '^\s*//\s*TODO';                  Label = 'TODO comment' },
-    @{ Pattern = '^\s*//\s*FIXME';                 Label = 'FIXME comment' },
-    @{ Pattern = '^\s*//\s*HACK';                  Label = 'HACK comment' },
-    @{ Pattern = 'console\.log\(';                 Label = 'console.log in production path' },
-    @{ Pattern = 'console\.debug\(';               Label = 'console.debug in production path' },
-    @{ Pattern = '^\s*//\s*placeholder';            Label = 'placeholder comment' },
-    @{ Pattern = '[''"]placeholder[''"]';            Label = 'placeholder string value' },
-    @{ Pattern = '// stub';                        Label = 'stub comment' },
-    @{ Pattern = 'as any\b';                       Label = 'type assertion to any (weakens type safety)' }
-)
+$patterns_file = Join-Path $PSScriptRoot 'stub-patterns.json'
+$patterns = Get-Content $patterns_file -Raw | ConvertFrom-Json
 
 $lines = Get-Content $file_path
 $blocking_hits = [System.Collections.Generic.List[string]]::new()
 $warning_hits  = [System.Collections.Generic.List[string]]::new()
 
 for ($i = 0; $i -lt $lines.Count; $i++) {
-    $line = $lines[$i]
+    $line   = $lines[$i]
     $lineno = $i + 1
 
-    foreach ($p in $BLOCKING_PATTERNS) {
-        if ($line -match $p.Pattern) {
-            $blocking_hits.Add("  Line $lineno [$($p.Label)]: $($line.Trim())")
+    foreach ($p in $patterns.blocking) {
+        if ($line -match $p.pattern) {
+            $blocking_hits.Add("  Line $lineno [$($p.label)]: $($line.Trim())")
         }
     }
-    foreach ($p in $WARNING_PATTERNS) {
-        if ($line -match $p.Pattern) {
-            $warning_hits.Add("  Line $lineno [$($p.Label)]: $($line.Trim())")
+    foreach ($p in $patterns.warning) {
+        if ($line -match $p.pattern) {
+            $warning_hits.Add("  Line $lineno [$($p.label)]: $($line.Trim())")
         }
     }
 }

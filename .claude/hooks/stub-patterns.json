@@ -1,0 +1,31 @@
+{
+  "blocking": [
+    {
+      "pattern": "throw new Error\\(['\"]Not implemented",
+      "label": "NOT_IMPLEMENTED stub"
+    },
+    {
+      "pattern": "throw new Error\\(['\"]TODO",
+      "label": "TODO throw stub"
+    },
+    {
+      "pattern": "^\\s*\\/\\/\\s*TODO:\\s*implement",
+      "label": "TODO: implement comment"
+    },
+    {
+      "pattern": "^\\s*return null;\\s*\\/\\/\\s*(stub|placeholder|todo|fixme)",
+      "label": "null-return stub"
+    }
+  ],
+  "warning": [
+    { "pattern": "^\\s*\\/\\/\\s*TODO", "label": "TODO comment" },
+    { "pattern": "^\\s*\\/\\/\\s*FIXME", "label": "FIXME comment" },
+    { "pattern": "^\\s*\\/\\/\\s*HACK", "label": "HACK comment" },
+    { "pattern": "console\\.log\\(", "label": "console.log in production path" },
+    { "pattern": "console\\.debug\\(", "label": "console.debug in production path" },
+    { "pattern": "^\\s*\\/\\/\\s*placeholder", "label": "placeholder comment" },
+    { "pattern": "['\"]placeholder['\"]", "label": "placeholder string value" },
+    { "pattern": "\\/\\/ stub", "label": "stub comment" },
+    { "pattern": "as any\\b", "label": "type assertion to any (weakens type safety)" }
+  ]
+}
