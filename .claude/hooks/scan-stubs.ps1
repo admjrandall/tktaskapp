@@ -45,7 +45,7 @@ $rel = $file_path -replace [regex]::Escape((Get-Location).Path + '\'), ''
 
 if ($blocking_hits.Count -gt 0) {
     Write-Output ""
-    Write-Output "STUB SCANNER — BLOCKING: $rel contains unfinished stubs that must be resolved before continuing:"
+    Write-Output "STUB SCANNER - BLOCKING: $rel contains unfinished stubs that must be resolved before continuing:"
     $blocking_hits | ForEach-Object { Write-Output $_ }
     Write-Output ""
     Write-Output "Resolve these stubs or explicitly justify leaving them. Do not commit placeholder implementations."
@@ -54,7 +54,7 @@ if ($blocking_hits.Count -gt 0) {
 
 if ($warning_hits.Count -gt 0) {
     Write-Output ""
-    Write-Output "STUB SCANNER — WARNING: $rel contains patterns that may indicate incomplete work:"
+    Write-Output "STUB SCANNER - WARNING: $rel contains patterns that may indicate incomplete work:"
     $warning_hits | ForEach-Object { Write-Output $_ }
     Write-Output ""
     Write-Output "Review each item. Remove debug output and resolve TODOs before marking work complete."
