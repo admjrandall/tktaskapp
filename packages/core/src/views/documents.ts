@@ -127,7 +127,10 @@ export function renderDocuments(state: AppState): string {
         <span class="doc-card-title">${escH(String(d.title || 'Untitled'))}</span>
         ${badge}
       </div>
-      <p class="doc-card-excerpt">${escH((String(d.excerpt || '') || String(d.content || '').replace(/<[^>]*>/g, '') || '').slice(0, 120))}</p>
+      <p class="doc-card-excerpt">${
+        // codeql[js/incomplete-multi-character-sanitization] -- escH() is the XSS defense; regex is for display-only plain-text extraction
+        escH((String(d.excerpt || '') || String(d.content || '').replace(/<[^>]*>/g, '') || '').slice(0, 120))
+      }</p>
       <div class="doc-card-meta">
         <span>${formatRelative(String(d.updatedAt || ''))}</span>
         ${linkedLabel ? `<span>·</span>${linkedLabel}` : ''}
@@ -986,11 +989,11 @@ export function bindDocumentEditor(): void {
       .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<[^>]+>/g, '')
-      .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
       .replace(/&#x27;/g, "'")
+      .replace(/&amp;/g, '&') // decode &amp; last to prevent double-decode of &amp;lt; → &lt; → <
     downloadText(`${t}.md`, `# ${t}\n\n${md}`, 'text/markdown')
     showToast('Exported as .md', 'success')
   })

@@ -10,6 +10,8 @@ jobs:
   ci:
     name: Typecheck · Lint · Build · Assert
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
