@@ -2,7 +2,7 @@ name: Accessibility
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
     paths:
       - 'packages/core/src/**'
       - 'apps/offline-web/**'

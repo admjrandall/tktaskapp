@@ -2,7 +2,7 @@ name: Release Offline Artifact
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
     paths:
       # Trigger when changeset files land on main — either a new changeset
       # being merged or the version-bump PR being merged (which deletes them).

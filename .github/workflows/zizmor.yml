@@ -2,13 +2,14 @@ name: zizmor — GitHub Actions security
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
-    branches: [main]
+    branches: [master, main]
   schedule:
     # Weekly Monday 07:00 UTC — aligned with security.yml (06:00) so both
     # appear in the same Security tab sweep each week
     - cron: '0 7 * * 1'
+  workflow_dispatch: # enable manual run from GitHub Actions UI
 
 # Deny all permissions at workflow level; grant only what each job needs
 permissions: {}
