@@ -48,6 +48,7 @@ import { conversationsRouter } from './api/routes/conversations.js'
 import { auditRouter } from './api/routes/audit.js'
 import { adminRouter } from './api/routes/admin.js'
 import { syncRouter } from './api/routes/sync.js'
+import { aiAttributesRouter } from './api/routes/ai-attributes.js'
 import { closeDb } from './db/index.js'
 import { startDestructionScheduler, stopDestructionScheduler } from './kms/destruction-scheduler.js'
 import { pruneExpiredRevocations } from './auth/state-store.js'
@@ -144,6 +145,7 @@ app.route('/api/v1/conversations', conversationsRouter)
 app.route('/api/v1/audit', auditRouter)
 app.route('/api/v1/admin', adminRouter)
 app.route('/api/v1/sync', syncRouter)
+app.route('/api/v1/ai/attributes', aiAttributesRouter)
 
 // ── Enterprise SPA static serving ────────────────────────────────────────────
 // Enabled when ENTERPRISE_STATIC_DIR is set (production / staging only).

@@ -452,7 +452,7 @@ and `server/drizzle/meta/_journal.json`, then pass `pnpm run validate:migrations
 ### Security checklist for new routes
 
 - [ ] `opaMiddleware(action)` on every handler
-- [ ] Zod schema validation; return `400` on failure
+- [ ] Valibot schema validation (`safeParseV()`); return `400` on failure
 - [ ] `withTenant()` wrapping every DB query
 - [ ] `writeAuditEvent()` on every mutating operation
 - [ ] No raw error details in HTTP responses

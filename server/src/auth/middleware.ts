@@ -76,6 +76,21 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
       return c.json({ error: 'Forbidden' }, 403)
     }
 
+    // ── User-session revocation check ────────────────────────────────────────
+    // Catches admin-suspended users whose JWT has not yet expired (≤15 min window).
+    // The DB isNull(deletedAt) filter above is the primary gate; this is defence-
+    // in-depth via AuthStateStore so revocation is recorded independently of the DB.
+    try {
+      const store = await getAuthStateStore()
+      if (await store.isUserSessionRevoked(user.id)) {
+        return c.json({ error: 'Unauthorized' }, 401)
+      }
+    } catch {
+      if (process.env['NODE_ENV'] === 'production') {
+        return c.json({ error: 'Unauthorized' }, 401)
+      }
+    }
+
     c.set('userId', user.id)
     c.set('tenantId', user.orgId)
     c.set('role', user.role)

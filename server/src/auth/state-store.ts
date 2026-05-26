@@ -38,6 +38,14 @@ export interface AuthStateStore {
   ): Promise<void>
   /** Returns true if the access token hash is on the revocation blocklist. */
   isAccessTokenRevoked(tokenHash: string): Promise<boolean>
+  /**
+   * Block all future authenticated requests for a user ID (e.g. on admin suspension).
+   * ttlSeconds should equal the access-token TTL so the block auto-expires once
+   * any in-flight JWT can no longer be valid.
+   */
+  revokeUserSessions(userId: string, ttlSeconds: number, reason?: string): Promise<void>
+  /** Returns true if the user's sessions have been explicitly revoked. */
+  isUserSessionRevoked(userId: string): Promise<boolean>
   saveStreamTicket(ticket: string, record: StreamTicketRecord, ttlSeconds: number): Promise<void>
   consumeStreamTicket(ticket: string): Promise<StreamTicketRecord | null>
 }
@@ -54,6 +62,7 @@ export interface StreamTicketRecord {
 const _memoryPkce = new Map<string, PkceStateRecord>()
 const _memoryRefresh = new Map<string, number>()
 const _memoryRevoked = new Map<string, number>()
+const _memoryRevokedUsers = new Map<string, number>()
 const _memoryStreamTickets = new Map<string, StreamTicketRecord>()
 let _redis: AuthStateRedisClient | null = null
 
@@ -94,6 +103,9 @@ function _cleanExpiredMemory(): void {
   }
   for (const [key, expiresAt] of _memoryRevoked) {
     if (expiresAt <= now) _memoryRevoked.delete(key)
+  }
+  for (const [key, expiresAt] of _memoryRevokedUsers) {
+    if (expiresAt <= now) _memoryRevokedUsers.delete(key)
   }
   for (const [key, record] of _memoryStreamTickets) {
     if (record.expiresAt <= now) _memoryStreamTickets.delete(key)
@@ -159,6 +171,19 @@ class RedisAuthStateStore implements AuthStateStore {
 
   async isAccessTokenRevoked(tokenHash: string): Promise<boolean> {
     const val = await this.redis.get(`revoked-access:${tokenHash}`)
+    return val !== null
+  }
+
+  async revokeUserSessions(
+    userId: string,
+    ttlSeconds: number,
+    reason = 'suspended',
+  ): Promise<void> {
+    await this.redis.set(`revoked-user:${userId}`, reason, 'EX', ttlSeconds)
+  }
+
+  async isUserSessionRevoked(userId: string): Promise<boolean> {
+    const val = await this.redis.get(`revoked-user:${userId}`)
     return val !== null
   }
 
@@ -236,6 +261,16 @@ class MemoryAuthStateStore implements AuthStateStore {
   isAccessTokenRevoked(tokenHash: string): Promise<boolean> {
     _cleanExpiredMemory()
     return Promise.resolve(_memoryRevoked.has(tokenHash))
+  }
+
+  revokeUserSessions(userId: string, ttlSeconds: number, _reason = 'suspended'): Promise<void> {
+    _memoryRevokedUsers.set(userId, Date.now() + ttlSeconds * 1000)
+    return Promise.resolve()
+  }
+
+  isUserSessionRevoked(userId: string): Promise<boolean> {
+    _cleanExpiredMemory()
+    return Promise.resolve(_memoryRevokedUsers.has(userId))
   }
 
   saveStreamTicket(ticket: string, record: StreamTicketRecord): Promise<void> {

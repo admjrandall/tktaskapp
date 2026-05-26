@@ -3,6 +3,7 @@ import * as v from 'valibot'
 import { usersService } from '../../services/users.service.js'
 import { opaMiddleware, resourcePolicyMiddleware } from '../../middleware/opa.js'
 import { requireStepUp } from '../../auth/step-up.js'
+import { getAuthStateStore } from '../../auth/state-store.js'
 import { otel } from '../../observability/otel.js'
 import { LegalHoldService } from '../../kms/legal-hold.js'
 import { LegalHoldActiveError, getKmsService } from '../../kms/key-service.js'
@@ -37,6 +38,10 @@ const LegalHoldPlaceSchema = v.object({
 })
 
 const legalHoldService = new LegalHoldService()
+
+// Access-token TTL — must match the value in auth/routes.ts (_oidcConfig).
+// Used as the revocation window when suspending a user.
+const ACCESS_TOKEN_TTL_SECONDS = 900
 
 export const adminRouter = new Hono<HonoEnv>()
 
@@ -102,7 +107,26 @@ adminRouter.post(
     const targetId = c.req.param('id')
     try {
       const ok = await usersService.suspend(tenantId, requestedBy, targetId)
-      return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404)
+      if (!ok) return c.json({ error: 'Not found' }, 404)
+      // Revoke active sessions immediately so the suspended user cannot use any
+      // in-flight JWT for the remainder of its 15-minute TTL.  This satisfies the
+      // server.md rule: "revocation must write to AuthStateStore on … admin suspension".
+      try {
+        const store = await getAuthStateStore()
+        await store.revokeUserSessions(targetId, ACCESS_TOKEN_TTL_SECONDS, 'suspended')
+      } catch (storeErr) {
+        // Log but do not fail the suspend — DB deletedAt already blocks the user.
+        otel.log({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'tktaskapp-server',
+          tenantId,
+          requestId: 'admin-suspend',
+          message: 'AuthStateStore unavailable during suspend — session revocation skipped',
+          extra: { error: String(storeErr) },
+        })
+      }
+      return c.body(null, 204)
     } catch (err) {
       otel.log({
         timestamp: new Date().toISOString(),
