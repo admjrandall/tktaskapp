@@ -5012,7 +5012,7 @@ const stores = ['clients', 'departments', 'projects', 'tasks', 'people', 'standa
           .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
           .replace(/<br\s*\/?>/gi, '\n')
           .replace(/<[^>]+>/g, '')
-          .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#x27;/g,"'");
+          .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#x27;/g,"'").replace(/&amp;/g,'&');
         downloadText(`${title}.md`, `# ${title}\n\n${md}`, 'text/markdown');
         showToast('Exported as .md', 'success');
       });
