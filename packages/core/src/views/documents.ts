@@ -127,10 +127,7 @@ export function renderDocuments(state: AppState): string {
         <span class="doc-card-title">${escH(String(d.title || 'Untitled'))}</span>
         ${badge}
       </div>
-      <p class="doc-card-excerpt">${
-        // codeql[js/incomplete-multi-character-sanitization] -- escH() is the XSS defense; regex is for display-only plain-text extraction
-        escH((String(d.excerpt || '') || String(d.content || '').replace(/<[^>]*>/g, '') || '').slice(0, 120))
-      }</p>
+      <p class="doc-card-excerpt">${escH((String(d.excerpt || '') || String(d.content || '').replace(/[<>]/g, '') || '').slice(0, 120))}</p>
       <div class="doc-card-meta">
         <span>${formatRelative(String(d.updatedAt || ''))}</span>
         ${linkedLabel ? `<span>·</span>${linkedLabel}` : ''}
@@ -979,7 +976,7 @@ export function bindDocumentEditor(): void {
     const doc = _docOpenId ? (dbGetById('documents', _docOpenId) as AnyRecord | null) : null
     const t = titleInput?.value || String(doc?.title || 'document')
     const html = editor?.innerHTML || String(doc?.content || '')
-    const md = html
+    const _partialMd = html
       .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n')
       .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n')
       .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n')
@@ -988,12 +985,9 @@ export function bindDocumentEditor(): void {
       .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
       .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
       .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#x27;/g, "'")
-      .replace(/&amp;/g, '&') // decode &amp; last to prevent double-decode of &amp;lt; → &lt; → <
+    const _strip = document.createElement('div')
+    _strip.innerHTML = _partialMd
+    const md = _strip.textContent ?? ''
     downloadText(`${t}.md`, `# ${t}\n\n${md}`, 'text/markdown')
     showToast('Exported as .md', 'success')
   })
