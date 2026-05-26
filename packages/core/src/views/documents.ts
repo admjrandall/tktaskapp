@@ -985,9 +985,7 @@ export function bindDocumentEditor(): void {
       .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
       .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
       .replace(/<br\s*\/?>/gi, '\n')
-    const _strip = document.createElement('div')
-    _strip.innerHTML = _partialMd
-    const md = _strip.textContent ?? ''
+    const md = new DOMParser().parseFromString(_partialMd, 'text/html').body.textContent ?? ''
     downloadText(`${t}.md`, `# ${t}\n\n${md}`, 'text/markdown')
     showToast('Exported as .md', 'success')
   })
