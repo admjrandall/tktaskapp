@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { auditService } from '../../services/audit.service.js'
 import { opaMiddleware } from '../../middleware/opa.js'
+import { requireStepUp } from '../../auth/step-up.js'
 import { otel } from '../../observability/otel.js'
 import { writeAuditEvent } from '../../services/base.js'
 import type { HonoEnv } from '../../hono-types.js'
@@ -39,7 +40,7 @@ auditRouter.get('/', opaMiddleware('read'), async (c) => {
   }
 })
 
-auditRouter.get('/export', opaMiddleware('read'), async (c) => {
+auditRouter.get('/export', opaMiddleware('read'), requireStepUp('data_export'), async (c) => {
   const tenantId = c.get('tenantId')
   const userId = c.get('userId')
   const role = c.get('role')

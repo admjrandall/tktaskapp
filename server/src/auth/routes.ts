@@ -307,7 +307,6 @@ authRouter.post('/logout', async (c) => {
 const _StepUpRequestSchema = v.object({
   operation: v.picklist([
     'gdpr_erase',
-    'admin_user_change',
     'ai_provider_configure',
     'data_export',
     'legal_hold_change',

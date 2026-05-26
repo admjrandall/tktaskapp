@@ -32,7 +32,6 @@ import { writeAuditEvent } from '../services/base.js'
 
 export type StepUpOperation =
   | 'gdpr_erase'
-  | 'admin_user_change'
   | 'ai_provider_configure'
   | 'data_export'
   | 'legal_hold_change'

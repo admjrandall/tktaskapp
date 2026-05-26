@@ -170,7 +170,7 @@ export async function create(tenantId: string, userId: string, data: CreateInput
 | `documents.service.ts`     | `create()` and `update()` auto-compute `excerpt` (first 200 chars of content) |
 | `conversations.service.ts` | Exports `appendMessage(tenantId, id, message)` in addition to CRUD            |
 | `audit.service.ts`         | Exports `exportNdjson()` and `exportCsv()` for streaming audit log exports    |
-| `users.service.ts`         | Exports `suspend(tenantId, userId, requestedBy)` — sets `suspended_at`        |
+| `users.service.ts`         | Exports `suspend(tenantId, requestedBy, userId)` — sets `suspended_at`        |
 
 ### 4.3 Audit event writer
 

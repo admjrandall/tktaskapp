@@ -30,6 +30,12 @@ const IntegrationAddSchema = v.object({
   config: v.record(v.string(), v.unknown()),
 })
 
+const LegalHoldPlaceSchema = v.object({
+  userId: v.pipe(v.string(), v.minLength(1)),
+  reason: v.pipe(v.string(), v.minLength(1)),
+  expiresAt: v.optional(v.pipe(v.string(), v.isoDateTime())),
+})
+
 const legalHoldService = new LegalHoldService()
 
 export const adminRouter = new Hono<HonoEnv>()
@@ -460,6 +466,166 @@ adminRouter.delete(
         service: 'tktaskapp-server',
         tenantId,
         requestId: 'admin-integrations-del',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
+
+// ── Legal hold management ──────────────────────────────────────────────────────
+
+adminRouter.post(
+  '/legal-holds',
+  opaMiddleware('manage_users'),
+  requireStepUp('legal_hold_change'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    const role = c.get('role')
+    if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+    try {
+      const parsed = safeParseV(LegalHoldPlaceSchema, await c.req.json())
+      if (!parsed.success)
+        return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+      const holdId = await legalHoldService.placeHold(
+        parsed.data.userId,
+        tenantId,
+        parsed.data.reason,
+        parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : undefined,
+        userId,
+      )
+      await writeAuditEvent({
+        tenantId,
+        userId,
+        eventType: 'legal_hold_placed',
+        resourceType: 'users',
+        resourceId: parsed.data.userId,
+        details: { reason: parsed.data.reason, holdId },
+      })
+      return c.json({ holdId }, 201)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'admin-legal-hold-place',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
+
+adminRouter.delete(
+  '/legal-holds/:holdId',
+  opaMiddleware('manage_users'),
+  requireStepUp('legal_hold_change'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    const role = c.get('role')
+    const holdId = c.req.param('holdId')
+    if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+    try {
+      await legalHoldService.liftHold(tenantId, holdId, userId)
+      await writeAuditEvent({
+        tenantId,
+        userId,
+        eventType: 'legal_hold_lifted',
+        resourceType: 'legal_holds',
+        resourceId: holdId,
+      })
+      return c.body(null, 204)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'admin-legal-hold-lift',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
+
+// ── KMS key management ─────────────────────────────────────────────────────────
+
+adminRouter.get('/kms/keys/:userId', opaMiddleware('manage_users'), async (c) => {
+  const tenantId = c.get('tenantId')
+  const role = c.get('role')
+  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+  try {
+    const kmsService = getKmsService()
+    const status = await kmsService.getKeyStatus(c.req.param('userId'), tenantId)
+    return c.json({ userId: c.req.param('userId'), status }, 200)
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message.includes('AZURE_KV_URL') || err.message.includes('AWS_REGION'))
+    ) {
+      return c.json({ error: 'KMS provider not configured on this server' }, 503)
+    }
+    otel.log({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'tktaskapp-server',
+      tenantId,
+      requestId: 'admin-kms-status',
+      message: String(err),
+    })
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+adminRouter.post(
+  '/kms/keys/:userId/finalize-destruction',
+  opaMiddleware('manage_users'),
+  requireStepUp('kms_key_manage'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    const role = c.get('role')
+    const targetUserId = c.req.param('userId')
+    if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+    try {
+      const kmsService = getKmsService()
+      const currentStatus = await kmsService.getKeyStatus(targetUserId, tenantId)
+      if (currentStatus !== 'scheduled-for-destruction') {
+        return c.json(
+          {
+            error: 'Key is not scheduled for destruction',
+            status: currentStatus,
+            code: 'KEY_NOT_SCHEDULED',
+          },
+          409,
+        )
+      }
+      await kmsService.deleteKey(targetUserId, tenantId)
+      await writeAuditEvent({
+        tenantId,
+        userId,
+        eventType: 'kms_key.force_destroyed',
+        resourceType: 'users',
+        resourceId: targetUserId,
+      })
+      return c.body(null, 204)
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        (err.message.includes('AZURE_KV_URL') || err.message.includes('AWS_REGION'))
+      ) {
+        return c.json({ error: 'KMS provider not configured on this server' }, 503)
+      }
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'admin-kms-force-destroy',
         message: String(err),
       })
       return c.json({ error: 'Internal server error' }, 500)

@@ -138,12 +138,14 @@ Default is **deny**. Cross-tenant access (`resourceTenantId != tenantId`) is alw
 
 High-risk operations require `requireStepUp(operation)` middleware from `server/src/auth/step-up.ts`. Step-up tokens are single-use, 5-minute TTL, operation-scoped.
 
-| Operation               | Route                                                                   |
-| ----------------------- | ----------------------------------------------------------------------- |
-| `gdpr_erase`            | `POST /api/v1/admin/users/:id/erase`                                    |
-| `ai_provider_configure` | `POST /api/v1/admin/ai-allowlist`, `PUT /api/v1/admin/ai-allowlist/:id` |
-| `admin_user_change`     | `POST /api/v1/admin/integrations`                                       |
-| `org_settings_change`   | `PUT /api/v1/admin/org-settings`                                        |
+| Operation               | Route                                                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `gdpr_erase`            | `POST /api/v1/admin/users/:id/erase`                                                                           |
+| `ai_provider_configure` | `POST /api/v1/admin/ai-allowlist`, `DELETE /api/v1/admin/ai-allowlist/:id`                                     |
+| `org_settings_change`   | `PATCH /api/v1/admin/org-settings`, `POST /api/v1/admin/integrations`, `DELETE /api/v1/admin/integrations/:id` |
+| `data_export`           | `GET /api/v1/audit/export`                                                                                     |
+| `legal_hold_change`     | `POST /api/v1/admin/legal-holds`, `DELETE /api/v1/admin/legal-holds/:holdId`                                   |
+| `kms_key_manage`        | `POST /api/v1/admin/kms/keys/:userId/finalize-destruction`                                                     |
 
 Never remove or bypass `requireStepUp()` middleware.
 
