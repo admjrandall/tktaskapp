@@ -80,6 +80,39 @@ Never modify files. Report findings with `file:line` references and a clear desc
 - Confirm the first non-comment import is `security/trusted-types`
 - Report if it is not as **[CRITICAL] Trusted Types not first import**
 
+### 11. SECURITY.md — withTenant session variables
+
+- Read `SECURITY.md` and find the `withTenant` code block
+- Confirm it shows BOTH `SET LOCAL app.tenant_id` AND `SET LOCAL app.org_id`
+- Read `server/src/services/base.ts` lines 10–16 to confirm both are present in source
+- Report any mismatch as **[HIGH] SECURITY.md withTenant doc drift**
+
+### 12. SECURITY.md — Trusted Types policy names
+
+- Read `SECURITY.md` and find the Trusted Types policy table
+- Confirm it lists `nexus-crm` and `nexus-crm-static-template` (NOT `nexus-crm-raw`)
+- Report any incorrect policy name as **[HIGH] SECURITY.md TT policy name wrong**
+
+### 13. TECHNICAL-REFERENCE.md — validation library
+
+- Read `TECHNICAL-REFERENCE.md` section 5.1
+- Confirm it references Valibot and `safeParseV()` (NOT Zod / `safeParse`)
+- Read one route file (e.g. `server/src/api/routes/clients.ts`) to confirm Valibot is in use
+- Report any mismatch as **[MEDIUM] TECHNICAL-REFERENCE.md validation library drift**
+
+### 14. TECHNICAL-REFERENCE.md — middleware order
+
+- Read `TECHNICAL-REFERENCE.md` section 2 middleware order
+- Confirm it lists: CORS → security headers → connection tracking → OTel → auth → lockdown → routes
+- Compare to the actual `app.use()` call order in `server/src/index.ts`
+- Report any missing or mis-ordered layer as **[MEDIUM] Middleware order doc drift**
+
+### 15. DECISIONS.md — delivery targets table
+
+- Read `DECISIONS.md` ADR-M-001 delivery targets table
+- Compare target entries (offline-web / enterprise-web / Dataverse) to `CLAUDE.md` delivery targets table
+- Report any discrepancy as **[LOW] DECISIONS.md delivery target drift**
+
 ## Output format
 
 ```

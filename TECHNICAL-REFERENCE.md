@@ -54,10 +54,12 @@ Middleware execution order per request:
 
 ```
 1. CORS headers / OPTIONS preflight  (server/src/middleware/cors.ts)
-2. Connection counter increment/decrement  (inline, metrics.ts)
-3. OTel root span  (server/src/observability/middleware.ts)
-4. Auth middleware — /api/v1/* only  (server/src/auth/middleware.ts)
-5. Route handler + opaMiddleware(action) per route
+2. Security headers                  (server/src/middleware/security-headers.ts)
+3. Connection counter increment/decrement  (inline, metrics.ts)
+4. OTel root span  (server/src/observability/middleware.ts)
+5. Auth middleware — /api/v1/* only  (server/src/auth/middleware.ts)
+6. Lockdown middleware — /api/v1/* only  (server/src/middleware/lockdown.ts)
+7. Route handler + opaMiddleware(action) per route
 ```
 
 **Public routes** (no auth): `GET /healthz`, `GET /readyz`
@@ -131,9 +133,12 @@ CREATE POLICY tenant_insert ON <table> FOR INSERT
 ```ts
 db.transaction(async (tx) => {
   await tx.execute(sql`SET LOCAL app.tenant_id = ${tenantId}`)
+  await tx.execute(sql`SET LOCAL app.org_id = ${tenantId}::uuid`)
   return fn(tx)
 })
 ```
+
+Both session variables are required: CRM entity tables use `app.tenant_id` for RLS; `tenant_users` and `kms_key_lifecycle` use `app.org_id`.
 
 All service methods call this wrapper. Queries outside a `withTenant` transaction will fail RLS checks unless the session variable is set by other means.
 
@@ -169,7 +174,9 @@ export async function create(tenantId: string, userId: string, data: CreateInput
 
 ### 4.3 Audit event writer
 
-**`writeAuditEvent(input)`** in `base.ts` inserts into `audit_events`. Maps `tenantId → orgId` (same UUID value; column name differs between old and new tables). Returns the new audit event `id`.
+**`writeAuditEvent(input)`** in `base.ts` inserts into `audit_events` with **SHA-256 hash chaining**. Each event records a `chainPosition` (incrementing integer), a `prevHash` (the `signedDigest` of the previous event for this org), and its own `signedDigest` (SHA-256 of a canonical JSON payload). This makes the audit trail tamper-evident — any gap or modification breaks chain verification. Returns the new audit event `id`.
+
+`verifyAuditChain(events)` replays all hashes in order and returns `false` on the first broken link.
 
 ---
 
@@ -179,17 +186,22 @@ All route files: `server/src/api/routes/`
 
 ### 5.1 Common pattern
 
+All routes use **Valibot** (`safeParseV` from `server/src/schemas/index.ts`) for request validation — not Zod.
+
 ```ts
+import * as v from 'valibot'
+import { safeParseV } from '../../schemas/index.js'
+
 const router = new Hono()
 
-const CreateSchema = z.object({ name: z.string().min(1), ... })
+const CreateSchema = v.object({ name: v.pipe(v.string(), v.minLength(1)), ... })
 
 router.post('/', opaMiddleware('create'), async (c) => {
   const tenantId = c.get('tenantId') as string
   const userId   = c.get('userId')   as string
-  const parsed   = CreateSchema.safeParse(await c.req.json())
-  if (!parsed.success) return c.json({ error: parsed.error.issues }, 400)
-  const result = await createEntity(tenantId, userId, parsed.data)
+  const parsed   = safeParseV(CreateSchema, await c.req.json())
+  if (!parsed.success) return c.json({ error: parsed.issues }, 400)
+  const result = await createEntity(tenantId, userId, parsed.output)
   return c.json(result, 201)
 })
 ```
@@ -198,17 +210,22 @@ Rules:
 
 - Never expose stack traces or raw DB error messages in HTTP responses
 - Always return `{ error: 'Internal server error' }` on unexpected errors (status 500)
-- Always return `{ error: parsed.error.issues }` on Zod failures (status 400)
+- Always return `{ error: parsed.issues }` on Valibot failures (status 400)
 - `GET /` routes support `?page=`, `?pageSize=` via `paginationValues()` from `base.ts`
 
 ### 5.2 Special routes
 
-| Route              | Method | Path                                 | Notes                                    |
-| ------------------ | ------ | ------------------------------------ | ---------------------------------------- |
-| `audit.ts`         | GET    | `/api/v1/audit/export`               | Streams NDJSON or CSV; `?format=csv`     |
-| `conversations.ts` | POST   | `/api/v1/conversations/:id/messages` | Appends a message to conversation        |
-| `admin.ts`         | POST   | `/api/v1/admin/users/:id/suspend`    | Requires `admin` role via OPA            |
-| `admin.ts`         | POST   | `/api/v1/admin/users/:id/erase`      | GDPR erasure; calls `runErasureWorkflow` |
+| Route              | Method | Path                                 | Notes                                      |
+| ------------------ | ------ | ------------------------------------ | ------------------------------------------ |
+| `audit.ts`         | GET    | `/api/v1/audit/export`               | Streams NDJSON or CSV; `?format=csv`       |
+| `conversations.ts` | POST   | `/api/v1/conversations/:id/messages` | Appends a message to conversation          |
+| `admin.ts`         | POST   | `/api/v1/admin/users/:id/suspend`    | Requires `admin` role via OPA              |
+| `admin.ts`         | POST   | `/api/v1/admin/users/:id/erase`      | GDPR erasure; calls `runErasureWorkflow`   |
+| `sync.ts`          | POST   | `/api/v1/sync/pull`                  | Checkpoint + limit; returns `DocWithRev[]` |
+| `sync.ts`          | POST   | `/api/v1/sync/push`                  | Conflict detection via `updatedAt`; UPSERT |
+| `sync.ts`          | GET    | `/api/v1/sync/stream`                | SSE; polls every 30s                       |
+
+**Note:** `server/src/api/routes/ai-attributes.ts` exists but is **not mounted** in `index.ts`. The `POST /api/v1/ai/attributes/:id/compute` route is defined but unreachable until the router is imported and wired.
 
 ---
 
