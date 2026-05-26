@@ -42,12 +42,12 @@ export function trapFocus(container: HTMLElement): () => void {
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Tab') return
     const focusable = getFocusable()
-    if (!focusable.length) {
+    const first = focusable.at(0)
+    const last = focusable.at(-1)
+    if (!first || !last) {
       e.preventDefault()
       return
     }
-    const first = focusable[0]!
-    const last = focusable[focusable.length - 1]!
     if (e.shiftKey) {
       if (document.activeElement === first || !container.contains(document.activeElement)) {
         e.preventDefault()

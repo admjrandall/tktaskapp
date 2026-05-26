@@ -747,7 +747,11 @@ export function renderSettings(state: AppState): string {
     const tagRows = tArr.length
       ? tArr
           .map((t) => {
-            const c = TAG_COLORS.find((c) => c.label === t.color) || TAG_COLORS[7]!
+            const c = TAG_COLORS.find((c) => c.label === t.color) ?? {
+              bg: '#f1f5f9',
+              text: '#475569',
+              border: '#e2e8f0',
+            }
             if (_editingTagId === String(t.id)) {
               return `<div style="padding:.625rem 0;border-bottom:1px solid var(--border-subtle)" id="tag-edit-form">
                 <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem">
@@ -888,7 +892,12 @@ export function bindSettings(_s: AppState): void {
       return
     }
     try {
-      const newKey = await changePassword(_state.cryptoKey!, nw)
+      const key = _state.cryptoKey
+      if (!key) {
+        showToast('Not authenticated', 'error')
+        return
+      }
+      const newKey = await changePassword(key, nw)
       await cacheSessionKey(newKey)
       setState({ cryptoKey: newKey })
       showToast('Password changed', 'success')
@@ -936,7 +945,12 @@ export function bindSettings(_s: AppState): void {
     }
     if (!(await requireReauth())) return
     try {
-      const b = await exportEncryptedBackup(_state.cryptoKey!, pw)
+      const key = _state.cryptoKey
+      if (!key) {
+        showToast('Not authenticated', 'error')
+        return
+      }
+      const b = await exportEncryptedBackup(key, pw)
       downloadText(`taskapp-backup-${new Date().toISOString().split('T')[0]}.taskappbak`, b)
       showToast('Backup exported', 'success')
     } catch {
@@ -946,7 +960,12 @@ export function bindSettings(_s: AppState): void {
   document.getElementById('export-json')?.addEventListener('click', async () => {
     if (!(await requireReauth())) return
     try {
-      const j = await exportJSON(_state.cryptoKey!)
+      const key = _state.cryptoKey
+      if (!key) {
+        showToast('Not authenticated', 'error')
+        return
+      }
+      const j = await exportJSON(key)
       downloadText('taskapp-data.json', j, 'application/json')
       showToast('JSON exported', 'success')
     } catch {
@@ -964,7 +983,12 @@ export function bindSettings(_s: AppState): void {
           showToast('Enter backup password', 'error')
           return
         }
-        const result = await importEncryptedBackup(text, pw, _state.cryptoKey!)
+        const key = _state.cryptoKey
+        if (!key) {
+          showToast('Not authenticated', 'error')
+          return
+        }
+        const result = await importEncryptedBackup(text, pw, key)
         reloadData()
         showToast('Imported successfully', 'success')
         if ((result as { legacyKdfUsed?: boolean })?.legacyKdfUsed) {
@@ -977,7 +1001,12 @@ export function bindSettings(_s: AppState): void {
           }, 1500)
         }
       } else {
-        await importJSON(text, _state.cryptoKey!)
+        const key = _state.cryptoKey
+        if (!key) {
+          showToast('Not authenticated', 'error')
+          return
+        }
+        await importJSON(text, key)
         reloadData()
         showToast('Imported successfully', 'success')
       }

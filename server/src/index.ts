@@ -198,6 +198,9 @@ if (enterpriseStaticDir) {
     }
     c.header('Cache-Control', 'no-cache, no-store, must-revalidate')
     try {
+      // spaIndexPath is built from ENTERPRISE_STATIC_DIR (operator env var, not user input);
+      // resolvePath() normalises it — no user-supplied value reaches this call.
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
       const html = await readFile(spaIndexPath, 'utf-8')
       return c.html(html)
     } catch {

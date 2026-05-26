@@ -105,14 +105,14 @@ export function renderTimeTracker(state: AppState): string {
 
 function renderManualEntryForm(tasks: AnyRecord[], entry: AnyRecord | null): string {
   const now = new Date()
-  const dateStr = now.toISOString().split('T')[0]!
+  const dateStr = now.toISOString().split('T').at(0) ?? ''
   const timeStr = now.toTimeString().slice(0, 5)
   const endTime = new Date(now.getTime() + 3600000).toTimeString().slice(0, 5)
 
   const startedAt = entry?.startedAt ? new Date(String(entry.startedAt)) : null
   const endedAt = entry?.endedAt ? new Date(String(entry.endedAt)) : null
 
-  const entryDate = startedAt ? startedAt.toISOString().split('T')[0]! : dateStr
+  const entryDate = startedAt ? (startedAt.toISOString().split('T').at(0) ?? '') : dateStr
   const entryStart = startedAt ? startedAt.toTimeString().slice(0, 5) : timeStr
   const entryEnd = endedAt ? endedAt.toTimeString().slice(0, 5) : endTime
   const entryDesc = entry?.description ? String(entry.description) : ''

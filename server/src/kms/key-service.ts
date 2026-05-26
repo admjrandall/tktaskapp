@@ -237,12 +237,22 @@ export class AzureKeyVaultKeyService implements KeyService {
     }
     const poller = await this._keyClient.beginDeleteKey(keyName)
     await poller.pollUntilDone()
+    // Azure Key Vault SDK types id and version as string | undefined, but both are
+    // always present on a key object returned by a successful create/rotate/delete call.
+    // Guard here to surface misconfiguration early rather than inserting null values.
+    const keyVaultUri = key.id
+    const keyVersion = key.properties.version
+    if (!keyVaultUri || !keyVersion) {
+      throw new Error(
+        'Azure Key Vault returned a key without id or version — check KMS configuration',
+      )
+    }
     await withTenant(tenantId, async (tx) => {
       await tx.insert(kmsKeyLifecycle).values({
         orgId: tenantId,
         userId,
-        keyVaultUri: key.id!,
-        keyVersion: key.properties.version!,
+        keyVaultUri,
+        keyVersion,
         event: 'DESTROYED',
         effectiveAt: new Date(),
       })

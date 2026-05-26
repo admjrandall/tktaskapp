@@ -116,12 +116,14 @@ export function renderListView(
 export function bindListView(onOpen: (id: string) => void, onSort: (f: string) => void): void {
   document.querySelectorAll<HTMLTableRowElement>('.list-table tbody tr').forEach((tr) => {
     tr.addEventListener('click', () => {
-      onOpen(tr.dataset.id!)
+      const id = tr.dataset.id
+      if (id) onOpen(id)
     })
   })
   document.querySelectorAll<HTMLTableCellElement>('.list-table th[data-sort]').forEach((th) => {
     th.addEventListener('click', () => {
-      onSort(th.dataset.sort!)
+      const sort = th.dataset.sort
+      if (sort) onSort(sort)
     })
   })
 }
@@ -162,7 +164,8 @@ export function renderGridView(
 export function bindGridView(onOpen: (id: string) => void): void {
   document.querySelectorAll<HTMLElement>('.grid-card').forEach((c) => {
     c.addEventListener('click', () => {
-      onOpen(c.dataset.id!)
+      const id = c.dataset.id
+      if (id) onOpen(id)
     })
   })
 }
@@ -239,10 +242,11 @@ export function bindKanbanView(
   const sf = store === 'tasks' ? 'status' : 'stage'
   document.querySelectorAll<HTMLElement>('.kanban-card').forEach((card) => {
     card.addEventListener('click', () => {
-      onOpen(card.dataset.id!)
+      const id = card.dataset.id
+      if (id) onOpen(id)
     })
     card.addEventListener('dragstart', (e: DragEvent) => {
-      dragging = card.dataset.id!
+      dragging = card.dataset.id ?? null
       if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
     })
   })
@@ -258,7 +262,8 @@ export function bindKanbanView(
       e.preventDefault()
       col.classList.remove('drag-over')
       if (!dragging) return
-      const ns = col.dataset.col!
+      const ns = col.dataset.col
+      if (!ns) return
       const rec = records.find((r) => r.id === dragging)
       if (rec && rec[sf] !== ns) {
         await dbUpdate(store, dragging, { [sf]: ns })
@@ -300,6 +305,8 @@ export function bindSpatialCanvas(
   const canvas = document.querySelector('.spatial-canvas')
   if (!canvas) return
   document.querySelectorAll<HTMLElement>('.spatial-node').forEach((node) => {
+    const nodeId = node.dataset.id
+    if (!nodeId) return
     const inner = node.querySelector<HTMLElement>('.spatial-node-inner')
     if (!inner) return
     let dragging = false
@@ -308,7 +315,7 @@ export function bindSpatialCanvas(
       origL = 0,
       origT = 0
     inner.addEventListener('click', () => {
-      if (!dragging) onOpen(node.dataset.id!)
+      if (!dragging) onOpen(nodeId)
     })
     inner.addEventListener('mousedown', (e: MouseEvent) => {
       if (e.button !== 0) return
@@ -331,7 +338,7 @@ export function bindSpatialCanvas(
         document.removeEventListener('mousemove', onMove)
         document.removeEventListener('mouseup', onUp)
         if (!dragging) return
-        await dbUpdate(store, node.dataset.id!, {
+        await dbUpdate(store, nodeId, {
           _x: parseFloat(node.style.left),
           _y: parseFloat(node.style.top),
         })

@@ -111,7 +111,7 @@ export function renderWorkspaceView(store: string): string {
   const filterActive = Object.values(s.filters).some((v) => v && v !== 'all')
   const filterPanel = s.filterOpen
     ? `<div class="filter-panel" style="position:absolute;top:calc(100%+6px);right:0;z-index:50;min-width:240px" id="filter-panel">
-    ${meta.stageField && meta.stages ? `<div class="form-group"><label class="form-label">${store === 'tasks' ? 'Status' : 'Stage'}</label><select class="select" data-filter="${meta.stageField}" style="height:32px"><option value="all">All</option>${meta.stages.map((sg) => `<option value="${sg}"${s.filters[meta.stageField!] === sg ? ' selected' : ''}>${sg}</option>`).join('')}</select></div>` : ''}
+    ${meta.stageField && meta.stages ? `<div class="form-group"><label class="form-label">${store === 'tasks' ? 'Status' : 'Stage'}</label><select class="select" data-filter="${meta.stageField}" style="height:32px"><option value="all">All</option>${meta.stages.map((sg) => `<option value="${sg}"${s.filters[meta.stageField ?? ''] === sg ? ' selected' : ''}>${sg}</option>`).join('')}</select></div>` : ''}
     ${store === 'projects' || store === 'tasks' ? `<div class="form-group"><label class="form-label">Priority</label><select class="select" data-filter="priority" style="height:32px"><option value="all">All</option>${PRIORITIES.map((p) => `<option value="${p}"${s.filters.priority === p ? ' selected' : ''}>${p}</option>`).join('')}</select></div>` : ''}
     ${store === 'projects' ? `<div class="form-group"><label class="form-label">Client</label><select class="select" data-filter="clientId" style="height:32px"><option value="all">All</option>${(dbGetAll('clients') as AnyRecord[]).map((c) => `<option value="${c.id}"${s.filters.clientId === c.id ? ' selected' : ''}>${escH(String(c.name || 'Untitled'))}</option>`).join('')}</select></div>` : ''}
     ${store === 'projects' ? `<div class="form-group"><label class="form-label">Owner</label><select class="select" data-filter="ownerId" style="height:32px"><option value="all">All</option>${(dbGetAll('people') as AnyRecord[]).map((p) => `<option value="${p.id}"${s.filters.ownerId === p.id ? ' selected' : ''}>${escH(String(p.name || 'Untitled'))}</option>`).join('')}</select></div>` : ''}
@@ -205,7 +205,7 @@ export function bindWorkspaceView(store: string): void {
       showToast('No records to export', 'error')
       return
     }
-    const fields = Object.keys(records[0]!).filter(
+    const fields = Object.keys(records[0] ?? {}).filter(
       (k) => !k.startsWith('_') && k !== 'files' && k !== 'notes',
     )
     downloadText(`taskapp-${store}.csv`, toCSV(records, fields), 'text/csv')

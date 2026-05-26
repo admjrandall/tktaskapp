@@ -100,9 +100,10 @@ export function renderFilesView(_state: AppState): string {
           const recId = f.relatedId ? String(f.relatedId) : null
           const recStore = f.relatedStore ? String(f.relatedStore) : null
           const rec = recId && recStore ? (dbGetById(recStore, recId) as AnyRecord | null) : null
-          const recLabel = rec
-            ? `<span style="font-size:.7rem;color:var(--accent);flex-shrink:0">${escH(recStore!)}: ${escH(String(rec.name || rec.title || ''))}</span>`
-            : ''
+          const recLabel =
+            rec && recStore
+              ? `<span style="font-size:.7rem;color:var(--accent);flex-shrink:0">${escH(recStore)}: ${escH(String(rec.name || rec.title || ''))}</span>`
+              : ''
           const name = String(f.name || '')
           const dataUrl = sanitizeDataUrl(f.dataUrl)
           const ext = name.split('.').pop()?.toLowerCase() ?? ''

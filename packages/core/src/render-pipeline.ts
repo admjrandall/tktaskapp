@@ -41,7 +41,9 @@ import { aiRuntime } from './ai/ai-runtime.js'
 import { auditedStaticHtml } from './render-utils.js'
 import type { AppState } from './state.js'
 
-export const appEl = document.getElementById('app')!
+const _appElRaw = document.getElementById('app')
+if (!_appElRaw) throw new Error('Fatal: #app element not found in DOM. Check the HTML template.')
+export const appEl: HTMLElement = _appElRaw
 
 let _prevView = ''
 

@@ -451,14 +451,14 @@ function _startNanoDownload(): void {
   _nanoModalTimer = setInterval(() => {
     const modal = aiRuntime._nanoModal as NanoModalState | null
     if (!modal) {
-      clearInterval(_nanoModalTimer!)
+      clearInterval(_nanoModalTimer ?? undefined)
       _nanoModalTimer = null
       return
     }
     if (aiRuntime.loadStarted) _loadObserved = true
 
     if (aiRuntime.ready) {
-      clearInterval(_nanoModalTimer!)
+      clearInterval(_nanoModalTimer ?? undefined)
       _nanoModalTimer = null
       aiRuntime._nanoModal = null
       navigate('ai')
@@ -467,7 +467,7 @@ function _startNanoDownload(): void {
     }
 
     if (_loadObserved && !aiRuntime.loadStarted) {
-      clearInterval(_nanoModalTimer!)
+      clearInterval(_nanoModalTimer ?? undefined)
       _nanoModalTimer = null
       if (aiRuntime._nanoModal) {
         modal.phase = 'error'
@@ -995,7 +995,7 @@ function renderWizardStep4(): string {
           ? 'Local/Internal AI Server'
           : 'Ollama'
         : w.tier === 'cloud'
-          ? `Cloud (${CLOUD_PROVIDERS[w.draft.cloudProvider!]?.label || ''})`
+          ? `Cloud (${CLOUD_PROVIDERS[w.draft.cloudProvider ?? '']?.label ?? ''})`
           : ''
   let modelLabel = ''
   if (w.tier === 'browser')
@@ -1004,7 +1004,7 @@ function renderWizardStep4(): string {
   else if (w.tier === 'cloud' && w.draft.cloudProvider)
     modelLabel =
       CLOUD_PROVIDERS[w.draft.cloudProvider]?.models.find(
-        (m) => m.id === w.draft.cloudModelByProvider[w.draft.cloudProvider!],
+        (m) => m.id === w.draft.cloudModelByProvider[w.draft.cloudProvider ?? ''],
       )?.label || ''
   return `<h3 style="font-size:1.125rem;font-weight:600;margin:0 0 .5rem">All set</h3>
     <div class="card" style="padding:1rem;margin:.75rem 0">

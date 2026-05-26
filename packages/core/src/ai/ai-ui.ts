@@ -464,7 +464,7 @@ export function bindAIChatWorkspace(): void {
         const { getState: gs, setState: ss } = await import('../state.js')
         const state = gs()
         const remaining = (state.conversations as Array<{ id: string }>).filter((c) => c.id !== id)
-        const nextId = remaining.length > 0 ? remaining[0]!.id : null
+        const nextId = remaining.at(0)?.id ?? null
         ss({ conversations: remaining, activeConversationId: nextId })
         if (aiRuntime.conversationId === id) {
           setActiveConversation(nextId)

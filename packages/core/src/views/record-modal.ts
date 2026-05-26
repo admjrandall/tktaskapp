@@ -147,7 +147,7 @@ const FILE_ICONS: Record<string, string> = {
   mp3: '🎵',
 }
 function getFileIcon(name: string): string {
-  const ext = (name || '').split('.').pop()!.toLowerCase()
+  const ext = (name || '').split('.').pop()?.toLowerCase() ?? ''
   return FILE_ICONS[ext] || '📎'
 }
 
@@ -187,7 +187,7 @@ export function renderRecordModal(
         return `<div class="form-group"><label class="form-label">${f.label}</label><select class="select" name="${f.key}"><option value="">— None —</option>${opts}</select></div>`
       }
       if (f.type === 'relation') {
-        const rel = dbGetAll(f.store!) as AnyRecord[]
+        const rel = dbGetAll(f.store ?? '') as AnyRecord[]
         const opts = rel
           .map(
             (r) =>
@@ -202,7 +202,11 @@ export function renderRecordModal(
 
   const tagHTML = allTags
     .map((t) => {
-      const c = TAG_COLORS.find((c) => c.label === t.color) || TAG_COLORS[7]!
+      const c = TAG_COLORS.find((c) => c.label === t.color) ?? {
+        bg: '#f1f5f9',
+        text: '#475569',
+        border: '#e2e8f0',
+      }
       return `<label style="display:inline-flex;align-items:center;gap:.375rem;cursor:pointer;padding:.25rem .5rem;border-radius:999px;font-size:.75rem;font-weight:500;background:${c.bg};color:${c.text};border:1.5px solid ${recTags.includes(String(t.id)) ? c.text : c.border}"><input type="checkbox" name="tagIds" value="${t.id}"${recTags.includes(String(t.id)) ? ' checked' : ''} style="width:12px;height:12px"> ${escH(String(t.name || ''))}</label>`
     })
     .join('')
@@ -289,14 +293,16 @@ export function bindRecordModal(config: {
     if (ta) ta.value = ''
   })
 
-  document.getElementById('delete-record-btn')?.addEventListener('click', () => {
-    showConfirm(`Delete this ${schema.label}? It will be moved to the Recycle Bin.`, async () => {
-      await softDelete(store, id!)
-      reloadData()
-      showToast(`${schema.label} moved to Recycle Bin`, 'success')
-      close()
+  if (id) {
+    document.getElementById('delete-record-btn')?.addEventListener('click', () => {
+      showConfirm(`Delete this ${schema.label}? It will be moved to the Recycle Bin.`, async () => {
+        await softDelete(store, id)
+        reloadData()
+        showToast(`${schema.label} moved to Recycle Bin`, 'success')
+        close()
+      })
     })
-  })
+  }
 
   // Modal file upload
   if (id) {
@@ -392,8 +398,8 @@ export function bindRecordModal(config: {
       }
     }
     try {
-      if (record) {
-        await dbUpdate(store, id!, fd)
+      if (record && id) {
+        await dbUpdate(store, id, fd)
         showToast(`${schema.label} updated`, 'success')
       } else {
         if (store === 'standaloneNotes') fd.createdAt = new Date().toISOString()

@@ -45,7 +45,7 @@ export function setDashHooks(appRenderWorkspace: (view: string) => void): void {
   _appRenderWorkspace = appRenderWorkspace
 }
 
-function getDashLayouts(): typeof _dashLayouts & object {
+function getDashLayouts(): Record<string, { x: number; y: number; w: number; h: number }> {
   if (!_dashLayouts) {
     try {
       const r = localStorage.getItem('taskapp_dash_v1')
@@ -54,7 +54,7 @@ function getDashLayouts(): typeof _dashLayouts & object {
       _dashLayouts = { ...DASH_DEFAULTS }
     }
   }
-  return _dashLayouts!
+  return _dashLayouts ?? { ...DASH_DEFAULTS }
 }
 function saveDashLayouts(): void {
   localStorage.setItem('taskapp_dash_v1', JSON.stringify(_dashLayouts))
@@ -253,7 +253,7 @@ export function renderDashboard(state: AppState): string {
 
   const desktopCards = cards
     .map((c) => {
-      const l = (L[c.id] || DASH_DEFAULTS[c.id])!
+      const l = L[c.id] ?? DASH_DEFAULTS[c.id] ?? { x: 0, y: 0, w: 300, h: 200 }
       return `<div class="dash-card" data-card="${c.id}" style="left:${l.x}px;top:${l.y}px;width:${l.w}px;height:${l.h}px;z-index:${_dashZMap[c.id] || 10}"><div class="dash-card-header" style="${_dashEdit ? 'cursor:grab' : 'cursor:default'}"><span class="dash-card-title">${c.title}</span>${_dashEdit ? `<span style="color:var(--text-tertiary);font-size:.7rem">drag</span>` : ''}</div><div class="dash-card-body">${c.body()}</div>${_dashEdit ? `<div style="position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:se-resize" class="dash-resize" data-card="${c.id}"></div>` : ''}</div>`
     })
     .join('')

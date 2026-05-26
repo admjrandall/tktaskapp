@@ -607,12 +607,13 @@ export async function execTool(tool: string, args: AnyRecord): Promise<unknown> 
         open_reports: 'reports',
         open_calendar: 'calendar',
       }
-      if (SAFE_INTENTS[intent]) {
+      const destination = SAFE_INTENTS[intent]
+      if (destination) {
         auditLog('ai_command_executed', { intent })
         setTimeout(() => {
-          navigate(SAFE_INTENTS[intent]!)
+          navigate(destination)
         }, 50)
-        return { executed: intent, navigated: SAFE_INTENTS[intent] }
+        return { executed: intent, navigated: destination }
       }
       auditLog('ai_command_rejected', { intent, reason: 'unknown_intent' })
       throw new Error(`Unknown command intent: ${intent}`)

@@ -305,7 +305,7 @@ export async function checkDueDates(): Promise<void> {
     (t) => t.status !== 'Done' && !t.done && t.dueDate,
   )
   for (const t of tasks) {
-    const due = parseDateLocal(t.dueDate) || new Date(t.dueDate!)
+    const due = parseDateLocal(t.dueDate) || new Date(String(t.dueDate))
     due.setHours(0, 0, 0, 0)
     const nid = 'due_' + t.id
     if (

@@ -269,8 +269,7 @@ export async function verifyAuditChain(): Promise<{
   firstBrokenAt: number | null
 }> {
   const entries = await _loadRaw()
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i]!
+  for (const [i, e] of entries.entries()) {
     if (e.signedDigest === undefined) continue // pre-Phase-4 entry; skip
     const prev = i > 0 ? entries[i - 1] : undefined
     const expectedPrevHash =

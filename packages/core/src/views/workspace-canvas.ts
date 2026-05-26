@@ -114,7 +114,8 @@ export function bindCanvas(opts: CanvasOptions): void {
 
   // Drag
   document.querySelectorAll<HTMLElement>('[data-drag]').forEach((handle) => {
-    const blockId = handle.dataset['drag']!
+    const blockId = handle.dataset['drag']
+    if (!blockId) return
     let startX = 0,
       startY = 0,
       origX = 0,
@@ -145,7 +146,8 @@ export function bindCanvas(opts: CanvasOptions): void {
       origX = block.x
       origY = block.y
       _canvasZMap[blockId] = ++_canvasZ
-      document.getElementById(`cb-${blockId}`)!.style.zIndex = String(_canvasZ)
+      const cbEl = document.getElementById(`cb-${blockId}`)
+      if (cbEl) cbEl.style.zIndex = String(_canvasZ)
       document.addEventListener('mousemove', onMove)
       document.addEventListener('mouseup', onUp)
     })
@@ -153,7 +155,8 @@ export function bindCanvas(opts: CanvasOptions): void {
 
   // Resize
   document.querySelectorAll<HTMLElement>('[data-resize]').forEach((handle) => {
-    const blockId = handle.dataset['resize']!
+    const blockId = handle.dataset['resize']
+    if (!blockId) return
     let startX = 0,
       startY = 0,
       origW = 0,

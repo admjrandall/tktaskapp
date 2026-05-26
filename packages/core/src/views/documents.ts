@@ -215,7 +215,7 @@ export function renderDocumentEditor(_state: AppState): string {
     mp3: '🎵',
   }
   const getFileIcon = (name: string) => {
-    const ext = (name || '').split('.').pop()!.toLowerCase()
+    const ext = (name || '').split('.').pop()?.toLowerCase() ?? ''
     return fileIcons[ext] || '📎'
   }
 
@@ -395,7 +395,7 @@ function _bindAIEditModal(
         // Walk up to the nearest block-level ancestor inside the editor so we insert
         // after a whole paragraph rather than splitting text mid-word
         let anchor: Node = range.commonAncestorContainer
-        if (anchor.nodeType === Node.TEXT_NODE) anchor = anchor.parentElement!
+        if (anchor.nodeType === Node.TEXT_NODE) anchor = anchor.parentElement ?? anchor
         while (
           anchor.parentElement &&
           anchor.parentElement !== editor &&
@@ -842,6 +842,10 @@ export function bindDocumentEditor(): void {
           selection.removeAllRanges()
           selection.addRange(range)
         }
+        // execCommand is the only practical API for synchronous contenteditable formatting
+        // (bold, italic, lists, etc.). The Clipboard API (March 2025 Baseline) replaces
+        // copy/cut/paste only; no modern equivalent exists for these formatting commands.
+        // eslint-disable-next-line @typescript-eslint/no-deprecated
       } else document.execCommand(cmd, false, val ?? undefined)
       markDirty()
     })
@@ -856,9 +860,10 @@ export function bindDocumentEditor(): void {
   })
 
   document.getElementById('doc-delete-btn')?.addEventListener('click', () => {
-    if (!_docOpenId) return
+    const docId = _docOpenId
+    if (!docId) return
     showConfirm('Delete this document? It will be moved to the Recycle Bin.', async () => {
-      await softDelete('documents', _docOpenId!)
+      await softDelete('documents', docId)
       reloadData()
       showToast('Document moved to Recycle Bin', 'success')
       _docActiveTab = 'write'
@@ -873,7 +878,9 @@ export function bindDocumentEditor(): void {
 
   document.querySelectorAll<HTMLElement>('[data-veridx]').forEach((item) => {
     item.addEventListener('click', async () => {
-      const doc = dbGetById('documents', _docOpenId!) as AnyRecord | null
+      const docId = _docOpenId
+      if (!docId) return
+      const doc = dbGetById('documents', docId) as AnyRecord | null
       if (!doc) return
       const versionIdx = parseInt((item.dataset as DOMStringMap & { veridx: string }).veridx)
       const ver = (doc.versions as AnyRecord[])[versionIdx]
@@ -1282,8 +1289,8 @@ function _mdToHtml(md: string): string {
     const hm = raw.match(/^(#{1,3})\s+(.+)/)
     if (hm) {
       closeList()
-      const tag = `h${hm[1]!.length}`
-      out.push(`<${tag}>${inline(esc(hm[2]!.trim()))}</${tag}>`)
+      const tag = `h${(hm[1] ?? '').length}`
+      out.push(`<${tag}>${inline(esc((hm[2] ?? '').trim()))}</${tag}>`)
       continue
     }
 
@@ -1305,7 +1312,7 @@ function _mdToHtml(md: string): string {
         out.push('<ul>')
         inUl = true
       }
-      out.push(`<li>${inline(esc(ul[1]!))}</li>`)
+      out.push(`<li>${inline(esc(ul[1] ?? ''))}</li>`)
       continue
     }
 
@@ -1320,7 +1327,7 @@ function _mdToHtml(md: string): string {
         out.push('<ol>')
         inOl = true
       }
-      out.push(`<li>${inline(esc(ol[1]!))}</li>`)
+      out.push(`<li>${inline(esc(ol[1] ?? ''))}</li>`)
       continue
     }
 
@@ -1328,7 +1335,7 @@ function _mdToHtml(md: string): string {
     const bq = raw.match(/^>\s*(.*)/)
     if (bq) {
       closeAll()
-      out.push(`<blockquote><p>${inline(esc(bq[1]!))}</p></blockquote>`)
+      out.push(`<blockquote><p>${inline(esc(bq[1] ?? ''))}</p></blockquote>`)
       continue
     }
 
@@ -1385,7 +1392,8 @@ function htmlToOoxml(title: string, html: string): OoxmlPart {
   // Parse into a DOM for clean traversal
   const parser = new DOMParser()
   const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html')
-  const root = doc.querySelector('div')!
+  const root = doc.querySelector('div')
+  if (!root) throw new Error('htmlToOoxml: DOMParser did not produce expected div wrapper')
 
   const hyperlinks: { id: string; url: string }[] = []
   let hlinkCounter = 0
@@ -1691,6 +1699,8 @@ function buildZip(parts: OoxmlPart): Uint8Array {
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
     let crc = 0xffffffff
     for (let i = 0; i < data.byteLength; i++) {
+      // index is always 0–255 due to the & 0xff mask; crcTable has exactly 256 entries.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       crc = crcTable[(crc ^ view.getUint8(i)) & 0xff]! ^ (crc >>> 8)
     }
     return (crc ^ 0xffffffff) >>> 0
@@ -1745,8 +1755,7 @@ function buildZip(parts: OoxmlPart): Uint8Array {
   const cdirStart = offset
   const cdirEntries: Uint8Array[] = []
 
-  for (let i = 0; i < files.length; i++) {
-    const { offset: localOffset, nameBytes, crc, size } = localHeaders[i]!
+  for (const { offset: localOffset, nameBytes, crc, size } of localHeaders) {
     const cd = concat([
       new Uint8Array([0x50, 0x4b, 0x01, 0x02]), // central dir signature
       u16le(20), // version made by

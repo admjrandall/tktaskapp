@@ -157,13 +157,15 @@ export function pcDetailsBody(project: AnyRecord): string {
 }
 
 export function pcBindDetails(_project: AnyRecord): void {
+  const projectId = _pcProjectId
+  if (!projectId) return
   document
     .querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-pc-field]')
     .forEach((el) => {
       el.addEventListener('change', async () => {
         const field = (el.dataset as DOMStringMap & { pcField: string }).pcField
         const value = (el as HTMLInputElement).value
-        await dbUpdate('projects', _pcProjectId!, { [field]: value })
+        await dbUpdate('projects', projectId, { [field]: value })
         reloadData()
         if (field === 'name') {
           const tb = document.getElementById('pc-project-name')
@@ -173,7 +175,7 @@ export function pcBindDetails(_project: AnyRecord): void {
       el.addEventListener('blur', async () => {
         if (el.tagName === 'INPUT') {
           const field = (el.dataset as DOMStringMap & { pcField: string }).pcField
-          await dbUpdate('projects', _pcProjectId!, { [field]: (el as HTMLInputElement).value })
+          await dbUpdate('projects', projectId, { [field]: (el as HTMLInputElement).value })
           reloadData()
           if (field === 'name') {
             const tb = document.getElementById('pc-project-name')
@@ -184,7 +186,7 @@ export function pcBindDetails(_project: AnyRecord): void {
     })
   document.getElementById('pc-delete-btn')?.addEventListener('click', () => {
     showConfirm('Delete this project? It will be moved to the Recycle Bin.', async () => {
-      await softDelete('projects', _pcProjectId!)
+      await softDelete('projects', projectId)
       reloadData()
       closeProjectCanvas()
       showToast('Project moved to Recycle Bin', 'success')
@@ -200,9 +202,10 @@ export function pcNarrativeBody(project: AnyRecord): string {
 
 export function pcBindNarrative(_project: AnyRecord): void {
   const ta = document.getElementById('pc-narrative-ta') as HTMLTextAreaElement | null
-  if (!ta) return
+  const projectId = _pcProjectId
+  if (!ta || !projectId) return
   ta.addEventListener('blur', async () => {
-    await dbUpdate('projects', _pcProjectId!, { description: ta.value })
+    await dbUpdate('projects', projectId, { description: ta.value })
     reloadData()
   })
 }
@@ -303,17 +306,19 @@ export function pcNotesBody(project: AnyRecord): string {
 }
 
 export function pcBindNotes(_project: AnyRecord): void {
+  const projectId = _pcProjectId
+  if (!projectId) return
   document.getElementById('pc-add-note')?.addEventListener('click', async () => {
     const ta = document.getElementById('pc-new-note') as HTMLTextAreaElement | null
     const text = ta?.value?.trim()
     if (!text) return
-    const existing = dbGetById('projects', _pcProjectId!) as AnyRecord | null
+    const existing = dbGetById('projects', projectId) as AnyRecord | null
     const newNote = { id: Date.now().toString(36), text, date: new Date().toISOString() }
     const updatedNotes = [
       ...(Array.isArray(existing?.notes) ? (existing.notes as AnyRecord[]) : []),
       newNote,
     ]
-    await dbUpdate('projects', _pcProjectId!, { notes: updatedNotes })
+    await dbUpdate('projects', projectId, { notes: updatedNotes })
     reloadData()
     if (ta) ta.value = ''
     pcRefreshPanel('notes')
@@ -326,11 +331,11 @@ export function pcBindNotes(_project: AnyRecord): void {
   document.querySelectorAll<HTMLElement>('[data-del-note]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const nid = (btn.dataset as DOMStringMap & { delNote: string }).delNote
-      const existing = dbGetById('projects', _pcProjectId!) as AnyRecord | null
+      const existing = dbGetById('projects', projectId) as AnyRecord | null
       const filtered = ((existing?.notes as AnyRecord[] | undefined) || []).filter(
         (n) => n.id !== nid,
       )
-      await dbUpdate('projects', _pcProjectId!, { notes: filtered })
+      await dbUpdate('projects', projectId, { notes: filtered })
       reloadData()
       pcRefreshPanel('notes')
     })
@@ -376,18 +381,20 @@ export function pcPeopleBody(project: AnyRecord, tasks: AnyRecord[]): string {
 }
 
 export function pcBindPeople(_project: AnyRecord): void {
+  const projectId = _pcProjectId
+  if (!projectId) return
   document.getElementById('pc-add-person-btn')?.addEventListener('click', async () => {
     const sel = document.getElementById('pc-add-person-sel') as HTMLSelectElement | null
     const pid = sel?.value
     if (!pid) return
-    const existing = dbGetById('projects', _pcProjectId!) as AnyRecord | null
+    const existing = dbGetById('projects', projectId) as AnyRecord | null
     if (!existing) return
     if (!existing.ownerId) {
-      await dbUpdate('projects', _pcProjectId!, { ownerId: pid })
+      await dbUpdate('projects', projectId, { ownerId: pid })
     } else {
       const teamIds = Array.isArray(existing._teamIds) ? (existing._teamIds as string[]) : []
       if (!teamIds.includes(pid)) {
-        await dbUpdate('projects', _pcProjectId!, { _teamIds: [...teamIds, pid] })
+        await dbUpdate('projects', projectId, { _teamIds: [...teamIds, pid] })
       }
     }
     reloadData()
@@ -418,6 +425,8 @@ export function renderProjectCanvas(): string {
   const progressPct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0
 
   const mkPanel = (id: string, title: string, bodyHTML: string) => {
+    // panels is built from PC_DEFAULTS keys; mkPanel is only called with those hardcoded keys.
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const l = panels[id]!
     return `<div class="proj-panel" data-panel="${id}" style="left:${l.x}px;top:${l.y}px;width:${l.w}px;height:${l.h}px;z-index:${l.z}">
       <div class="proj-panel-header" data-drag="${id}">
@@ -457,6 +466,8 @@ export function renderProjectCanvas(): string {
 }
 
 export function bindProjectCanvas(): void {
+  const projectId = _pcProjectId
+  if (!projectId) return
   let _pcTopZ = 20
 
   document.getElementById('pc-close')?.addEventListener('click', () => {
@@ -466,7 +477,7 @@ export function bindProjectCanvas(): void {
     })
   })
 
-  const project = dbGetById('projects', _pcProjectId!) as AnyRecord
+  const project = dbGetById('projects', projectId) as AnyRecord
   const _tasks = (dbGetAll('tasks') as AnyRecord[]).filter((t) => t.projectId === _pcProjectId)
 
   pcBindDetails(project)
