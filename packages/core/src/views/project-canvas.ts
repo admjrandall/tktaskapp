@@ -478,7 +478,7 @@ export function bindProjectCanvas(): void {
   })
 
   const project = dbGetById('projects', projectId) as AnyRecord
-  const _tasks = (dbGetAll('tasks') as AnyRecord[]).filter((t) => t.projectId === _pcProjectId)
+  const _tasks = (dbGetAll('tasks') as AnyRecord[]).filter((t) => t.projectId === projectId)
 
   pcBindDetails(project)
   pcBindNarrative(project)

@@ -37,6 +37,7 @@ export type StepUpOperation =
   | 'legal_hold_change'
   | 'kms_key_manage'
   | 'org_settings_change'
+  | 'user_suspend'
 
 const STEP_UP_TTL_SECONDS = 5 * 60 // 5 minutes — single-use
 const STEP_UP_TOKEN_HEADER = 'X-Step-Up-Token'

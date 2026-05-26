@@ -16,12 +16,16 @@ import * as v from 'valibot'
 // Populated from env vars at module evaluation time. The server refuses /auth/*
 // requests with 503 if ENTRA_CLIENT_ID is absent (rather than silently breaking).
 
+/** Access-token lifetime in seconds. Export so dependent code (e.g. revocation windows)
+ *  stays in sync with the actual JWT TTL without hardcoding the value. RFC 9700 §2.2.2. */
+export const ACCESS_TOKEN_TTL_SECONDS = 900
+
 function _oidcConfig(): OidcConfig {
   return {
     issuer: `https://login.microsoftonline.com/${process.env['ENTRA_TENANT_ID'] ?? 'common'}/v2.0`,
     clientId: process.env['ENTRA_CLIENT_ID'] ?? '',
     codeChallengeMethod: 'S256',
-    accessTokenTtlSeconds: 900, // 15 min — RFC 9700 §2.2.2
+    accessTokenTtlSeconds: ACCESS_TOKEN_TTL_SECONDS, // 15 min — RFC 9700 §2.2.2
     refreshTokenTtlSeconds: 30 * 24 * 60 * 60, // 30 days
     requireDPoP: false,
   }

@@ -5,6 +5,7 @@ import { getAuthStateStore } from './state-store.js'
 import { db } from '../db/index.js'
 import { tenantUsers } from '../db/schema/users.js'
 import { eq, and, isNull } from 'drizzle-orm'
+import { otel } from '../observability/otel.js'
 
 export async function authMiddleware(c: Context, next: Next): Promise<Response | undefined> {
   const authHeader = c.req.header('Authorization')
@@ -85,7 +86,18 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
       if (await store.isUserSessionRevoked(user.id)) {
         return c.json({ error: 'Unauthorized' }, 401)
       }
-    } catch {
+    } catch (storeErr) {
+      // Always log — store failures must be visible in dev/staging too.
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        service: 'tktaskapp-server',
+        tenantId: user.orgId,
+        requestId: c.req.path,
+        message:
+          'AuthStateStore unavailable during revocation check — failing closed in production',
+        extra: { error: String(storeErr) },
+      })
       if (process.env['NODE_ENV'] === 'production') {
         return c.json({ error: 'Unauthorized' }, 401)
       }

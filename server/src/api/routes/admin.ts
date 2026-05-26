@@ -4,6 +4,7 @@ import { usersService } from '../../services/users.service.js'
 import { opaMiddleware, resourcePolicyMiddleware } from '../../middleware/opa.js'
 import { requireStepUp } from '../../auth/step-up.js'
 import { getAuthStateStore } from '../../auth/state-store.js'
+import { ACCESS_TOKEN_TTL_SECONDS } from '../../auth/routes.js'
 import { otel } from '../../observability/otel.js'
 import { LegalHoldService } from '../../kms/legal-hold.js'
 import { LegalHoldActiveError, getKmsService } from '../../kms/key-service.js'
@@ -38,10 +39,6 @@ const LegalHoldPlaceSchema = v.object({
 })
 
 const legalHoldService = new LegalHoldService()
-
-// Access-token TTL — must match the value in auth/routes.ts (_oidcConfig).
-// Used as the revocation window when suspending a user.
-const ACCESS_TOKEN_TTL_SECONDS = 900
 
 export const adminRouter = new Hono<HonoEnv>()
 
@@ -97,6 +94,7 @@ adminRouter.get(
 
 adminRouter.post(
   '/users/:id/suspend',
+  requireStepUp('user_suspend'),
   resourcePolicyMiddleware('suspend_user', 'users', async (_c, tenantId, resourceId) => {
     const user = await usersService.getById(tenantId, resourceId)
     return user?.orgId ?? null

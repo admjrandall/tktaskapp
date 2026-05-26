@@ -29,6 +29,7 @@ High-risk operations require `requireStepUp(operation)` middleware from `server/
 | Operation               | Route                                                                                                          |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `gdpr_erase`            | `POST /api/v1/admin/users/:id/erase`                                                                           |
+| `user_suspend`          | `POST /api/v1/admin/users/:id/suspend`                                                                         |
 | `ai_provider_configure` | `POST /api/v1/admin/ai-allowlist`, `DELETE /api/v1/admin/ai-allowlist/:id`                                     |
 | `org_settings_change`   | `PATCH /api/v1/admin/org-settings`, `POST /api/v1/admin/integrations`, `DELETE /api/v1/admin/integrations/:id` |
 | `data_export`           | `GET /api/v1/audit/export`                                                                                     |
