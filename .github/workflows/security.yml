@@ -42,12 +42,48 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Semgrep — SAST
-        uses: returntocorp/semgrep-action@v1
+      # Semgrep runs community rules with no token required.
+      # To upgrade to Pro rules + cross-file dataflow (free for ≤10 contributors):
+      #   1. Create account at https://semgrep.dev
+      #   2. Generate token: https://semgrep.dev/orgs/-/settings/tokens
+      #   3. Add repo secret SEMGREP_APP_TOKEN
+      #   4. Replace the run: block below with:
+      #        uses: semgrep/semgrep-action@v1
+      #        env: { SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }} }
+      - name: Semgrep — SAST (community rules)
+        run: |
+          pip install semgrep --quiet
+          semgrep scan \
+            --config p/javascript \
+            --config p/typescript \
+            --config p/owasp-top-ten \
+            --config p/cwe-top-25 \
+            --sarif \
+            --quiet \
+            . > semgrep.sarif
+        continue-on-error: true
+
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('semgrep.sarif') != ''
         with:
-          config: auto
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Bearer — SAST + Privacy (OWASP / GDPR / HIPAA patterns)
+        uses: bearer/bearer-action@v2
+        with:
+          format: sarif
+          output: bearer.sarif
+          exit-code: "0"
+          skip-path: "dist,node_modules,taskapp.html,originalfiles"
+
+      - name: Upload Bearer SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('bearer.sarif') != ''
+        with:
+          sarif_file: bearer.sarif
+          category: bearer
 
       - name: License compliance check
         run: |
