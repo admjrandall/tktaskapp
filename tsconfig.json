@@ -20,7 +20,8 @@
     "server/src/**/*.ts",
     "scripts/**/*.mjs",
     "config/**/*.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "vitest.shared.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

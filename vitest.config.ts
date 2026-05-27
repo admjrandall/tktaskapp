@@ -1,19 +1,10 @@
 import { defineConfig } from 'vitest/config'
 import { viteAliases } from './config/aliases.js'
+import { sharedConfig } from './vitest.shared'
 
 export default defineConfig({
   test: {
-    environment: 'node',
-    hookTimeout: 30_000,
-    include: ['tests/**/*.ts'],
-    exclude: [
-      '**/node_modules/**',
-      'tests/adapters/adapter-contract.ts',
-      'tests/adapters/kms-mock.ts',
-      'tests/adapters/mock-mobile-adapters.ts',
-      // Playwright E2E tests run via pnpm exec playwright test, not vitest.
-      'tests/e2e/**',
-    ],
+    ...sharedConfig,
     coverage: {
       provider: 'istanbul',
       include: [
@@ -25,6 +16,15 @@ export default defineConfig({
       thresholds: { branches: 80, functions: 80, lines: 80, statements: 80 },
       reportsDirectory: './coverage',
     },
+    // test.projects: each entry is a vitest.config.ts for a package/app/workspace.
+    // Individual project configs must use defineProject (not defineConfig) to avoid
+    // circular project references. Coverage is configured here at root only.
+    projects: [
+      'tests/vitest.config.ts',
+      'packages/*/vitest.config.ts',
+      'apps/*/vitest.config.ts',
+      'server/vitest.config.ts',
+    ],
   },
   resolve: {
     alias: viteAliases,
