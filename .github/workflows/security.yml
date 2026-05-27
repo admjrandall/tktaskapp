@@ -83,7 +83,7 @@ jobs:
 
           exit-code: '0'
           config-file: bearer.yml
-          skip-path: 'dist,node_modules,taskapp.html,originalfiles'
+          skip-path: 'dist,node_modules,taskapp.html,originalfiles,.claude'
 
       - name: Upload Bearer SARIF
         uses: github/codeql-action/upload-sarif@fee9466b8957867761f2d78f922ab084e3e2dd17
