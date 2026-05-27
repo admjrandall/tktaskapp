@@ -107,6 +107,20 @@ importers:
 
   apps/offline-web: {}
 
+  packages/adapter-dataverse: {}
+
+  packages/adapter-kms: {}
+
+  packages/adapter-mobile-native: {}
+
+  packages/adapter-null: {}
+
+  packages/adapter-rxdb: {}
+
+  packages/adapter-rxdb-couchdb: {}
+
+  packages/core: {}
+
   server:
     dependencies:
       '@aws-sdk/client-kms':
