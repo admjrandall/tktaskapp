@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "pnpm --filter @tktaskapp/offline-web run build",
     "sync": "cap sync",
-    "open": "cap open ios"
+    "open:ios": "cap open ios",
+    "open:android": "cap open android"
   },
   "devDependencies": {}
 }

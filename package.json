@@ -13,7 +13,7 @@
     "build:offline:internal-ai": "turbo run build:offline:internal-ai --filter=@tktaskapp/offline-web",
     "build:enterprise": "turbo run build:enterprise --filter=@tktaskapp/enterprise-web",
     "build:dataverse": "turbo run build:dataverse --filter=@tktaskapp/dataverse",
-    "build:mobile": "pnpm run build:enterprise",
+    "build:mobile": "pnpm --filter @tktaskapp/enterprise-web run build && pnpm --filter @tktaskapp/mobile run sync",
     "build:all": "turbo run build:offline build:offline:no-ai build:offline:internal-ai build:enterprise build:dataverse",
     "typecheck": "tsc --noEmit",
     "lint": "eslint packages apps config server",
