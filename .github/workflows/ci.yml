@@ -16,6 +16,10 @@ jobs:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
       TURBO_API: ${{ secrets.TURBO_API }}
+      TURBO_TELEMETRY_DISABLED: '1'
+      # Set TURBO_OTEL_TRACE_ENDPOINT in repository secrets to enable experimental
+      # Turborepo task span export to your OTLP backend (Turborepo 2.9+ feature).
+      TURBO_OTEL_TRACE_ENDPOINT: ${{ secrets.TURBO_OTEL_TRACE_ENDPOINT }}
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
