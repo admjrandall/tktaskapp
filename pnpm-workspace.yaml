@@ -2,6 +2,18 @@ packages:
   - 'packages/*'
   - 'apps/*'
   - 'server'
+
+# pnpm catalog — single source of truth for shared dev-dependency versions.
+# Reference with "catalog:" in any package.json devDependencies.
+# Docs: https://pnpm.io/catalogs
+catalog:
+  typescript: '^6.0.3'
+  vitest: '^4.1.7'
+  eslint: '^10.4.0'
+  typescript-eslint: '^8.59.4'
+  prettier: '^3.8.3'
+  vite: '^8.0.14'
+
 allowBuilds:
   esbuild: false
   onnxruntime-node: false
