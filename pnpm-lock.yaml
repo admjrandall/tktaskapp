@@ -80,6 +80,9 @@ importers:
       pg:
         specifier: ^8.16.0
         version: 8.21.0
+      pnpm-license-checker:
+        specifier: ^1.2.2
+        version: 1.2.2
       prettier:
         specifier: ^3.8.3
         version: 3.8.3
@@ -4298,6 +4301,14 @@ packages:
         integrity: sha512-ZClg6AaYvamvYEE82d3Iyd3vSSIjQ+odgjaTzRuO3s7toCdFKczob2i0zCh7JE8kWn17yvAWhUVxvqGwUalsRA==,
       }
 
+  json5@2.2.3:
+    resolution:
+      {
+        integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==,
+      }
+    engines: { node: '>=6' }
+    hasBin: true
+
   jsonfile@4.0.0:
     resolution:
       {
@@ -5024,6 +5035,14 @@ packages:
         integrity: sha512-ZIfcLJC+7E7FBFnDxm9MPmt7D+DidyQ26lewieO75AdhA2ayMtsJSES0iWzqJQbcVRSrTufQoy0DR94xHue0oA==,
       }
     engines: { node: '>=10.4.0' }
+
+  pnpm-license-checker@1.2.2:
+    resolution:
+      {
+        integrity: sha512-Eo/sQY6AFQx3IdUtKo1sE0Ijn7D2az9u2Wa8GR6WFG7Kego7Z8IJftY22kLxwpEXDfYerO40cU59Piv85eVDRw==,
+      }
+    engines: { node: '>= 20', pnpm: '>= 10' }
+    hasBin: true
 
   postcss@8.5.15:
     resolution:
@@ -8831,6 +8850,8 @@ snapshots:
 
   json-stringify-safe@5.0.1: {}
 
+  json5@2.2.3: {}
+
   jsonfile@4.0.0:
     optionalDependencies:
       graceful-fs: 4.2.11
@@ -9222,6 +9243,10 @@ snapshots:
       '@xmldom/xmldom': 0.9.10
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
+
+  pnpm-license-checker@1.2.2:
+    dependencies:
+      json5: 2.2.3
 
   postcss@8.5.15:
     dependencies:

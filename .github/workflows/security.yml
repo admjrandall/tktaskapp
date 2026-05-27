@@ -75,8 +75,8 @@ jobs:
         with:
           format: sarif
           output: bearer.sarif
-          exit-code: "0"
-          skip-path: "dist,node_modules,taskapp.html,originalfiles"
+          exit-code: '0'
+          skip-path: 'dist,node_modules,taskapp.html,originalfiles'
 
       - name: Upload Bearer SARIF
         uses: github/codeql-action/upload-sarif@v3
@@ -86,8 +86,4 @@ jobs:
           category: bearer
 
       - name: License compliance check
-        run: |
-          npx license-checker-evergreen --onlyAllow \
-            "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;CC0-1.0;Unlicense;0BSD;BlueOak-1.0.0" \
-            --excludePrivatePackages \
-            --production
+        run: pnpm exec pnpm-license-checker --prod
