@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
-import { dirname, resolve } from 'node:path'
+import { dirname, relative, resolve } from 'node:path'
 
 const TEMPLATE_PATH = resolve('infra/k8s/network-policy.yaml')
 const OUTPUT_PATH = resolve(
@@ -49,4 +49,4 @@ if (rendered.includes('${')) {
 
 await mkdir(dirname(OUTPUT_PATH), { recursive: true })
 await writeFile(OUTPUT_PATH, rendered)
-console.log(`Rendered ${OUTPUT_PATH}`)
+console.log('Rendered ' + relative(process.cwd(), OUTPUT_PATH))

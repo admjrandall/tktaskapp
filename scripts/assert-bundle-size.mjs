@@ -12,11 +12,12 @@
 
 import { readFileSync } from 'fs'
 import { gzipSync } from 'zlib'
-import { resolve, dirname } from 'path'
+import { resolve, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, '..')
+const rel = (p) => relative(root, p)
 
 const PROFILES = [
   {
@@ -52,7 +53,7 @@ for (const profile of PROFILES) {
     content = readFileSync(profile.path)
   } catch {
     // Artifact not built — skip without failing (only assert what exists)
-    console.log(`⏭  ${profile.name}: artifact not found at ${profile.path} — skipped`)
+    console.log('⏭  ' + profile.name + ': artifact not found at ' + rel(profile.path) + ' — skipped')
     continue
   }
 
@@ -64,20 +65,19 @@ for (const profile of PROFILES) {
   const rawStatus = rawOk ? '✅' : '❌'
   const gzipStatus = gzipOk ? '✅' : '❌'
 
-  console.log(`${rawStatus}${gzipStatus} ${profile.name}`)
-  console.log(`   raw:  ${rawBytes.toLocaleString()} bytes (budget ${profile.maxRaw.toLocaleString()})`)
-  console.log(`   gzip: ${gzipBytes.toLocaleString()} bytes (budget ${profile.maxGzip.toLocaleString()})`)
+  const statusLine = rawStatus + gzipStatus + ' ' + profile.name
+  const rawLine = '   raw:  ' + rawBytes.toLocaleString() + ' bytes (budget ' + profile.maxRaw.toLocaleString() + ')'
+  const gzipLine = '   gzip: ' + gzipBytes.toLocaleString() + ' bytes (budget ' + profile.maxGzip.toLocaleString() + ')'
+  console.log(statusLine)
+  console.log(rawLine)
+  console.log(gzipLine)
 
   if (!rawOk) {
-    console.error(
-      `   RAW OVER BUDGET by ${(rawBytes - profile.maxRaw).toLocaleString()} bytes`,
-    )
+    console.error('   RAW OVER BUDGET by ' + (rawBytes - profile.maxRaw).toLocaleString() + ' bytes')
     failed = true
   }
   if (!gzipOk) {
-    console.error(
-      `   GZIP OVER BUDGET by ${(gzipBytes - profile.maxGzip).toLocaleString()} bytes`,
-    )
+    console.error('   GZIP OVER BUDGET by ' + (gzipBytes - profile.maxGzip).toLocaleString() + ' bytes')
     failed = true
   }
 }
