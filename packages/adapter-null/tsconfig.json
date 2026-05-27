@@ -3,7 +3,12 @@
   "compilerOptions": {
     "composite": true,
     "declarationMap": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "paths": {
+      "@core/*": ["../core/src/*"],
+      "@config/*": ["../../config/*"]
+    }
   },
+  "references": [{ "path": "../core" }],
   "include": ["src/**/*.ts"]
 }
