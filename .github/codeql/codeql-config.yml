@@ -5,3 +5,4 @@ paths-ignore:
   - originalfiles/**
   - dist/**
   - node_modules/**
+  - .claude/**

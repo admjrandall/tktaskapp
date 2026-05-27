@@ -62,6 +62,7 @@ jobs:
             --exclude originalfiles \
             --exclude dist \
             --exclude node_modules \
+            --exclude .claude \
             --exclude-rule typescript.react.security.audit.react-unsanitized-method.react-unsanitized-method \
             --sarif \
             --quiet \
@@ -84,6 +85,11 @@ jobs:
           exit-code: '0'
           config-file: bearer.yml
           skip-path: 'dist,node_modules,taskapp.html,originalfiles,.claude'
+
+      - name: Normalize empty Bearer SARIF
+        if: always() && hashFiles('bearer.sarif') != ''
+        run: |
+          node -e "const fs = require('node:fs'); const p = 'bearer.sarif'; const sarif = JSON.parse(fs.readFileSync(p, 'utf8')); for (const run of sarif.runs || []) { if (!Array.isArray(run.results)) run.results = []; } fs.writeFileSync(p, JSON.stringify(sarif));"
 
       - name: Upload Bearer SARIF
         uses: github/codeql-action/upload-sarif@fee9466b8957867761f2d78f922ab084e3e2dd17
