@@ -5052,7 +5052,7 @@ const stores = ['clients', 'departments', 'projects', 'tasks', 'people', 'standa
         if (!_aiReady) { showToast('Connect AI first in Settings → AI', 'error'); return; }
         const title = titleInput?.value || '';
         const bodyContent = editor?.innerHTML || '';
-        const prompt = `I have a document titled "${title}". Here is the current content:\n\n${bodyContent.replace(/<[^>]*>/g,'').slice(0,2000)}\n\nPlease suggest improvements or edits.`;
+        const prompt = `I have a document titled "${title}". Here is the current content:\n\n${(new DOMParser().parseFromString(bodyContent, 'text/html').body.textContent || '').slice(0,2000)}\n\nPlease suggest improvements or edits.`;
         _aiHistory.push({ role: 'user', content: prompt });
         setState({ aiPanelOpen: true });
       });
