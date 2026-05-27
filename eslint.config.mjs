@@ -8,7 +8,6 @@ export default tseslint.config(
       'dist/**',
       '**/dist/**',
       'node_modules/**',
-      '**/vite.config.ts',
       'apps/*/index.html',
       'apps/*/public/**/*.js',
       'server/drizzle.config.ts',

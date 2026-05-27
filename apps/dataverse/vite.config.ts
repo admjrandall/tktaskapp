@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { defineConfig } from 'vite'
 import { fileURLToPath } from 'url'
-import { dirname, resolve } from 'path'
+import { dirname } from 'path'
 import { viteAliases } from '../../config/aliases.js'
 
 const __filename = fileURLToPath(import.meta.url)
