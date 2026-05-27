@@ -1,0 +1,11 @@
+{
+  "name": "@tktaskapp/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "cap sync",
+    "open": "cap open ios"
+  },
+  "devDependencies": {}
+}
