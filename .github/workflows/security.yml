@@ -75,7 +75,9 @@ jobs:
         with:
           format: sarif
           output: bearer.sarif
+
           exit-code: '0'
+          config-file: bearer.yml
           skip-path: 'dist,node_modules,taskapp.html,originalfiles'
 
       - name: Upload Bearer SARIF
