@@ -523,7 +523,7 @@ Set `TURBO_TELEMETRY_DISABLED=1` to disable Turborepo's separate anonymous usage
 Turborepo 2.8 added automatic Git worktree cache sharing. When multiple worktrees exist for the same repository (e.g. AI agent sessions working on different branches in parallel), Turborepo shares the local cache across worktrees without any configuration. Unchanged packages produce cache hits even when switching between branches.
 
 **Minimum version required:** Turborepo 2.8 (this project uses `turbo: ^2.9.14`).
-**Configuration required:** None — automatic when using Git worktrees.
+**Configuration required:** None — automatic when using Git worktrees. See the `// Git worktree` comment in `turbo.json` for an in-file reference.
 
 This is particularly useful for AI agent sessions (Claude Code on the web) that work in isolated worktrees: a build on one branch caches outputs that a session on another branch can reuse if the inputs are identical.
 
