@@ -1,9 +1,9 @@
 /// <reference types="node" />
 import { defineConfig } from 'vite'
-import type { Alias } from 'vite'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
 import { readFileSync } from 'fs'
+import { viteAliases } from '../../config/aliases.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -49,10 +49,6 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: [
-      { find: '@core', replacement: resolve(repoRoot, 'packages/core/src') },
-      { find: '@adapter-rxdb', replacement: resolve(repoRoot, 'packages/adapter-rxdb/src') },
-      { find: '@config', replacement: resolve(repoRoot, 'config') },
-    ] as Alias[],
+    alias: viteAliases,
   },
 })

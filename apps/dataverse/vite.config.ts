@@ -2,6 +2,7 @@
 import { defineConfig } from 'vite'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
+import { viteAliases } from '../../config/aliases.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -38,9 +39,6 @@ export default defineConfig({
     __OFFLINE_FS__: 'false',
   },
   resolve: {
-    alias: {
-      '@core': resolve(__dirname, '../../packages/core/src'),
-      '@adapter-dataverse': resolve(__dirname, '../../packages/adapter-dataverse/src'),
-    },
+    alias: viteAliases,
   },
 })
