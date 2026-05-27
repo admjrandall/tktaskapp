@@ -13,7 +13,6 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "typecheck": "tsc --noEmit",
     "lint": "eslint src"
   },
   "devDependencies": {}
