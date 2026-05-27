@@ -5,6 +5,7 @@
     { "path": "packages/core" },
     { "path": "packages/adapter-null" },
     { "path": "packages/adapter-rxdb" },
+    { "path": "packages/adapter-rxdb-couchdb" },
     { "path": "packages/adapter-dataverse" },
     { "path": "packages/adapter-mobile-native" },
     { "path": "packages/adapter-kms" }
