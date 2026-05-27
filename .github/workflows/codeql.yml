@@ -2,9 +2,9 @@ name: CodeQL
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
-    branches: [main]
+    branches: [master, main]
   schedule:
     # Weekly scan every Wednesday at 07:00 UTC
     - cron: '0 7 * * 3'
@@ -24,19 +24,21 @@ jobs:
         language: [javascript-typescript]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@fee9466b8957867761f2d78f922ab084e3e2dd17
         with:
           languages: ${{ matrix.language }}
           queries: security-extended
+          config-file: ./.github/codeql/codeql-config.yml
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@ac6db6d3c1f721f886538a378a2d73e85697340a
         with:
           version: 11.1.2
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -45,6 +47,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@fee9466b8957867761f2d78f922ab084e3e2dd17
         with:
           category: /language:${{ matrix.language }}

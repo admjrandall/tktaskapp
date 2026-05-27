@@ -6,8 +6,8 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      '**/dist/**',
       'node_modules/**',
-      '**/vite.config.ts',
       'apps/*/index.html',
       'apps/*/public/**/*.js',
       'server/drizzle.config.ts',
@@ -17,6 +17,12 @@ export default tseslint.config(
       'taskapp.html',
       'tests/**',
       'vitest.config.ts',
+      // Non-workspace root directories — not source code, not in the TS project graph.
+      // See TECHNICAL-REFERENCE.md §15 for what each contains.
+      'verifier/**',
+      '_bmad/**',
+      'originalfiles/**',
+      'Coremdfiles/**',
     ],
   },
   ...tseslint.configs.strictTypeChecked,
@@ -24,7 +30,7 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        project: true,
+        projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },

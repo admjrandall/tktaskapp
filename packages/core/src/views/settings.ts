@@ -781,7 +781,7 @@ export function renderSettings(state: AppState): string {
             const name = escH(String(r.name || r.title || 'Untitled'))
             const [bg, fg] = avatarColor(String(r.name || r.title || 'Untitled'))
             return `<div style="display:flex;align-items:center;gap:.75rem;padding:.75rem 0;border-bottom:1px solid var(--border-subtle)">
-            <div class="avatar avatar-sm" style="background:${bg};color:${fg}">${initials(String(r.name || r.title || 'Untitled'))}</div>
+            <div class="avatar avatar-sm" style="background:${bg};color:${fg}">${escH(initials(String(r.name || r.title || 'Untitled')))}</div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
               <div style="font-size:.75rem;color:var(--text-tertiary)">${escH(String(r._store || ''))} · ${formatRelative(String(r.deletedAt || ''))}</div>

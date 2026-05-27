@@ -270,11 +270,21 @@ def output_json(data: dict, output_path: str | None) -> None:
     """Write JSON to file or stdout."""
     json_str = json.dumps(data, indent=2)
     if output_path:
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(output_path).write_text(json_str + "\n")
-        print(f"Results written to {output_path}", file=sys.stderr)
+        target = resolve_safe_output_path(output_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json_str + "\n")
+        print(f"Results written to {target}", file=sys.stderr)
     else:
         print(json_str)
+
+
+def resolve_safe_output_path(output_path: str) -> Path:
+    """Resolve an output path and keep writes inside the current workspace."""
+    base_dir = Path.cwd().resolve()
+    target = Path(output_path).expanduser().resolve()
+    if not target.is_relative_to(base_dir):
+        raise ValueError(f"Output path must stay under {base_dir}: {output_path}")
+    return target
 
 
 def main() -> None:

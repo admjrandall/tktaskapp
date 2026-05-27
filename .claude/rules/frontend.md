@@ -58,3 +58,41 @@ Views that need to call `appRenderWorkspace` or other functions from `bootstrap.
 ## Legacy reference file
 
 Do not edit `taskapp.html`. It is the legacy ~7,800-line single-file reference. All active development is in the monorepo packages under `packages/core/src/` and `apps/`.
+
+## Encoding and sanitization checklist — ASVS 5.0 V1 (CWE-116)
+
+Check every PR that touches output rendering or data transformation against these patterns. These are the class of issue that CodeQL and Semgrep flag but that manual review can miss.
+
+**Multi-character sanitization regex (CodeQL js/incomplete-multi-character-sanitization)**
+
+- Never use `/<[^>]*>/g` or similar multi-char patterns to strip HTML for display or export — a crafted input can reconstruct the dangerous sequence after replacement
+- For plain-text excerpt display: use single-char class `/[<>]/g` instead
+- For export or any context needing clean plain text: use DOM `textContent`:
+  ```ts
+  const _tmp = document.createElement('div')
+  _tmp.innerHTML = htmlContent // read-only — no script execution
+  const plain = _tmp.textContent ?? ''
+  ```
+
+**HTML entity decode order (CodeQL js/double-escaping)**
+
+- When manually decoding HTML entities, always decode `&amp;` **last**
+- Wrong order: `&amp;` → `&`, then `&lt;` → `<` causes `&amp;lt;` to become `<`
+- Correct: decode `&lt;`, `&gt;`, `&quot;`, `&#x27;` first, then `&amp;` last
+- Best: avoid manual entity chains entirely — use DOM `textContent` which decodes for free
+
+**Automated coverage:** CodeQL (`security-extended`), Semgrep (`p/cwe-top-25`), and Bearer all scan for these patterns in CI. Findings appear in Security → Code scanning.
+
+## ASVS 5.0.0 chapter mapping
+
+| Rule in this file                       | ASVS 5.0.0 chapter                                     |
+| --------------------------------------- | ------------------------------------------------------ |
+| escH() + Trusted Types                  | V1 Encoding and Sanitization, V3 Web Frontend Security |
+| Multi-char sanitization checklist above | V1 Encoding and Sanitization                           |
+| IDB database boundaries                 | V11 Cryptography, V14 Data Protection                  |
+| Base64 encoding helpers                 | V1 Encoding and Sanitization                           |
+| CSP hash regeneration                   | V3 Web Frontend Security                               |
+| Target / adapter boundaries             | V15 Secure Coding and Architecture                     |
+| DB helpers only from views              | V8 Authorization                                       |
+
+Reference: [OWASP ASVS 5.0.0](https://owasp.org/www-project-application-security-verification-standard/) — target Level 2 for all active delivery targets.

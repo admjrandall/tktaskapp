@@ -61,7 +61,17 @@ function _analyzePatterns(): void {
 
 // ── Proposal helpers ───────────────────────────────────────────────────────────
 function _uid(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+  const randomId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : _randomHex(16)
+  return `${Date.now().toString(36)}-${randomId}`
+}
+
+function _randomHex(bytes: number): string {
+  const buf = new Uint8Array(bytes)
+  crypto.getRandomValues(buf)
+  return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 function _proposeSuggestion(params: Omit<AdaptiveSuggestion, 'id' | 'proposedAt'>): void {

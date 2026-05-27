@@ -2,23 +2,34 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
-    branches: [main]
+    branches: [master, main]
 
 jobs:
   ci:
     name: Typecheck · Lint · Build · Assert
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+      TURBO_API: ${{ secrets.TURBO_API }}
+      TURBO_TELEMETRY_DISABLED: '1'
+      # Set TURBO_OTEL_TRACE_ENDPOINT in repository secrets to enable experimental
+      # Turborepo task span export to your OTLP backend (Turborepo 2.9+ feature).
+      TURBO_OTEL_TRACE_ENDPOINT: ${{ secrets.TURBO_OTEL_TRACE_ENDPOINT }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@ac6db6d3c1f721f886538a378a2d73e85697340a
         with:
           version: 11.1.2
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -32,9 +43,6 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
-      - name: Test
-        run: pnpm run test
-
       - name: Validate committed SQL migrations
         run: pnpm run validate:migrations
 
@@ -47,6 +55,9 @@ jobs:
       - name: Build offline (internal-ai profile)
         run: pnpm run build:offline:internal-ai
 
+      - name: Test
+        run: pnpm run test
+
       - name: Assert — no forbidden strings in offline bundle
         run: pnpm run assert:offline-bundle
 
@@ -54,7 +65,7 @@ jobs:
         run: pnpm run assert:bundle-size
 
       - name: Upload offline build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: dist-offline
           path: dist/offline/index.html

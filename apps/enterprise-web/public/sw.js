@@ -28,9 +28,7 @@ self.addEventListener('activate', (event) => {
       .keys()
       .then((keys) =>
         Promise.all(
-          keys
-            .filter((k) => k !== SHELL_CACHE && k !== API_CACHE)
-            .map((k) => caches.delete(k)),
+          keys.filter((k) => k !== SHELL_CACHE && k !== API_CACHE).map((k) => caches.delete(k)),
         ),
       )
       .then(() => self.clients.claim()),
@@ -39,6 +37,7 @@ self.addEventListener('activate', (event) => {
 
 // ── Message handler ────────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
+  if (event.origin !== self.location.origin) return
   if (event.data === 'CLEAR_API_CACHE') {
     event.waitUntil(caches.delete(API_CACHE))
   }
@@ -88,9 +87,7 @@ self.addEventListener('fetch', (event) => {
   // Navigation requests: network-first, fall back to cached SPA shell
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() =>
-        caches.match('/').then((cached) => cached ?? Response.error()),
-      ),
+      fetch(request).catch(() => caches.match('/').then((cached) => cached ?? Response.error())),
     )
     return
   }

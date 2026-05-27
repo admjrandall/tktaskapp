@@ -1,0 +1,13 @@
+{
+  "name": "@tktaskapp/dataverse",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "build:dataverse": "vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "devDependencies": {}
+}

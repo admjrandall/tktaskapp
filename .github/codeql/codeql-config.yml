@@ -1,0 +1,8 @@
+name: taskapp-codeql
+
+paths-ignore:
+  - taskapp.html
+  - originalfiles/**
+  - dist/**
+  - node_modules/**
+  - .claude/**

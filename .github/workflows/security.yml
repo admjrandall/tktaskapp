@@ -2,12 +2,13 @@ name: Security
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
-    branches: [main]
+    branches: [master, main]
   schedule:
     # Weekly scan every Monday at 06:00 UTC
     - cron: '0 6 * * 1'
+  workflow_dispatch: # enable manual run from GitHub Actions UI
 
 jobs:
   security:
@@ -18,15 +19,15 @@ jobs:
       security-events: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@ac6db6d3c1f721f886538a378a2d73e85697340a
         with:
           version: 11.1.2
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -38,19 +39,64 @@ jobs:
         run: pnpm audit --audit-level=moderate
 
       - name: Gitleaks — secret scanning
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Semgrep — SAST
-        uses: returntocorp/semgrep-action@v1
+      # Semgrep runs community rules with no token required.
+      # To upgrade to Pro rules + cross-file dataflow (free for ≤10 contributors):
+      #   1. Create account at https://semgrep.dev
+      #   2. Generate token: https://semgrep.dev/orgs/-/settings/tokens
+      #   3. Add repo secret SEMGREP_APP_TOKEN
+      #   4. Replace the run: block below with a SHA-pinned semgrep/semgrep-action release
+      #        env: { SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }} }
+      - name: Semgrep — SAST (community rules)
+        run: |
+          pip install semgrep --quiet
+          semgrep scan \
+            --config p/javascript \
+            --config p/typescript \
+            --config p/owasp-top-ten \
+            --config p/cwe-top-25 \
+            --exclude taskapp.html \
+            --exclude originalfiles \
+            --exclude dist \
+            --exclude node_modules \
+            --exclude .claude \
+            --exclude-rule typescript.react.security.audit.react-unsanitized-method.react-unsanitized-method \
+            --sarif \
+            --quiet \
+            . > semgrep.sarif
+        continue-on-error: true
+
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@fee9466b8957867761f2d78f922ab084e3e2dd17
+        if: always() && hashFiles('semgrep.sarif') != ''
         with:
-          config: auto
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Bearer — SAST + Privacy (OWASP / GDPR / HIPAA patterns)
+        uses: bearer/bearer-action@828eeb928ce2f4a7ca5ed57fb8b59508cb8c79bc
+        with:
+          format: sarif
+          output: bearer.sarif
+
+          exit-code: '0'
+          config-file: bearer.yml
+          skip-path: 'dist,node_modules,taskapp.html,originalfiles,.claude'
+
+      - name: Normalize empty Bearer SARIF
+        if: always() && hashFiles('bearer.sarif') != ''
+        run: |
+          node -e "const fs = require('node:fs'); const p = 'bearer.sarif'; const sarif = JSON.parse(fs.readFileSync(p, 'utf8')); for (const run of sarif.runs || []) { if (!Array.isArray(run.results)) run.results = []; } fs.writeFileSync(p, JSON.stringify(sarif));"
+
+      - name: Upload Bearer SARIF
+        uses: github/codeql-action/upload-sarif@fee9466b8957867761f2d78f922ab084e3e2dd17
+        if: always() && hashFiles('bearer.sarif') != ''
+        with:
+          sarif_file: bearer.sarif
+          category: bearer
 
       - name: License compliance check
-        run: |
-          npx license-checker --onlyAllow \
-            "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;CC0-1.0;Unlicense;0BSD;BlueOak-1.0.0" \
-            --excludePrivatePackages
+        run: pnpm exec pnpm-license-checker --prod

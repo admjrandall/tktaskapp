@@ -4683,7 +4683,7 @@ const stores = ['clients', 'departments', 'projects', 'tasks', 'people', 'standa
             <span class="doc-card-title">${escH(d.title || 'Untitled')}</span>
             ${badge}
           </div>
-          <p class="doc-card-excerpt">${escH((d.excerpt || d.content?.replace(/<[^>]*>/g,'') || '').slice(0,120))}</p>
+          <p class="doc-card-excerpt">${escH((d.excerpt || d.content?.replace(/[<>]/g,'') || '').slice(0,120))}</p>
           <div class="doc-card-meta">
             <span>${formatRelative(d.updatedAt)}</span>
             ${linkedLabel ? `<span>·</span>${linkedLabel}` : ''}

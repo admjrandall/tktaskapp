@@ -1,0 +1,37 @@
+name: zizmor — GitHub Actions security
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  schedule:
+    # Weekly Monday 07:00 UTC — aligned with security.yml (06:00) so both
+    # appear in the same Security tab sweep each week
+    - cron: '0 7 * * 1'
+  workflow_dispatch: # enable manual run from GitHub Actions UI
+
+# Deny all permissions at workflow level; grant only what each job needs
+permissions: {}
+
+jobs:
+  zizmor:
+    name: GitHub Actions static analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # upload SARIF to GitHub code scanning
+      contents: read # checkout
+      actions: read # read workflow files (required for private repos)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d
+        # zizmor-action automatically uploads SARIF to GitHub code scanning.
+        # Findings appear in Security → Code scanning under category "zizmor".
+        # To dismiss a false positive: Security tab → open alert → Dismiss alert
+        # with reason "False positive" or "Used in tests".

@@ -71,7 +71,7 @@ syncRouter.post('/stream-ticket', opaMiddleware('sync:stream'), async (c) => {
 
 // ── Revision generation ───────────────────────────────────────────────────────
 function _makeRev(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  return `${Date.now()}-${randomBytes(16).toString('base64url')}`
 }
 
 function _recordString(

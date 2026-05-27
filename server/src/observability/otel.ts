@@ -165,7 +165,19 @@ export class OtelServiceImpl implements OtelService {
 
     process.on('SIGTERM', () => {
       _sdk?.shutdown().catch((err: unknown) => {
-        console.error('[otel] shutdown error', err)
+        process.stderr.write(
+          JSON.stringify({
+            timestamp: new Date().toISOString(),
+            level: 'error',
+            service: config.serviceName,
+            traceId: 'none',
+            spanId: 'none',
+            tenantId: 'system',
+            requestId: 'shutdown',
+            message: 'otel shutdown error',
+            extra: { error: err instanceof Error ? err.message : String(err) },
+          }) + '\n',
+        )
       })
     })
   }

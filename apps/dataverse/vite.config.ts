@@ -1,13 +1,18 @@
 /// <reference types="node" />
 import { defineConfig } from 'vite'
 import { fileURLToPath } from 'url'
-import { dirname, resolve } from 'path'
+import { dirname } from 'path'
+import { viteAliases } from '../../config/aliases.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 export default defineConfig({
   root: __dirname,
+  esbuild: {
+    drop: ['console', 'debugger'],
+    legalComments: 'none',
+  },
   build: {
     // Code Apps target Edge/Chromium on Power Platform — esnext is safe
     target: 'esnext',
@@ -34,9 +39,6 @@ export default defineConfig({
     __OFFLINE_FS__: 'false',
   },
   resolve: {
-    alias: {
-      '@core': resolve(__dirname, '../../packages/core/src'),
-      '@adapter-dataverse': resolve(__dirname, '../../packages/adapter-dataverse/src'),
-    },
+    alias: viteAliases,
   },
 })

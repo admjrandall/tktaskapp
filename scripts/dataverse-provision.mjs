@@ -149,8 +149,9 @@ async function createTable(table) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`\nTech Key CRM — Dataverse Phase 5 Provisioning`)
-  console.log(`Environment: ${ENV_URL}\n`)
+  const envHost = (() => { try { return new URL(ENV_URL).hostname } catch { return '[invalid URL]' } })()
+  console.log('\nTech Key CRM — Dataverse Phase 5 Provisioning')
+  console.log('Environment: ' + envHost + '\n')
 
   let created = 0
   let skipped = 0
@@ -163,16 +164,16 @@ async function main() {
         skipped++
       } else {
         const ref = await createTable(table)
-        console.log(`created  ${ref}`)
+        console.log('created  ' + ref)
         created++
       }
     } catch (err) {
-      console.log(`FAILED — ${err.message}`)
+      console.log('FAILED — ' + err.message)
       // Continue so other tables can still be created
     }
   }
 
-  console.log(`\nDone. Created: ${created}  Skipped: ${skipped}`)
+  console.log('\nDone. Created: ' + String(created) + '  Skipped: ' + String(skipped))
   if (created > 0) {
     console.log('Publish customizations in the Power Apps Maker portal to activate the new tables.')
   }

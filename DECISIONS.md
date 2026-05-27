@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 **Task App CRM — monorepo**
-**Last reviewed:** 2026-05-25
+**Last reviewed:** 2026-05-27
 
 This document records the significant architectural decisions made during and after the monorepo migration. Each entry answers: _"Why does the code look like this?"_
 
@@ -242,3 +242,30 @@ GDPR Article 17 and HIPAA require demonstrating that the audit trail has not bee
 ### Rationale
 
 Maintaining a separate mobile web build would diverge from the enterprise-web feature set over time. Capacitor wrapping of the enterprise-web build gives native device APIs (biometric unlock, filesystem, share sheet) without a separate codebase. The `CapacitorVaultAdapter` and `CapacitorBiometricAdapter` provide the native storage layer that the WebView calls via the Capacitor bridge.
+
+---
+
+## ADR-M-014 — esbuild native binary blocked by pnpm allowBuilds (intentional)
+
+**Status:** Active
+**Date:** 2026-05-27
+
+### Decision
+
+`pnpm-workspace.yaml` sets `allowBuilds: esbuild: false`. This blocks esbuild's postinstall script from running during `pnpm install`, preventing the install-time download of esbuild's native Go binary. The JavaScript fallback ships with the package and remains functional.
+
+### Rationale
+
+Postinstall scripts are a known supply-chain attack vector. Blocking them for packages that bundle native binaries reduces the risk that a compromised esbuild release could execute arbitrary code during `pnpm install` in CI or developer environments. This is the OWASP and CIS supply-chain hardening recommendation for build tooling.
+
+### Observed behaviour
+
+The server build (`cd server && pnpm build`) completes correctly. The `⚡` indicator in esbuild output confirms the native binary is active in environments where it was already installed (pre-seeded CI runners, developer machines). In environments where the binary was never installed, esbuild falls back to its pure-JS implementation — builds are slower but functionally correct.
+
+### Trade-off accepted
+
+Build speed may be reduced in environments without a pre-seeded esbuild binary. This is accepted in exchange for blocking arbitrary postinstall code execution. The version is pinned via `pnpm.overrides: esbuild: ^0.28.0` to limit the impact of a compromised release.
+
+### Alternatives considered
+
+Allowing the postinstall script (`allowBuilds: esbuild: true`) would restore native-speed builds unconditionally but exposes the install pipeline to any code the esbuild postinstall script runs. Rejected for security-sensitive CI environments.

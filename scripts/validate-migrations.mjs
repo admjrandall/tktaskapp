@@ -1,9 +1,10 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, '..')
+const rel = (p) => relative(root, p)
 const migrationsDir = join(root, 'server', 'drizzle')
 const staleDir = join(root, 'server', 'src', 'db', 'migrations')
 const journalPath = join(migrationsDir, 'meta', '_journal.json')
@@ -18,17 +19,17 @@ function readJson(path) {
   try {
     return JSON.parse(readFileSync(path, 'utf8'))
   } catch (error) {
-    fail(`Unable to read valid JSON at ${path}: ${error.message}`)
+    fail(`Unable to read valid JSON at ${rel(path)}: ${error.message}`)
     return null
   }
 }
 
 if (!existsSync(migrationsDir) || !statSync(migrationsDir).isDirectory()) {
-  fail(`Missing committed migration directory: ${migrationsDir}`)
+  fail(`Missing committed migration directory: ${rel(migrationsDir)}`)
 }
 
 if (!existsSync(journalPath)) {
-  fail(`Missing Drizzle migration journal: ${journalPath}`)
+  fail(`Missing Drizzle migration journal: ${rel(journalPath)}`)
 }
 
 const staleSqlFiles = existsSync(staleDir)
@@ -36,7 +37,7 @@ const staleSqlFiles = existsSync(staleDir)
   : []
 if (staleSqlFiles.length > 0) {
   fail(
-    `Stale SQL files found in ${staleDir}. Production migrations must live only in server/drizzle: ${staleSqlFiles.join(', ')}`,
+    `Stale SQL files found in ${rel(staleDir)}. Production migrations must live only in server/drizzle: ${staleSqlFiles.join(', ')}`,
   )
 }
 
@@ -106,8 +107,9 @@ for (const entry of entries) {
 
 if (errors.length > 0) {
   console.error('Migration validation failed:')
-  for (const error of errors) console.error(`- ${error}`)
+  for (const error of errors) console.error('- ' + error)
   process.exit(1)
 }
 
-console.log(`Migration validation passed: ${sqlFiles.length} committed SQL migrations`)
+const summary = 'Migration validation passed: ' + String(sqlFiles.length) + ' committed SQL migrations'
+console.log(summary)
