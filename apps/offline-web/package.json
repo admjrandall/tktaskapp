@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "description": "Offline-first CRM — single-file HTML build targets (browser-ai, no-ai, internal-ai)",
   "scripts": {
-    "build": "vite build"
+    "build": "vite build",
+    "build:offline": "vite build --config vite.config.ts && node ../../generate-csp.mjs ../../dist/offline/index.html",
+    "build:offline:no-ai": "vite build --config vite.no-ai.config.ts && node ../../scripts/normalize-offline-profile-output.mjs ../../dist/offline-no-ai && node ../../generate-csp.mjs ../../dist/offline-no-ai/index.html",
+    "build:offline:internal-ai": "vite build --config vite.internal-ai.config.ts && node ../../scripts/normalize-offline-profile-output.mjs ../../dist/offline-internal-ai && node ../../generate-csp.mjs ../../dist/offline-internal-ai/index.html"
   }
 }

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:enterprise": "vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src"
   },

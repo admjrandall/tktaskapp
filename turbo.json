@@ -8,9 +8,34 @@
       "outputs": ["dist/**"]
     },
     "build:offline": {
+      "description": "Build offline single-file bundle (browser-ai profile) and regenerate CSP hashes",
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "vite.config.ts", "tsconfig.json"],
+      "inputs": ["src/**", "vite.config.ts", "tsconfig.json", "../../config/**"],
       "outputs": ["../../dist/offline/**"]
+    },
+    "build:offline:no-ai": {
+      "description": "Build offline single-file bundle (no-ai profile) and regenerate CSP hashes",
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "vite.no-ai.config.ts", "tsconfig.json", "../../config/**"],
+      "outputs": ["../../dist/offline-no-ai/**"]
+    },
+    "build:offline:internal-ai": {
+      "description": "Build offline single-file bundle (internal-ai profile) and regenerate CSP hashes",
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "vite.internal-ai.config.ts", "tsconfig.json", "../../config/**"],
+      "outputs": ["../../dist/offline-internal-ai/**"]
+    },
+    "build:enterprise": {
+      "description": "Build enterprise PWA bundle for HTTPS deployment",
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "vite.config.ts", "tsconfig.json", "../../config/**"],
+      "outputs": ["../../dist/enterprise/**"]
+    },
+    "build:dataverse": {
+      "description": "Build Power Platform Code App bundle (flat naming, no hashes)",
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "vite.config.ts", "tsconfig.json", "../../config/**"],
+      "outputs": ["../../dist/dataverse/**"]
     },
     "//#typecheck": {
       "dependsOn": []
@@ -30,10 +55,6 @@
       "dependsOn": []
     },
     "lint": {},
-    "//#build:offline": {
-      "dependsOn": [],
-      "outputs": ["dist/offline/**"]
-    },
     "test": {
       "dependsOn": ["^build"],
       "inputs": ["src/**", "tests/**"]
