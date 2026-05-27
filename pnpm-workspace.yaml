@@ -14,6 +14,11 @@ catalog:
   prettier: '^3.8.3'
   vite: '^8.0.14'
 
+# allowBuilds controls which packages may run postinstall scripts during pnpm install.
+# esbuild, onnxruntime-node, protobufjs, and sharp are blocked as a supply-chain
+# security measure — postinstall scripts can execute arbitrary code. esbuild's pure-JS
+# fallback is functionally correct; the native binary works in environments where it was
+# pre-installed (CI runners, dev machines). Decision documented in DECISIONS.md ADR-M-014.
 allowBuilds:
   esbuild: false
   onnxruntime-node: false
