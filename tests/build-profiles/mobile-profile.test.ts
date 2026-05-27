@@ -80,7 +80,7 @@ describe('Android network security config', () => {
   })
 })
 
-describe('Offline bundle — mobile JS bundle content gates', () => {
+describe.skipIf(!process.env.CI)('Offline bundle — mobile JS bundle content gates', () => {
   const bundlePath = resolve(ROOT, 'dist/offline/index.html')
 
   it('offline bundle exists (run pnpm run build:offline if this fails)', () => {
