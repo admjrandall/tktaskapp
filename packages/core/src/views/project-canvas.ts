@@ -221,7 +221,7 @@ export function pcTasksBody(tasks: AnyRecord[]): string {
       <input type="checkbox" data-task-toggle="${t.id}" ${t.status === 'Done' ? 'checked' : ''} style="flex-shrink:0;cursor:pointer" onclick="event.stopPropagation()">
       <span class="pc-task-title ${t.status === 'Done' ? 'pc-task-done' : ''}" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(String(t.title || 'Untitled'))}</span>
       ${assignee ? `<span style="font-size:.7rem;color:var(--text-tertiary);flex-shrink:0">${escH(initials(String(assignee.name || '')))}</span>` : ''}
-      ${t.dueDate ? `<span style="font-size:.7rem;color:var(--priority-high);flex-shrink:0">${t.dueDate}</span>` : ''}
+      ${t.dueDate ? `<span style="font-size:.7rem;color:var(--priority-high);flex-shrink:0">${escH(String(t.dueDate))}</span>` : ''}
     </div>`
         })
         .join('')
@@ -360,7 +360,7 @@ export function pcPeopleBody(project: AnyRecord, tasks: AnyRecord[]): string {
         const [bg, fg] = avatarColor(String(p.name || ''))
         const isOwner = p.id === project.ownerId
         return `<div class="pc-person-row">
-      <div class="avatar avatar-sm" style="background:${bg};color:${fg}">${initials(String(p.name || ''))}</div>
+      <div class="avatar avatar-sm" style="background:${bg};color:${fg}">${escH(initials(String(p.name || '')))}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.8125rem">${escH(String(p.name || ''))}</div>
         <div style="font-size:.7rem;color:var(--text-tertiary)">${escH(String(p.role || (isOwner ? 'Owner' : 'Team')))}</div>

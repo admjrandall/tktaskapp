@@ -19,7 +19,7 @@ export function renderTrash(state: AppState): string {
     .map((r) => {
       const name = String(r.name || r.title || 'Untitled')
       const [bg, fg] = avatarColor(name)
-      return `<div style="display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;border-bottom:1px solid var(--border-subtle)"><div class="avatar avatar-sm" style="background:${bg};color:${fg}">${initials(name)}</div><div style="flex:1;min-width:0"><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(name)}</div><div style="font-size:.75rem;color:var(--text-tertiary)">${escH(String(r._store || ''))} · ${formatRelative(String(r.deletedAt || ''))}</div></div><button class="btn btn-secondary btn-sm" data-restore="${r.id}">${Icons.Restore(14)} Restore</button><button class="btn btn-danger btn-sm" data-perma="${r.id}">${Icons.Delete(14)}</button></div>`
+      return `<div style="display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;border-bottom:1px solid var(--border-subtle)"><div class="avatar avatar-sm" style="background:${bg};color:${fg}">${escH(initials(name))}</div><div style="flex:1;min-width:0"><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(name)}</div><div style="font-size:.75rem;color:var(--text-tertiary)">${escH(String(r._store || ''))} · ${formatRelative(String(r.deletedAt || ''))}</div></div><button class="btn btn-secondary btn-sm" data-restore="${r.id}">${Icons.Restore(14)} Restore</button><button class="btn btn-danger btn-sm" data-perma="${r.id}">${Icons.Delete(14)}</button></div>`
     })
     .join('')}</div></div>`
 }

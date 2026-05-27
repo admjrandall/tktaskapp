@@ -88,7 +88,7 @@ export function renderListView(
           let val: string = String(r[field] ?? '')
           if (field === 'name' || field === 'title') {
             const [bg, fg] = avatarColor(val)
-            val = `<div style="display:flex;align-items:center;gap:.625rem"><div class="avatar avatar-sm" style="background:${bg};color:${fg}">${initials(val)}</div><span style="font-weight:500">${escH(val) || '—'}</span></div>`
+            val = `<div style="display:flex;align-items:center;gap:.625rem"><div class="avatar avatar-sm" style="background:${bg};color:${fg}">${escH(initials(val))}</div><span style="font-weight:500">${escH(val) || '—'}</span></div>`
           } else if (field === 'body') {
             const preview = val.replace(/\n/g, ' ').slice(0, 80)
             val = `<span style="color:var(--text-primary)">${escH(preview) || '—'}</span>${val.length > 80 ? '<span style="color:var(--text-tertiary)">…</span>' : ''}`
@@ -157,7 +157,7 @@ export function renderGridView(
           .slice(0, 60)
         meta = `<div style="font-size:.8rem;color:var(--text-secondary);margin-top:.375rem;line-height:1.4">${escH(preview) || 'No content'}</div><div style="font-size:.7rem;color:var(--text-tertiary);margin-top:.25rem">${formatRelative(String(r.createdAt || ''))}</div>`
       }
-      return `<div class="grid-card" data-id="${r.id}"><div class="avatar avatar-lg" style="background:${bg};color:${fg};margin-bottom:.875rem">${initials(name)}</div><div style="font-weight:600;font-size:.9375rem">${escH(name)}</div>${meta}<div class="text-xs text-tertiary" style="margin-top:.75rem">${formatRelative(String(r.updatedAt || ''))}</div></div>`
+      return `<div class="grid-card" data-id="${r.id}"><div class="avatar avatar-lg" style="background:${bg};color:${fg};margin-bottom:.875rem">${escH(initials(name))}</div><div style="font-weight:600;font-size:.9375rem">${escH(name)}</div>${meta}<div class="text-xs text-tertiary" style="margin-top:.75rem">${formatRelative(String(r.updatedAt || ''))}</div></div>`
     })
     .join('')}</div>`
 }
@@ -225,7 +225,7 @@ export function renderKanbanView(
             store === 'standaloneNotes'
               ? `<div style="font-size:.8rem;color:var(--text-secondary);line-height:1.4;margin-bottom:.375rem">${escH(String(r.body || '').slice(0, 80))}</div><div style="font-size:.7rem;color:var(--text-tertiary)">${formatRelative(String(r.createdAt || ''))}</div>`
               : `<div style="display:flex;gap:.375rem;flex-wrap:wrap">${renderPriorityBadge(String(r.priority || ''))} ${renderDueBadge(String(r.dueDate || ''))}</div><div style="font-size:.7rem;color:var(--text-tertiary);margin-top:.375rem">${formatRelative(String(r.updatedAt || ''))}</div>`
-          return `<div class="kanban-card" draggable="${store !== 'standaloneNotes'}" data-id="${r.id}" data-col="${col}">${store !== 'standaloneNotes' ? `<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem"><div class="avatar avatar-sm" style="background:${bg};color:${fg}">${initials(name)}</div><span style="font-weight:500;font-size:.875rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(name)}</span></div>` : ''}${cardBody}</div>`
+          return `<div class="kanban-card" draggable="${store !== 'standaloneNotes'}" data-id="${r.id}" data-col="${col}">${store !== 'standaloneNotes' ? `<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem"><div class="avatar avatar-sm" style="background:${bg};color:${fg}">${escH(initials(name))}</div><span style="font-weight:500;font-size:.875rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(name)}</span></div>` : ''}${cardBody}</div>`
         })
         .join('')
       return `<div class="kanban-col" data-col="${col}"><div class="kanban-col-header"><span class="kanban-col-title">${col}</span><span class="kanban-col-count">${cr.length}</span></div><div class="kanban-col-body">${cards || '<div style="color:var(--text-tertiary);font-size:.8rem;text-align:center;padding:1rem;opacity:.6">Drop here</div>'}</div></div>`
@@ -290,7 +290,7 @@ export function renderSpatialCanvas(
       const content =
         store === 'standaloneNotes'
           ? `<div style="font-size:.8rem;line-height:1.5;color:var(--text-primary);max-width:200px">${escH(String(r.body || '').slice(0, 120))}</div><div style="font-size:.7rem;color:var(--text-tertiary);margin-top:.5rem">${formatRelative(String(r.createdAt || ''))}</div>`
-          : `<div class="avatar avatar-md" style="background:${bg};color:${fg};margin-bottom:.625rem">${initials(name)}</div><div style="font-weight:600;font-size:.9375rem">${escH(name)}</div>${r.role ? `<div style="font-size:.8rem;color:var(--text-secondary)">${escH(String(r.role))}</div>` : ''}${r.stage ? stageBadge(r.stage) : ''}${r.status ? statusBadge(r.status) : ''}`
+          : `<div class="avatar avatar-md" style="background:${bg};color:${fg};margin-bottom:.625rem">${escH(initials(name))}</div><div style="font-weight:600;font-size:.9375rem">${escH(name)}</div>${r.role ? `<div style="font-size:.8rem;color:var(--text-secondary)">${escH(String(r.role))}</div>` : ''}${r.stage ? stageBadge(r.stage) : ''}${r.status ? statusBadge(r.status) : ''}`
       return `<div class="spatial-node" data-id="${r.id}" style="left:${x}%;top:${y}%;position:absolute"><div class="spatial-node-inner">${content}</div></div>`
     })
     .join('')
