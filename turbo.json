@@ -1,18 +1,22 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  // Git worktree cache sharing is automatic in Turborepo 2.8+. No configuration
+  // required. See TECHNICAL-REFERENCE.md §14 for details and minimum version.
+  // Reference: https://turbo.build/blog/turbo-2-8
   "remoteCache": {
     "enabled": true,
     "signature": true
   },
   "tasks": {
     "build": {
+      "description": "Compile TypeScript and produce dist/ output for a workspace package.",
       "dependsOn": ["^build"],
       "inputs": ["src/**", "vite.config.ts", "tsconfig.json"],
       "outputs": ["dist/**"]
     },
     "build:offline": {
-      "description": "Build offline single-file bundle (browser-ai profile) and regenerate CSP hashes",
+      "description": "Build the offline single-file HTML bundle (browser-ai profile) and regenerate CSP hashes in the output.",
       "dependsOn": ["^build"],
       "inputs": ["src/**", "vite.config.ts", "tsconfig.json", "../../config/**"],
       "outputs": ["../../dist/offline/**"]
@@ -42,32 +46,47 @@
       "outputs": ["../../dist/dataverse/**"]
     },
     "//#typecheck": {
+      "description": "Run tsc --noEmit at the workspace root.",
       "dependsOn": []
     },
     "//#test": {
+      "description": "Run the full Vitest test suite with coverage thresholds (80% branches/functions/lines/statements).",
       "dependsOn": [],
       "inputs": ["tests/**", "packages/*/src/**", "vitest.config.ts"]
     },
     "//#test:watch": {
+      "description": "Run Vitest in interactive watch mode (not cached).",
       "cache": false,
       "persistent": true
     },
     "typecheck": {
+      "description": "Type-check a workspace package without emitting output.",
       "dependsOn": ["^typecheck"]
     },
     "//#lint": {
+      "description": "Run ESLint with security-extended and OWASP rules across packages, apps, config, and server.",
       "dependsOn": []
     },
-    "lint": {},
+    "lint": {
+      "description": "Run ESLint on a workspace package."
+    },
+    "//#build:offline": {
+      "description": "Root alias for the offline browser-ai build — produces dist/offline/index.html.",
+      "dependsOn": [],
+      "outputs": ["dist/offline/**"]
+    },
     "test": {
+      "description": "Run the test suite for a workspace package.",
       "dependsOn": ["^build"],
       "inputs": ["src/**", "tests/**"]
     },
     "test:watch": {
+      "description": "Run a package test suite in watch mode (not cached).",
       "cache": false,
       "persistent": true
     },
     "build:server": {
+      "description": "Compile and bundle the Hono server via esbuild (dual output: server.js + migrate.js).",
       "dependsOn": [],
       "inputs": ["src/**", "tsconfig.json", "package.json"],
       "outputs": ["dist/**"]
