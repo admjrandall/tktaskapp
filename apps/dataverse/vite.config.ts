@@ -8,6 +8,10 @@ const __dirname = dirname(__filename)
 
 export default defineConfig({
   root: __dirname,
+  esbuild: {
+    drop: ['console', 'debugger'],
+    legalComments: 'none',
+  },
   build: {
     // Code Apps target Edge/Chromium on Power Platform — esnext is safe
     target: 'esnext',

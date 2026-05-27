@@ -4,6 +4,7 @@
 
 import { escH } from '../utils.js'
 import { LS_CANVAS_KEY_PREFIX } from '../constants.js'
+import { sanitizeDocHtml } from '../security/sanitize.js'
 
 export interface CanvasBlock {
   id: string
@@ -68,6 +69,7 @@ function saveLayout(key: string): void {
 
 export function renderCanvasBlock(block: CanvasBlock, editable: boolean): string {
   const z = _canvasZMap[block.id] ?? block.z ?? 1
+  const body = typeof block.body === 'string' ? sanitizeDocHtml(block.body) : ''
   return `<div
     class="canvas-block"
     id="cb-${escH(block.id)}"
@@ -75,7 +77,7 @@ export function renderCanvasBlock(block: CanvasBlock, editable: boolean): string
     style="position:absolute;left:${block.x}px;top:${block.y}px;width:${block.w}px;height:${block.h}px;z-index:${z};background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden;display:flex;flex-direction:column"
   >
     ${block.title ? `<div class="canvas-block-header" data-drag="${escH(block.id)}" style="padding:.5rem .75rem;font-size:.8125rem;font-weight:600;color:var(--text-secondary);border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between;cursor:${editable ? 'grab' : 'default'};user-select:none">${escH(block.title)}${editable ? `<div style="display:flex;gap:.25rem"><button class="btn btn-ghost btn-icon btn-sm" data-block-toggle="${escH(block.id)}" title="Toggle" style="width:20px;height:20px;padding:0">⊟</button></div>` : ''}</div>` : ''}
-    <div class="canvas-block-body" style="flex:1;overflow:auto;padding:.75rem" id="cb-body-${escH(block.id)}">${block.body ?? ''}</div>
+    <div class="canvas-block-body" style="flex:1;overflow:auto;padding:.75rem" id="cb-body-${escH(block.id)}">${body}</div>
     ${editable ? `<div data-resize="${escH(block.id)}" style="position:absolute;bottom:0;right:0;width:16px;height:16px;cursor:se-resize;opacity:.4;background:linear-gradient(135deg,transparent 50%,var(--border-strong) 50%)"></div>` : ''}
   </div>`
 }

@@ -19,14 +19,15 @@ jobs:
       security-events: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@ac6db6d3c1f721f886538a378a2d73e85697340a # v6
         with:
           version: 11.1.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -38,7 +39,7 @@ jobs:
         run: pnpm audit --audit-level=moderate
 
       - name: Gitleaks — secret scanning
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -47,8 +48,7 @@ jobs:
       #   1. Create account at https://semgrep.dev
       #   2. Generate token: https://semgrep.dev/orgs/-/settings/tokens
       #   3. Add repo secret SEMGREP_APP_TOKEN
-      #   4. Replace the run: block below with:
-      #        uses: semgrep/semgrep-action@v1
+      #   4. Replace the run: block below with a SHA-pinned semgrep/semgrep-action release
       #        env: { SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }} }
       - name: Semgrep — SAST (community rules)
         run: |
@@ -58,20 +58,24 @@ jobs:
             --config p/typescript \
             --config p/owasp-top-ten \
             --config p/cwe-top-25 \
+            --exclude taskapp.html \
+            --exclude originalfiles \
+            --exclude dist \
+            --exclude node_modules \
             --sarif \
             --quiet \
             . > semgrep.sarif
         continue-on-error: true
 
       - name: Upload Semgrep SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@fee9466b8957867761f2d78f922ab084e3e2dd17 # v3
         if: always() && hashFiles('semgrep.sarif') != ''
         with:
           sarif_file: semgrep.sarif
           category: semgrep
 
       - name: Bearer — SAST + Privacy (OWASP / GDPR / HIPAA patterns)
-        uses: bearer/bearer-action@v2
+        uses: bearer/bearer-action@828eeb928ce2f4a7ca5ed57fb8b59508cb8c79bc # v2
         with:
           format: sarif
           output: bearer.sarif
@@ -81,7 +85,7 @@ jobs:
           skip-path: 'dist,node_modules,taskapp.html,originalfiles'
 
       - name: Upload Bearer SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@fee9466b8957867761f2d78f922ab084e3e2dd17 # v3
         if: always() && hashFiles('bearer.sarif') != ''
         with:
           sarif_file: bearer.sarif

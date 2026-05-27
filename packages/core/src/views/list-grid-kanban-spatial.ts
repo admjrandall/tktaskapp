@@ -8,6 +8,12 @@ import { Icons } from '../ui/icons.js'
 
 type AnyRecord = Record<string, unknown>
 
+function _secureRandomUnit(): number {
+  const bytes = new Uint32Array(1)
+  crypto.getRandomValues(bytes)
+  return (bytes[0] ?? 0) / 0x1_0000_0000
+}
+
 export function stageBadge(s: unknown): string {
   const m: Record<string, string> = {
     Lead: 'badge-slate',
@@ -285,8 +291,8 @@ export function renderSpatialCanvas(
     .map((r) => {
       const name = String(r.name || r.title || 'Untitled')
       const [bg, fg] = avatarColor(name)
-      const x = typeof r._x === 'number' ? r._x : Math.random() * 70 + 5
-      const y = typeof r._y === 'number' ? r._y : Math.random() * 70 + 5
+      const x = typeof r._x === 'number' ? r._x : _secureRandomUnit() * 70 + 5
+      const y = typeof r._y === 'number' ? r._y : _secureRandomUnit() * 70 + 5
       const content =
         store === 'standaloneNotes'
           ? `<div style="font-size:.8rem;line-height:1.5;color:var(--text-primary);max-width:200px">${escH(String(r.body || '').slice(0, 120))}</div><div style="font-size:.7rem;color:var(--text-tertiary);margin-top:.5rem">${formatRelative(String(r.createdAt || ''))}</div>`

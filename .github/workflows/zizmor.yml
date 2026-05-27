@@ -19,13 +19,13 @@ jobs:
     name: GitHub Actions static analysis
     runs-on: ubuntu-latest
     permissions:
-      security-events: write  # upload SARIF to GitHub code scanning
-      contents: read          # checkout
-      actions: read           # read workflow files (required for private repos)
+      security-events: write # upload SARIF to GitHub code scanning
+      contents: read # checkout
+      actions: read # read workflow files (required for private repos)
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
 
