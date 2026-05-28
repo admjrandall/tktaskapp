@@ -7,8 +7,8 @@ import {
 } from './list-grid-kanban-spatial.js'
 import { populatedState } from './__storybook-mock-state.js'
 
-const SAMPLE_RECORDS = populatedState.tasks as unknown as Record<string, unknown>[]
-const SAMPLE_COLUMNS = ['status', 'priority', 'title', 'dueDate']
+const SAMPLE_RECORDS = populatedState.tasks as unknown as Parameters<typeof renderListView>[1]
+const noop = () => {}
 
 const meta: Meta = {
   title: 'Views/List-Grid-Kanban',
@@ -20,22 +20,21 @@ export default meta
 type Story = StoryObj
 
 export const List: Story = {
-  render: () => renderListView(SAMPLE_RECORDS, 'tasks', SAMPLE_COLUMNS),
+  render: () => renderListView('tasks', SAMPLE_RECORDS, noop, 'title', 'asc', noop),
 }
 
 export const Grid: Story = {
-  render: () => renderGridView(SAMPLE_RECORDS, 'tasks'),
+  render: () => renderGridView('tasks', SAMPLE_RECORDS, noop),
 }
 
 export const Kanban: Story = {
-  render: () =>
-    renderKanbanView(SAMPLE_RECORDS, 'tasks', ['Todo', 'In Progress', 'Blocked', 'Done'], 'status'),
+  render: () => renderKanbanView('tasks', SAMPLE_RECORDS, noop),
 }
 
 export const SpatialCanvas: Story = {
-  render: () => renderSpatialCanvas(SAMPLE_RECORDS, 'tasks', populatedState),
+  render: () => renderSpatialCanvas('tasks', SAMPLE_RECORDS, noop),
 }
 
 export const ListEmpty: Story = {
-  render: () => renderListView([], 'tasks', SAMPLE_COLUMNS),
+  render: () => renderListView('tasks', [], noop, 'title', 'asc', noop),
 }
