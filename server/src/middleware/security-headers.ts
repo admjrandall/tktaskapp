@@ -41,6 +41,17 @@ function _enterpriseCsp(): string {
   ].join('; ')
 }
 
+// Relaxed CSP for the /docs route only — Swagger UI loads its JS/CSS from jsDelivr CDN.
+// This policy never applies to the enterprise SPA or any API route.
+const _docsCsp = [
+  "default-src 'self'",
+  "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'",
+  "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'",
+  "img-src 'self' data: blob: https://cdn.jsdelivr.net",
+  "font-src 'self' https://cdn.jsdelivr.net",
+  "connect-src 'self'",
+].join('; ')
+
 export const enterpriseContentSecurityPolicy = _enterpriseCsp()
 
 export function securityHeaders(): MiddlewareHandler<HonoEnv> {
@@ -62,7 +73,8 @@ export function securityHeaders(): MiddlewareHandler<HonoEnv> {
     }
 
     if (!c.req.path.startsWith('/api/') && !c.req.path.startsWith('/auth/')) {
-      c.header('Content-Security-Policy', enterpriseContentSecurityPolicy)
+      const csp = c.req.path === '/docs' ? _docsCsp : enterpriseContentSecurityPolicy
+      c.header('Content-Security-Policy', csp)
     }
 
     await next()
