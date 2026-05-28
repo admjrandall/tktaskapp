@@ -7,9 +7,6 @@ const config: StorybookConfig = {
     '../packages/core/src/views/**/*.stories.ts',
   ],
   addons: [],
-  docs: {
-    autodocs: 'tag',
-  },
 }
 
 export default config
