@@ -7,56 +7,86 @@ import { opaMiddleware, resourcePolicyMiddleware } from '../../middleware/opa.js
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { CreateDepartmentSchema, UpdateDepartmentSchema, safeParseV } from '../../schemas/index.js'
+import { describeRoute } from 'hono-openapi'
+import { resolver } from '../../schemas/index.js'
 
 export const departmentsRouter = new Hono<HonoEnv>()
 
-departmentsRouter.get('/', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId')
-  try {
-    const { page, pageSize, search } = c.req.query()
-    return c.json(
-      await departmentsService.list(tenantId, {
-        ...(search !== undefined ? { search } : {}),
-        ...(page !== undefined ? { page: Number(page) } : {}),
-        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
-      }),
-      200,
-    )
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'dept-list',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+departmentsRouter.get(
+  '/',
+  describeRoute({
+    tags: ['Departments'],
+    summary: 'List departments',
+    responses: { 200: { description: 'Paginated department list' } },
+  }),
+  opaMiddleware('read'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    try {
+      const { page, pageSize, search } = c.req.query()
+      return c.json(
+        await departmentsService.list(tenantId, {
+          ...(search !== undefined ? { search } : {}),
+          ...(page !== undefined ? { page: Number(page) } : {}),
+          ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
+        }),
+        200,
+      )
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'dept-list',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
-departmentsRouter.post('/', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const userId = c.get('userId')
-  try {
-    const parsed = safeParseV(CreateDepartmentSchema, await c.req.json())
-    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
-    return c.json(await departmentsService.create(tenantId, userId, parsed.data), 201)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'dept-create',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+departmentsRouter.post(
+  '/',
+  describeRoute({
+    tags: ['Departments'],
+    summary: 'Create department',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: resolver(CreateDepartmentSchema) } },
+    },
+    responses: { 201: { description: 'Created' }, 400: { description: 'Validation error' } },
+  }),
+  opaMiddleware('create'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    try {
+      const parsed = safeParseV(CreateDepartmentSchema, await c.req.json())
+      if (!parsed.success)
+        return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+      return c.json(await departmentsService.create(tenantId, userId, parsed.data), 201)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'dept-create',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
 departmentsRouter.get(
   '/:id',
+  describeRoute({
+    tags: ['Departments'],
+    summary: 'Get department by ID',
+    responses: { 200: { description: 'Success' }, 404: { description: 'Not found' } },
+  }),
   resourcePolicyMiddleware('read', 'departments', async (_c, tenantId, resourceId) => {
     const row = await departmentsService.getById(tenantId, resourceId)
     return row?.tenantId ?? null
@@ -82,6 +112,15 @@ departmentsRouter.get(
 
 departmentsRouter.patch(
   '/:id',
+  describeRoute({
+    tags: ['Departments'],
+    summary: 'Update department',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: resolver(UpdateDepartmentSchema) } },
+    },
+    responses: { 200: { description: 'Updated' }, 404: { description: 'Not found' } },
+  }),
   resourcePolicyMiddleware('update', 'departments', async (_c, tenantId, resourceId) => {
     const row = await departmentsService.getById(tenantId, resourceId)
     return row?.tenantId ?? null
@@ -116,6 +155,11 @@ departmentsRouter.patch(
 
 departmentsRouter.delete(
   '/:id',
+  describeRoute({
+    tags: ['Departments'],
+    summary: 'Delete department',
+    responses: { 204: { description: 'Deleted' }, 404: { description: 'Not found' } },
+  }),
   resourcePolicyMiddleware('delete', 'departments', async (_c, tenantId, resourceId) => {
     const row = await departmentsService.getById(tenantId, resourceId)
     return row?.tenantId ?? null

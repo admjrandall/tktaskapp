@@ -200,6 +200,19 @@ export const EraseUserSchema = v.object({
 })
 export type EraseUserInput = v.InferOutput<typeof EraseUserSchema>
 
+// ── OpenAPI resolver wrapper ──────────────────────────────────────────────
+// hono-openapi's DescribeRouteOptions.requestBody inherits the standard OpenAPI
+// MediaTypeObject type which expects SchemaObject | ReferenceObject for `schema`.
+// At runtime hono-openapi correctly handles ResolverReturnType in that position,
+// but the TypeScript types don't extend the requestBody position (only responses).
+// Casting to SchemaObject lets routes compile without per-call casts.
+import { resolver as _resolver } from 'hono-openapi'
+import type { OpenAPIV3_1 } from 'openapi-types'
+type AnyStandardSchema = Parameters<typeof _resolver>[0]
+export function resolver(schema: AnyStandardSchema): OpenAPIV3_1.SchemaObject {
+  return _resolver(schema) as unknown as OpenAPIV3_1.SchemaObject
+}
+
 // ── Validation helper ─────────────────────────────────────────────────────
 // Returns { success, data } or { success, issues } matching the Zod safeParse shape
 // so existing route error-handling code (`result.issues` / flatten) works without change.

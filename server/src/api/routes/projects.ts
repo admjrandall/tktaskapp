@@ -8,62 +8,96 @@ import { opaMiddleware, resourcePolicyMiddleware } from '../../middleware/opa.js
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { CreateProjectSchema, UpdateProjectSchema, safeParseV } from '../../schemas/index.js'
+import { describeRoute } from 'hono-openapi'
+import { resolver } from '../../schemas/index.js'
 
 export const projectsRouter = new Hono<HonoEnv>()
 
-projectsRouter.get('/', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId')
-  try {
-    const { page, pageSize, search, clientId, stage, priority } = c.req.query()
-    return c.json(
-      await projectsService.list(tenantId, {
-        ...(search !== undefined ? { search } : {}),
-        ...(clientId !== undefined ? { clientId } : {}),
-        ...(stage !== undefined ? { stage } : {}),
-        ...(priority !== undefined ? { priority } : {}),
-        ...(page !== undefined ? { page: Number(page) } : {}),
-        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
-      }),
-      200,
-    )
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'proj-list',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+projectsRouter.get(
+  '/',
+  describeRoute({
+    tags: ['Projects'],
+    summary: 'List projects',
+    responses: { 200: { description: 'Paginated project list' } },
+  }),
+  opaMiddleware('read'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    try {
+      const { page, pageSize, search, clientId, stage, priority } = c.req.query()
+      return c.json(
+        await projectsService.list(tenantId, {
+          ...(search !== undefined ? { search } : {}),
+          ...(clientId !== undefined ? { clientId } : {}),
+          ...(stage !== undefined ? { stage } : {}),
+          ...(priority !== undefined ? { priority } : {}),
+          ...(page !== undefined ? { page: Number(page) } : {}),
+          ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
+        }),
+        200,
+      )
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'proj-list',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
-projectsRouter.post('/', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const userId = c.get('userId')
-  try {
-    const parsed = safeParseV(CreateProjectSchema, await c.req.json())
-    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
-    return c.json(
-      await projectsService.create(tenantId, userId, parsed.data as unknown as CreateProjectInput),
-      201,
-    )
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'proj-create',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+projectsRouter.post(
+  '/',
+  describeRoute({
+    tags: ['Projects'],
+    summary: 'Create project',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: resolver(CreateProjectSchema) } },
+    },
+    responses: { 201: { description: 'Created' }, 400: { description: 'Validation error' } },
+  }),
+  opaMiddleware('create'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    try {
+      const parsed = safeParseV(CreateProjectSchema, await c.req.json())
+      if (!parsed.success)
+        return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+      return c.json(
+        await projectsService.create(
+          tenantId,
+          userId,
+          parsed.data as unknown as CreateProjectInput,
+        ),
+        201,
+      )
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'proj-create',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
 projectsRouter.get(
   '/:id',
+  describeRoute({
+    tags: ['Projects'],
+    summary: 'Get project by ID',
+    responses: { 200: { description: 'Success' }, 404: { description: 'Not found' } },
+  }),
   resourcePolicyMiddleware('read', 'projects', async (_c, tenantId, resourceId) => {
     const row = await projectsService.getById(tenantId, resourceId)
     return row?.tenantId ?? null
@@ -89,6 +123,15 @@ projectsRouter.get(
 
 projectsRouter.patch(
   '/:id',
+  describeRoute({
+    tags: ['Projects'],
+    summary: 'Update project',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: resolver(UpdateProjectSchema) } },
+    },
+    responses: { 200: { description: 'Updated' }, 404: { description: 'Not found' } },
+  }),
   resourcePolicyMiddleware('update', 'projects', async (_c, tenantId, resourceId) => {
     const row = await projectsService.getById(tenantId, resourceId)
     return row?.tenantId ?? null
@@ -123,6 +166,11 @@ projectsRouter.patch(
 
 projectsRouter.delete(
   '/:id',
+  describeRoute({
+    tags: ['Projects'],
+    summary: 'Delete project',
+    responses: { 204: { description: 'Deleted' }, 404: { description: 'Not found' } },
+  }),
   resourcePolicyMiddleware('delete', 'projects', async (_c, tenantId, resourceId) => {
     const row = await projectsService.getById(tenantId, resourceId)
     return row?.tenantId ?? null

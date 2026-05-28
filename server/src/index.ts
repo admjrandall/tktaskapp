@@ -21,6 +21,8 @@ otelImpl.init({
 
 import { readFile } from 'fs/promises'
 import { resolve as resolvePath } from 'path'
+import { swaggerUI } from '@hono/swagger-ui'
+import { openAPIRouteHandler } from 'hono-openapi'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
@@ -146,6 +148,52 @@ app.route('/api/v1/audit', auditRouter)
 app.route('/api/v1/admin', adminRouter)
 app.route('/api/v1/sync', syncRouter)
 app.route('/api/v1/ai/attributes', aiAttributesRouter)
+
+// ── OpenAPI spec + Swagger UI (public — generated from route decorations) ────
+
+app.get(
+  '/openapi.json',
+  openAPIRouteHandler(app, {
+    documentation: {
+      openapi: '3.1.0',
+      info: {
+        title: 'Task App CRM API',
+        version: '0.1.0',
+        description:
+          'Enterprise CRM API — Hono v4, Valibot-validated, OPA-authorized, step-up protected.',
+      },
+      servers: [{ url: '/api/v1', description: 'Current server' }],
+      tags: [
+        { name: 'Auth', description: 'OIDC/PKCE authentication and step-up' },
+        { name: 'Clients', description: 'CRM clients' },
+        { name: 'Departments', description: 'Departments' },
+        { name: 'Projects', description: 'Projects' },
+        { name: 'Tasks', description: 'Tasks' },
+        { name: 'People', description: 'Contact people' },
+        { name: 'Tags', description: 'Tags' },
+        { name: 'Communications', description: 'Emails, calls, meetings' },
+        { name: 'Time Entries', description: 'Time tracking' },
+        { name: 'Notifications', description: 'In-app notifications' },
+        { name: 'Files', description: 'File records' },
+        { name: 'Documents', description: 'Rich-text documents' },
+        { name: 'Standalone Notes', description: 'Linked notes' },
+        { name: 'Conversations', description: 'AI conversation history' },
+        { name: 'Audit', description: 'Audit log — admin only' },
+        { name: 'Sync', description: 'RxDB-compatible replication protocol' },
+        { name: 'AI Attributes', description: 'Server-side AI attribute compute' },
+        { name: 'Admin', description: 'Admin console — owner/admin only' },
+      ],
+      components: {
+        securitySchemes: {
+          BearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        },
+      },
+      security: [{ BearerAuth: [] }],
+    },
+  }),
+)
+
+app.get('/docs', swaggerUI({ url: '/openapi.json' }))
 
 // ── Enterprise SPA static serving ────────────────────────────────────────────
 // Enabled when ENTERPRISE_STATIC_DIR is set (production / staging only).

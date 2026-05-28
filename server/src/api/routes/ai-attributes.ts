@@ -10,6 +10,8 @@ import { resourcePolicyMiddleware } from '../../middleware/opa.js'
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { safeParseV } from '../../schemas/index.js'
+import { describeRoute } from 'hono-openapi'
+import { resolver } from '../../schemas/index.js'
 import { sql } from 'drizzle-orm'
 import { evaluateAiGatewayRequest } from '../../ai-gateway/policy-engine.js'
 import { callLlm, LlmUnconfiguredError } from '../../ai-gateway/llm-client.js'
@@ -45,6 +47,19 @@ const ComputeAttributeSchema = v.object({
 // ── POST /:id/compute ─────────────────────────────────────────────────────────
 aiAttributesRouter.post(
   '/:id/compute',
+  describeRoute({
+    tags: ['AI Attributes'],
+    summary: 'Compute AI attribute value for a record',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: resolver(ComputeAttributeSchema) } },
+    },
+    responses: {
+      200: { description: 'Computed value' },
+      403: { description: 'Gateway denied or HIPAA restriction' },
+      404: { description: 'Attribute definition not found' },
+    },
+  }),
   resourcePolicyMiddleware(
     'create',
     'ai_attribute_definition',

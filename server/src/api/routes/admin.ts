@@ -11,6 +11,8 @@ import { LegalHoldActiveError, getKmsService } from '../../kms/key-service.js'
 import { withTenant, writeAuditEvent } from '../../services/base.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { EraseUserSchema, safeParseV } from '../../schemas/index.js'
+import { describeRoute } from 'hono-openapi'
+import { resolver } from '../../schemas/index.js'
 import { sql } from 'drizzle-orm'
 
 // ── Admin-only Valibot schemas ─────────────────────────────────────────────────
@@ -42,33 +44,47 @@ const legalHoldService = new LegalHoldService()
 
 export const adminRouter = new Hono<HonoEnv>()
 
-adminRouter.get('/users', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId')
-  try {
-    const { page, pageSize, status } = c.req.query()
-    return c.json(
-      await usersService.list(tenantId, {
-        ...(status !== undefined ? { status } : {}),
-        ...(page !== undefined ? { page: Number(page) } : {}),
-        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
-      }),
-      200,
-    )
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'admin-users-list',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+adminRouter.get(
+  '/users',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'List users (admin)',
+    responses: { 200: { description: 'Paginated user list' } },
+  }),
+  opaMiddleware('manage_users'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    try {
+      const { page, pageSize, status } = c.req.query()
+      return c.json(
+        await usersService.list(tenantId, {
+          ...(status !== undefined ? { status } : {}),
+          ...(page !== undefined ? { page: Number(page) } : {}),
+          ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
+        }),
+        200,
+      )
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'admin-users-list',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
 adminRouter.get(
   '/users/:id',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Get user by ID (admin)',
+    responses: { 200: { description: 'User record' }, 404: { description: 'Not found' } },
+  }),
   resourcePolicyMiddleware('manage_users', 'users', async (_c, tenantId, resourceId) => {
     const user = await usersService.getById(tenantId, resourceId)
     return user?.orgId ?? null
@@ -94,6 +110,11 @@ adminRouter.get(
 
 adminRouter.post(
   '/users/:id/suspend',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Suspend user (step-up required)',
+    responses: { 204: { description: 'Suspended' }, 404: { description: 'Not found' } },
+  }),
   requireStepUp('user_suspend'),
   resourcePolicyMiddleware('suspend_user', 'users', async (_c, tenantId, resourceId) => {
     const user = await usersService.getById(tenantId, resourceId)
@@ -141,6 +162,18 @@ adminRouter.post(
 
 adminRouter.post(
   '/users/:id/erase',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Schedule GDPR erasure (step-up required)',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: resolver(EraseUserSchema) } },
+    },
+    responses: {
+      202: { description: 'Erasure scheduled' },
+      409: { description: 'Legal hold active' },
+    },
+  }),
   requireStepUp('gdpr_erase'),
   resourcePolicyMiddleware('erase_user', 'users', async (_c, tenantId, resourceId) => {
     const user = await usersService.getById(tenantId, resourceId)
@@ -208,33 +241,47 @@ adminRouter.post(
 )
 
 // ── Org settings ───────────────────────────────────────────────────────────────
-adminRouter.get('/org-settings', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const role = c.get('role')
-  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
-  try {
-    const rows = await withTenant(tenantId, async (tx) => {
-      return tx.execute(sql`SELECT * FROM org_settings WHERE org_id = ${tenantId}::uuid LIMIT 1`)
-    })
-    return c.json(
-      rows.rows[0] ?? { lockdownLevel: 'off', retentionDays: 2190, compliancePacks: [] },
-      200,
-    )
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'admin-org-settings-get',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+adminRouter.get(
+  '/org-settings',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Get org settings',
+    responses: { 200: { description: 'Org settings' } },
+  }),
+  opaMiddleware('manage_users'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const role = c.get('role')
+    if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+    try {
+      const rows = await withTenant(tenantId, async (tx) => {
+        return tx.execute(sql`SELECT * FROM org_settings WHERE org_id = ${tenantId}::uuid LIMIT 1`)
+      })
+      return c.json(
+        rows.rows[0] ?? { lockdownLevel: 'off', retentionDays: 2190, compliancePacks: [] },
+        200,
+      )
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'admin-org-settings-get',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
 adminRouter.patch(
   '/org-settings',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Update org settings (step-up required)',
+    responses: { 204: { description: 'Updated' } },
+  }),
   opaMiddleware('manage_org_settings'),
   requireStepUp('org_settings_change'),
   async (c) => {
@@ -284,32 +331,46 @@ adminRouter.patch(
 )
 
 // ── AI endpoint allowlist ──────────────────────────────────────────────────────
-adminRouter.get('/ai-allowlist', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const role = c.get('role')
-  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
-  try {
-    const rows = await withTenant(tenantId, async (tx) => {
-      return tx.execute(
-        sql`SELECT * FROM ai_endpoint_allowlist WHERE org_id = ${tenantId}::uuid ORDER BY created_at DESC`,
-      )
-    })
-    return c.json(rows.rows, 200)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'admin-ai-allowlist-get',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+adminRouter.get(
+  '/ai-allowlist',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'List AI endpoint allowlist',
+    responses: { 200: { description: 'Allowlist entries' } },
+  }),
+  opaMiddleware('manage_users'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const role = c.get('role')
+    if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+    try {
+      const rows = await withTenant(tenantId, async (tx) => {
+        return tx.execute(
+          sql`SELECT * FROM ai_endpoint_allowlist WHERE org_id = ${tenantId}::uuid ORDER BY created_at DESC`,
+        )
+      })
+      return c.json(rows.rows, 200)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'admin-ai-allowlist-get',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
 adminRouter.post(
   '/ai-allowlist',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Add AI allowlist entry (step-up required)',
+    responses: { 201: { description: 'Entry added' } },
+  }),
   opaMiddleware('manage_ai_allowlist'),
   requireStepUp('ai_provider_configure'),
   async (c) => {
@@ -353,6 +414,11 @@ adminRouter.post(
 
 adminRouter.delete(
   '/ai-allowlist/:id',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Remove AI allowlist entry (step-up required)',
+    responses: { 204: { description: 'Removed' } },
+  }),
   opaMiddleware('manage_ai_allowlist'),
   requireStepUp('ai_provider_configure'),
   async (c) => {
@@ -390,32 +456,46 @@ adminRouter.delete(
 )
 
 // ── Integration manager ────────────────────────────────────────────────────────
-adminRouter.get('/integrations', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const role = c.get('role')
-  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
-  try {
-    const rows = await withTenant(tenantId, async (tx) => {
-      return tx.execute(
-        sql`SELECT id, name, type, created_at FROM integrations WHERE org_id = ${tenantId}::uuid ORDER BY created_at DESC`,
-      )
-    })
-    return c.json(rows.rows, 200)
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'admin-integrations-list',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+adminRouter.get(
+  '/integrations',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'List integrations',
+    responses: { 200: { description: 'Integration list' } },
+  }),
+  opaMiddleware('manage_users'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const role = c.get('role')
+    if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+    try {
+      const rows = await withTenant(tenantId, async (tx) => {
+        return tx.execute(
+          sql`SELECT id, name, type, created_at FROM integrations WHERE org_id = ${tenantId}::uuid ORDER BY created_at DESC`,
+        )
+      })
+      return c.json(rows.rows, 200)
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'admin-integrations-list',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
 adminRouter.post(
   '/integrations',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Register integration (step-up required)',
+    responses: { 201: { description: 'Registered' } },
+  }),
   opaMiddleware('manage_integrations'),
   requireStepUp('org_settings_change'),
   async (c) => {
@@ -459,6 +539,11 @@ adminRouter.post(
 
 adminRouter.delete(
   '/integrations/:id',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Remove integration (step-up required)',
+    responses: { 204: { description: 'Removed' } },
+  }),
   opaMiddleware('manage_integrations'),
   requireStepUp('org_settings_change'),
   async (c) => {
@@ -499,6 +584,11 @@ adminRouter.delete(
 
 adminRouter.post(
   '/legal-holds',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Place legal hold (step-up required)',
+    responses: { 201: { description: 'Hold placed' } },
+  }),
   opaMiddleware('manage_users'),
   requireStepUp('legal_hold_change'),
   async (c) => {
@@ -542,6 +632,11 @@ adminRouter.post(
 
 adminRouter.delete(
   '/legal-holds/:holdId',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Lift legal hold (step-up required)',
+    responses: { 204: { description: 'Lifted' } },
+  }),
   opaMiddleware('manage_users'),
   requireStepUp('legal_hold_change'),
   async (c) => {
@@ -576,35 +671,49 @@ adminRouter.delete(
 
 // ── KMS key management ─────────────────────────────────────────────────────────
 
-adminRouter.get('/kms/keys/:userId', opaMiddleware('manage_users'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const role = c.get('role')
-  if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
-  try {
-    const kmsService = getKmsService()
-    const status = await kmsService.getKeyStatus(c.req.param('userId'), tenantId)
-    return c.json({ userId: c.req.param('userId'), status }, 200)
-  } catch (err) {
-    if (
-      err instanceof Error &&
-      (err.message.includes('AZURE_KV_URL') || err.message.includes('AWS_REGION'))
-    ) {
-      return c.json({ error: 'KMS provider not configured on this server' }, 503)
+adminRouter.get(
+  '/kms/keys/:userId',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Get KMS key status for user',
+    responses: { 200: { description: 'Key status' } },
+  }),
+  opaMiddleware('manage_users'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const role = c.get('role')
+    if (role !== 'admin' && role !== 'owner') return c.json({ error: 'Forbidden' }, 403)
+    try {
+      const kmsService = getKmsService()
+      const status = await kmsService.getKeyStatus(c.req.param('userId'), tenantId)
+      return c.json({ userId: c.req.param('userId'), status }, 200)
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        (err.message.includes('AZURE_KV_URL') || err.message.includes('AWS_REGION'))
+      ) {
+        return c.json({ error: 'KMS provider not configured on this server' }, 503)
+      }
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'admin-kms-status',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
     }
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'admin-kms-status',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+  },
+)
 
 adminRouter.post(
   '/kms/keys/:userId/finalize-destruction',
+  describeRoute({
+    tags: ['Admin'],
+    summary: 'Finalize KMS key destruction (step-up required)',
+    responses: { 204: { description: 'Key destroyed' }, 409: { description: 'Not scheduled' } },
+  }),
   opaMiddleware('manage_users'),
   requireStepUp('kms_key_manage'),
   async (c) => {

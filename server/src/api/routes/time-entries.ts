@@ -8,65 +8,95 @@ import { opaMiddleware, resourcePolicyMiddleware } from '../../middleware/opa.js
 import { otel } from '../../observability/otel.js'
 import type { HonoEnv } from '../../hono-types.js'
 import { CreateTimeEntrySchema, UpdateTimeEntrySchema, safeParseV } from '../../schemas/index.js'
+import { describeRoute } from 'hono-openapi'
+import { resolver } from '../../schemas/index.js'
 
 export const timeEntriesRouter = new Hono<HonoEnv>()
 
-timeEntriesRouter.get('/', opaMiddleware('read'), async (c) => {
-  const tenantId = c.get('tenantId')
-  try {
-    const { page, pageSize, taskId, userId } = c.req.query()
-    return c.json(
-      await timeEntriesService.list(tenantId, {
-        ...(taskId !== undefined ? { taskId } : {}),
-        ...(userId !== undefined ? { userId } : {}),
-        ...(page !== undefined ? { page: Number(page) } : {}),
-        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
-      }),
-      200,
-    )
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'te-list',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
-
-timeEntriesRouter.post('/', opaMiddleware('create'), async (c) => {
-  const tenantId = c.get('tenantId')
-  const userId = c.get('userId')
-  try {
-    const parsed = safeParseV(CreateTimeEntrySchema, await c.req.json())
-    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
-    const data = {
-      ...parsed.data,
-      startedAt: new Date(parsed.data.startedAt),
-      endedAt: parsed.data.endedAt ? new Date(parsed.data.endedAt) : undefined,
+timeEntriesRouter.get(
+  '/',
+  describeRoute({
+    tags: ['Time Entries'],
+    summary: 'List time entries',
+    responses: { 200: { description: 'Paginated time entry list' } },
+  }),
+  opaMiddleware('read'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    try {
+      const { page, pageSize, taskId, userId } = c.req.query()
+      return c.json(
+        await timeEntriesService.list(tenantId, {
+          ...(taskId !== undefined ? { taskId } : {}),
+          ...(userId !== undefined ? { userId } : {}),
+          ...(page !== undefined ? { page: Number(page) } : {}),
+          ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
+        }),
+        200,
+      )
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'te-list',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
     }
-    return c.json(
-      await timeEntriesService.create(tenantId, userId, data as unknown as CreateTimeEntryInput),
-      201,
-    )
-  } catch (err) {
-    otel.log({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      service: 'tktaskapp-server',
-      tenantId,
-      requestId: 'te-create',
-      message: String(err),
-    })
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
+  },
+)
+
+timeEntriesRouter.post(
+  '/',
+  describeRoute({
+    tags: ['Time Entries'],
+    summary: 'Create time entry',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: resolver(CreateTimeEntrySchema) } },
+    },
+    responses: { 201: { description: 'Created' }, 400: { description: 'Validation error' } },
+  }),
+  opaMiddleware('create'),
+  async (c) => {
+    const tenantId = c.get('tenantId')
+    const userId = c.get('userId')
+    try {
+      const parsed = safeParseV(CreateTimeEntrySchema, await c.req.json())
+      if (!parsed.success)
+        return c.json({ error: 'Validation failed', details: parsed.issues }, 400)
+      const data = {
+        ...parsed.data,
+        startedAt: new Date(parsed.data.startedAt),
+        endedAt: parsed.data.endedAt ? new Date(parsed.data.endedAt) : undefined,
+      }
+      return c.json(
+        await timeEntriesService.create(tenantId, userId, data as unknown as CreateTimeEntryInput),
+        201,
+      )
+    } catch (err) {
+      otel.log({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'tktaskapp-server',
+        tenantId,
+        requestId: 'te-create',
+        message: String(err),
+      })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  },
+)
 
 timeEntriesRouter.get(
   '/:id',
+  describeRoute({
+    tags: ['Time Entries'],
+    summary: 'Get time entry by ID',
+    responses: { 200: { description: 'Success' }, 404: { description: 'Not found' } },
+  }),
   resourcePolicyMiddleware('read', 'timeEntries', async (_c, tenantId, resourceId) => {
     const row = await timeEntriesService.getById(tenantId, resourceId)
     return row?.tenantId ?? null
@@ -92,6 +122,15 @@ timeEntriesRouter.get(
 
 timeEntriesRouter.patch(
   '/:id',
+  describeRoute({
+    tags: ['Time Entries'],
+    summary: 'Update time entry',
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: resolver(UpdateTimeEntrySchema) } },
+    },
+    responses: { 200: { description: 'Updated' }, 404: { description: 'Not found' } },
+  }),
   resourcePolicyMiddleware('update', 'timeEntries', async (_c, tenantId, resourceId) => {
     const row = await timeEntriesService.getById(tenantId, resourceId)
     return row?.tenantId ?? null
@@ -131,6 +170,11 @@ timeEntriesRouter.patch(
 
 timeEntriesRouter.delete(
   '/:id',
+  describeRoute({
+    tags: ['Time Entries'],
+    summary: 'Delete time entry',
+    responses: { 204: { description: 'Deleted' }, 404: { description: 'Not found' } },
+  }),
   resourcePolicyMiddleware('delete', 'timeEntries', async (_c, tenantId, resourceId) => {
     const row = await timeEntriesService.getById(tenantId, resourceId)
     return row?.tenantId ?? null

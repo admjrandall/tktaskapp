@@ -29,7 +29,9 @@
     "validate:migrations": "node scripts/validate-migrations.mjs",
     "render:k8s:network-policy": "node scripts/render-k8s-network-policy.mjs",
     "changeset": "changeset",
-    "version-packages": "changeset version"
+    "version-packages": "changeset version",
+    "storybook": "storybook dev -p 6006",
+    "build:storybook": "storybook build -o dist/storybook"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -42,6 +44,8 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
+    "@storybook/html-vite": "^8.6.0",
+    "storybook": "^8.6.0",
     "@capacitor/cli": "^8.3.4",
     "@changesets/changelog-github": "^0.5.1",
     "@changesets/cli": "^2.31.0",

@@ -9,25 +9,28 @@
     "pnpm": ">=11"
   },
   "dependencies": {
-    "hono": "^4",
-    "@hono/node-server": "^1",
-    "drizzle-orm": "^0.45.2",
-    "pg": "^8",
+    "@aws-sdk/client-kms": "^3",
     "@azure/identity": "^4",
     "@azure/keyvault-keys": "^4",
-    "@opentelemetry/sdk-node": "^0.218.0",
+    "@hono/node-server": "^1",
+    "@hono/swagger-ui": "^0.5.0",
+    "@open-policy-agent/opa-wasm": "^1",
+    "@opentelemetry/api": "^1",
     "@opentelemetry/auto-instrumentations-node": "^0.76.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.218.0",
-    "@opentelemetry/api": "^1",
-    "@open-policy-agent/opa-wasm": "^1",
-    "jose": "^6.2.3",
-    "valibot": "^1.4.0",
+    "@opentelemetry/sdk-node": "^0.218.0",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4",
+    "hono-openapi": "^1.3.0",
     "ioredis": "^5",
-    "@aws-sdk/client-kms": "^3"
+    "jose": "^6.2.3",
+    "pg": "^8",
+    "valibot": "^1.4.0"
   },
   "devDependencies": {
     "@types/pg": "^8",
     "esbuild": "^0.28.0",
+    "openapi-types": "^12.1.3",
     "tsx": "^4",
     "typescript": "catalog:",
     "vitest": "catalog:"
