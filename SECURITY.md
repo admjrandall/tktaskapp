@@ -185,10 +185,26 @@ Applied in this order in `server/src/index.ts` — do not reorder:
 2. Security headers
 3. Connection tracking
 4. OTel spans
-5. Auth middleware  (/api/v1/* only)
-6. Lockdown middleware  (/api/v1/* only)
-7. Route handler + opaMiddleware(action) per route
+5. Global rate limit  (per-IP, all traffic; skips /healthz + /readyz)
+6. Auth rate limit    (per-IP, /auth/* only — brute-force defence)
+7. Auth middleware    (/api/v1/* only)
+8. Lockdown middleware (/api/v1/* only)
+9. API rate limit     (per-user, /api/v1/* — after auth so identity is known)
+10. Export rate limit  (per-user, /api/v1/audit/export — stricter)
+11. Route handler + opaMiddleware(action) per route
 ```
+
+---
+
+## Server: HTTP rate limiting
+
+Mitigates OWASP API Security **API4:2023 Unrestricted Resource Consumption** (brute-force on auth, scraping, per-tenant cost-blast). Implemented in `server/src/middleware/rate-limit.ts` as tiered middleware (see order above).
+
+- **Store:** Redis primary (fixed-window counter via `INCR` + `PEXPIRE`, coordinated across instances) with an in-memory sliding-window-log fallback. URL precedence: `RATE_LIMIT_REDIS_URL` → `AUTH_STATE_REDIS_URL` → `AI_GATEWAY_REDIS_URL`.
+- **Fail mode:** unlike auth revocation (fails **closed** in production), rate limiting fails **open** to the in-process limiter on a Redis outage — denying all traffic on a transient store blip would be a self-inflicted DoS. The in-memory limiter still bounds each instance in that mode.
+- **Client IP:** spoofing-resistant. `TRUST_PROXY` = number of trusted reverse-proxy hops (default `0` = ignore `X-Forwarded-For`, use the socket address). When set, the client IP is read `TRUST_PROXY` hops from the right of the `X-Forwarded-For` chain, so client-supplied left-hand values are ignored.
+- **Headers:** emits the IETF draft `RateLimit-Limit` / `RateLimit-Remaining` / `RateLimit-Reset` triplet, plus `Retry-After` on a `429 { error: 'Too many requests' }`.
+- **Defaults (env-overridable):** global 600/min/IP · auth 20/5min/IP · api 300/min/user · export 5/min/user.
 
 ---
 

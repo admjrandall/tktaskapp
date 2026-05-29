@@ -32,6 +32,12 @@ import { securityHeaders } from './middleware/security-headers.js'
 import { authMiddleware } from './auth/middleware.js'
 import { authRouter } from './auth/routes.js'
 import { lockdownMiddleware } from './middleware/lockdown.js'
+import {
+  globalRateLimit,
+  authRateLimit,
+  apiRateLimit,
+  exportRateLimit,
+} from './middleware/rate-limit.js'
 import { otelMiddleware } from './observability/middleware.js'
 import { handleHealthz, handleReadyz } from './api/routes/health.js'
 import { clientsRouter } from './api/routes/clients.js'
@@ -96,6 +102,10 @@ app.use('*', async (c, next) => {
 
 app.use('*', otelMiddleware)
 
+// ── Coarse per-IP rate limit (protects auth lookups; skips health probes) ──────
+
+app.use('*', globalRateLimit())
+
 // ── Public health routes (no auth) ────────────────────────────────────────────
 
 app.get('/healthz', (c) => {
@@ -120,14 +130,22 @@ app.get('/readyz', async (c) => {
   return c.json(body, status as never)
 })
 
-// ── BFF auth routes (public — no authMiddleware) ──────────────────────────────
+// ── BFF auth routes (public — strict per-IP brute-force limit, no authMiddleware) ─
 
+app.use('/auth/*', authRateLimit())
 app.route('/auth', authRouter)
 
 // ── Auth middleware (all /api/v1 routes) ─────────────────────────────────────
 
 app.use('/api/v1/*', authMiddleware)
 app.use('/api/v1/*', lockdownMiddleware())
+
+// ── Per-user rate limit (runs after auth so identity is known) ─────────────────
+
+app.use('/api/v1/*', apiRateLimit())
+// Stricter per-user limit on the expensive audit export — registered before the
+// audit router mount so it applies to GET /api/v1/audit/export.
+app.use('/api/v1/audit/export', exportRateLimit())
 
 // ── CRM routes ────────────────────────────────────────────────────────────────
 

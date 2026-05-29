@@ -58,9 +58,13 @@ Production schema changes must be committed SQL migrations in `server/drizzle/`.
 
 Server code must not edit files in `packages/core/src/`. Frontend and server are separate packages. Do not create cross-package dependencies from `server/` into the frontend monorepo packages.
 
+## HTTP rate limiting
+
+All public and authenticated traffic is rate-limited via `server/src/middleware/rate-limit.ts` (OWASP API4:2023 — Unrestricted Resource Consumption). Tiers: coarse per-IP global guard, strict per-IP on `/auth/*`, per-user on `/api/v1/*`, stricter per-user on the audit export. Backing store is Redis primary with an in-memory per-instance fallback. Rate limiting fails **open** to the in-memory limiter on a Redis outage (the opposite of auth revocation, which fails closed) — never hard-deny traffic on a transient store blip. Client IP is read proxy-aware via `TRUST_PROXY` (default 0 = use socket address, ignore `X-Forwarded-For`). Do not remove these limiters or weaken the auth/export tiers.
+
 ## Middleware stack (order matters)
 
-`server/src/index.ts` applies middleware in this order: CORS → security headers → connection tracking → OTel spans → auth (`/api/v1/*`) → lockdown → routes. Do not reorder or skip layers.
+`server/src/index.ts` applies middleware in this order: CORS → security headers → connection tracking → OTel spans → global rate limit → auth rate limit (`/auth/*`) → auth (`/api/v1/*`) → lockdown → API rate limit (`/api/v1/*`) → export rate limit (`/api/v1/audit/export`) → routes. Do not reorder or skip layers.
 
 ## New route checklist — run before every PR that adds a server route
 
@@ -72,22 +76,24 @@ When adding or modifying any route in `server/src/api/routes/`:
 - [ ] High-risk operation? Add `requireStepUp(operation)` middleware and add to the table above
 - [ ] Error paths return `{ error: 'Internal server error' }` — no SQL text, stack traces, or query strings in the response body
 - [ ] New route uses `authMiddleware` if it accesses tenant data
+- [ ] Expensive or abuse-prone route (export, bulk, search)? Add a dedicated `rateLimit(...)` tier in `index.ts` before the route mount
 
 **Automated coverage:** Bearer scans for missing auth checks and sensitive data in responses. Semgrep (`p/owasp-top-ten`) covers injection and missing validation patterns. The `gap-auditor` agent checks `withTenant` / `writeAuditEvent` coverage on demand.
 
 ## ASVS 5.0.0 chapter mapping
 
-| Rule in this file                    | ASVS 5.0.0 chapter                      |
-| ------------------------------------ | --------------------------------------- |
-| withTenant() on all CRM queries      | V8 Authorization, V14 Data Protection   |
-| writeAuditEvent() on mutations       | V16 Security Logging and Error Handling |
-| HTTP response safety (no raw errors) | V16 §16.5.1                             |
-| Request validation — Valibot         | V2 Validation and Business Logic        |
-| Secrets from env vars only           | V13 Configuration                       |
-| requireStepUp() on high-risk routes  | V6 Authentication, V8 Authorization     |
-| Token revocation — AuthStateStore    | V7 Session Management                   |
-| KMS via getKmsService()              | V11 Cryptography                        |
-| OPA authorization                    | V8 Authorization                        |
-| Middleware order                     | V15 Secure Coding and Architecture      |
+| Rule in this file                    | ASVS 5.0.0 chapter                              |
+| ------------------------------------ | ----------------------------------------------- |
+| withTenant() on all CRM queries      | V8 Authorization, V14 Data Protection           |
+| writeAuditEvent() on mutations       | V16 Security Logging and Error Handling         |
+| HTTP response safety (no raw errors) | V16 §16.5.1                                     |
+| Request validation — Valibot         | V2 Validation and Business Logic                |
+| Secrets from env vars only           | V13 Configuration                               |
+| requireStepUp() on high-risk routes  | V6 Authentication, V8 Authorization             |
+| Token revocation — AuthStateStore    | V7 Session Management                           |
+| KMS via getKmsService()              | V11 Cryptography                                |
+| OPA authorization                    | V8 Authorization                                |
+| HTTP rate limiting (tiered)          | V8 Authorization, V10 §10.2.1 (anti-automation) |
+| Middleware order                     | V15 Secure Coding and Architecture              |
 
 Reference: [OWASP ASVS 5.0.0](https://owasp.org/www-project-application-security-verification-standard/) — target Level 2 for the enterprise-web and server delivery targets.

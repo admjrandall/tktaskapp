@@ -56,16 +56,22 @@ OTel `init()` must run before any other import that creates spans or metrics. Im
 Middleware execution order per request:
 
 ```
-1. CORS headers / OPTIONS preflight  (server/src/middleware/cors.ts)
-2. Security headers                  (server/src/middleware/security-headers.ts)
-3. Connection counter increment/decrement  (inline, metrics.ts)
-4. OTel root span  (server/src/observability/middleware.ts)
-5. Auth middleware — /api/v1/* only  (server/src/auth/middleware.ts)
-6. Lockdown middleware — /api/v1/* only  (server/src/middleware/lockdown.ts)
-7. Route handler + opaMiddleware(action) per route
+1.  CORS headers / OPTIONS preflight  (server/src/middleware/cors.ts)
+2.  Security headers                  (server/src/middleware/security-headers.ts)
+3.  Connection counter increment/decrement  (inline, metrics.ts)
+4.  OTel root span  (server/src/observability/middleware.ts)
+5.  Global rate limit — per-IP, all traffic; skips health probes  (server/src/middleware/rate-limit.ts)
+6.  Auth rate limit — per-IP, /auth/* only (brute-force defence)
+7.  Auth middleware — /api/v1/* only  (server/src/auth/middleware.ts)
+8.  Lockdown middleware — /api/v1/* only  (server/src/middleware/lockdown.ts)
+9.  API rate limit — per-user, /api/v1/* (after auth so identity is known)
+10. Export rate limit — per-user, /api/v1/audit/export (stricter)
+11. Route handler + opaMiddleware(action) per route
 ```
 
 **Public routes** (no auth): `GET /healthz`, `GET /readyz`
+
+**HTTP rate limiting** (`server/src/middleware/rate-limit.ts`) — tiered (see steps 5/6/9/10), OWASP API4:2023. Redis primary (fixed-window `INCR`+`PEXPIRE`) with in-memory per-instance fallback; URL precedence `RATE_LIMIT_REDIS_URL` → `AUTH_STATE_REDIS_URL` → `AI_GATEWAY_REDIS_URL`. Fails **open** to in-memory on a Redis outage (auth revocation, by contrast, fails closed). Proxy-aware client IP via `TRUST_PROXY` (default 0). Emits `RateLimit-Limit/Remaining/Reset` + `Retry-After` on `429 { error: 'Too many requests' }`. Defaults: global 600/min/IP, auth 20/5min/IP, api 300/min/user, export 5/min/user.
 
 **Graceful shutdown** — `SIGTERM`/`SIGINT`:
 

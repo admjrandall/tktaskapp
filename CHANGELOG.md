@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 
 ---
 
+## [2026-05-29] — HTTP rate limiting (roadmap B1, #13)
+
+### Security
+
+- **HTTP rate limiting** (`server/src/middleware/rate-limit.ts`) — mitigates OWASP API Security **API4:2023 Unrestricted Resource Consumption**. Tiered middleware wired into `server/src/index.ts`: coarse per-IP global guard (skips health probes), strict per-IP on `/auth/*` (brute-force defence), per-user on `/api/v1/*`, and a stricter per-user limit on `GET /api/v1/audit/export`.
+  - **Store:** Redis primary (fixed-window `INCR` + `PEXPIRE`, coordinated across instances) with an in-memory sliding-window-log per-instance fallback. URL precedence `RATE_LIMIT_REDIS_URL` → `AUTH_STATE_REDIS_URL` → `AI_GATEWAY_REDIS_URL`.
+  - **Fail mode:** fails **open** to the in-memory limiter on a Redis outage (auth revocation, by contrast, fails closed) — avoids a self-inflicted DoS on a transient store blip.
+  - **Client IP:** spoofing-resistant via `TRUST_PROXY` (number of trusted proxy hops; default 0 ignores `X-Forwarded-For`).
+  - **Headers:** IETF draft `RateLimit-Limit/Remaining/Reset` triplet + `Retry-After` on `429 { error: 'Too many requests' }`.
+  - 9 unit tests (`rate-limit.test.ts`) covering limits, 429, window reset, identity isolation, skip/exempt, disable flag, and the `byUser` resolver.
+
+### Changed
+
+- **`server/.env.example`**: added the `RATE_LIMIT_*` and `TRUST_PROXY` configuration block.
+- Docs updated: `SECURITY.md` (new "Server: HTTP rate limiting" section + middleware order), `.claude/rules/server.md` (rate-limit rule, middleware order, new-route checklist, ASVS map), `TECHNICAL-REFERENCE.md` (middleware stack).
+
+### Verification
+
+- Current-source check (2026-05-29): OWASP API Security Top 10 (API4:2023), Hono rate-limiting guidance, IETF `RateLimit` header draft. Implemented in-house to match the existing AuthStateStore Redis-fallback convention rather than adding a third-party limiter. **Not verified:** behaviour against a live Redis instance (in-memory path is unit-tested; Redis path is covered by code review only).
+- `pnpm typecheck`, `pnpm lint` (server), `pnpm test` (server, 23 passed) all green.
+
+---
+
 ## [2026-05-29] — Enterprise-readiness roadmap + Phase 0 audit-chain tests
 
 ### Added
