@@ -5,6 +5,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 
 ---
 
+## [2026-05-29] — React migration foundation (Phase 2, ADR-M-015)
+
+### Added
+
+- **`REACT-MIGRATION.md`**: detailed, current-source-verified plan for the React
+  migration (strangler-fig strategy, Trusted Types/CSP plan, per-view checklist,
+  pending build-wiring + test-infra steps).
+- **React foundation** under `packages/core/src/react/` (no target build touched —
+  existing builds unaffected):
+  - `use-app-state.ts` — `useAppState()` bridging the existing `state.ts`
+    `subscribe`/`getState` store to React via `useSyncExternalStore` (no store rewrite).
+  - `trusted-html.ts` — `dangerousAuditedHtml()` routing React `dangerouslySetInnerHTML`
+    through the `nexus-crm-static-template` Trusted Types policy (offline-CSP safe).
+  - `mount.tsx` — `mountReact()` via `createRoot` + `StrictMode`.
+  - `views/Reports.tsx` — reference component porting `views/reports.ts` (JSX
+    auto-escaping replaces manual `escH`; `onClick` replaces `getElementById` wiring).
+  - `tests/unit/react/trusted-html.test.ts` — 3 tests on the TT bridge.
+- Deps: `react`/`react-dom` 19.2.x; dev `@types/react`, `@types/react-dom`,
+  `@vitejs/plugin-react` v6 (the correct plugin for Vite 8 / Rolldown).
+
+### Changed
+
+- `tsconfig.base.json`: `jsx: react-jsx` + `jsxImportSource: react`. Added `**/*.tsx`
+  to the `include` globs in `tsconfig.json` and `packages/core/tsconfig.json` — `tsc`
+  was otherwise silently skipping `.tsx` (a false pass); they are now genuinely typechecked.
+
+### Verification
+
+- Current-source check (2026-05-29): React 19.2.x, `@vitejs/plugin-react` v6 (Vite 8/Rolldown;
+  `plugin-react-oxc` deprecated), `vite-plugin-singlefile`, Trusted Types + React. `pnpm typecheck`
+  (incl. `.tsx`), `eslint` (React source), and the bridge test all pass.
+- **Not verified:** the single-file offline build has not yet been run with React (foundation is
+  build-independent; proving it is the first pending step in `REACT-MIGRATION.md`). React render-test
+  infra (jsdom + Testing Library) is not yet set up.
+
+---
+
 ## [2026-05-29] — HTTP rate limiting (roadmap B1, #13)
 
 ### Security

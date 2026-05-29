@@ -11,6 +11,8 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "paths": {
       "@config/*": ["./config/*"]
