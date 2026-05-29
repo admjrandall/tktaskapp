@@ -21,6 +21,7 @@ catalog:
 # pre-installed (CI runners, dev machines). Decision documented in DECISIONS.md ADR-M-014.
 allowBuilds:
   esbuild: false
+  msgpackr-extract: false
   onnxruntime-node: false
   protobufjs: false
   sharp: false

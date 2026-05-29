@@ -57,11 +57,13 @@ import { auditRouter } from './api/routes/audit.js'
 import { adminRouter } from './api/routes/admin.js'
 import { syncRouter } from './api/routes/sync.js'
 import { aiAttributesRouter } from './api/routes/ai-attributes.js'
+import { exportsRouter } from './api/routes/exports.js'
 import { closeDb } from './db/index.js'
 import { startDestructionScheduler, stopDestructionScheduler } from './kms/destruction-scheduler.js'
 import { pruneExpiredRevocations } from './auth/state-store.js'
 import { otel } from './observability/otel.js'
 import { incrementActiveConnections, decrementActiveConnections } from './observability/metrics.js'
+import { startQueues, stopQueues } from './queues/index.js'
 
 const app = new Hono<HonoEnv>()
 
@@ -166,6 +168,7 @@ app.route('/api/v1/audit', auditRouter)
 app.route('/api/v1/admin', adminRouter)
 app.route('/api/v1/sync', syncRouter)
 app.route('/api/v1/ai/attributes', aiAttributesRouter)
+app.route('/api/v1/exports', exportsRouter)
 
 // ── OpenAPI spec + Swagger UI (public — generated from route decorations) ────
 
@@ -200,6 +203,7 @@ app.get(
         { name: 'Sync', description: 'RxDB-compatible replication protocol' },
         { name: 'AI Attributes', description: 'Server-side AI attribute compute' },
         { name: 'Admin', description: 'Admin console — owner/admin only' },
+        { name: 'Exports', description: 'Async data exports (BullMQ-backed)' },
       ],
       components: {
         securitySchemes: {
@@ -312,6 +316,20 @@ const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
   })
 })
 
+// Start the BullMQ job worker. Failure to connect to Redis is non-fatal in
+// development (worker logs an error and exits; HTTP server continues).
+void startQueues().catch((err: unknown) => {
+  otel.log({
+    timestamp: new Date().toISOString(),
+    level: 'error',
+    service: 'tktaskapp-server',
+    tenantId: 'system',
+    requestId: 'startup',
+    message: 'BullMQ queue startup failed — job processing disabled',
+    extra: { error: String(err) },
+  })
+})
+
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 
 async function shutdown(): Promise<void> {
@@ -324,12 +342,15 @@ async function shutdown(): Promise<void> {
     message: 'SIGTERM received — shutting down',
   })
   stopDestructionScheduler(destructionTimer)
+  // Stop accepting new connections while in-flight requests drain
   await new Promise<void>((resolve, reject) => {
     server.close((err?: Error) => {
       if (err) reject(err)
       else resolve()
     })
   })
+  // Gracefully drain BullMQ workers (waits up to 30s for running jobs)
+  await stopQueues()
   await closeDb()
   process.exit(0)
 }
