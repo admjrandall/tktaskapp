@@ -21,6 +21,7 @@ export default defineConfig({
     // circular project references. Coverage is configured here at root only.
     projects: [
       'tests/vitest.config.ts',
+      'tests/react/vitest.config.ts',
       'packages/*/vitest.config.ts',
       'apps/*/vitest.config.ts',
       'server/vitest.config.ts',

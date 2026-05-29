@@ -18,6 +18,8 @@ export default defineProject({
       'adapters/kms-mock.ts',
       'adapters/mock-mobile-adapters.ts',
       'e2e/**',
+      // .tsx component tests run under the react-components jsdom project
+      '**/*.test.tsx',
     ],
   },
   resolve: {
