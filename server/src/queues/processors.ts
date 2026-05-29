@@ -5,9 +5,12 @@ import { clients } from '../db/schema/clients.js'
 import { tasks } from '../db/schema/tasks.js'
 import { people } from '../db/schema/people.js'
 import { projects } from '../db/schema/projects.js'
+import { notifications } from '../db/schema/notifications.js'
+import { tenantUsers } from '../db/schema/users.js'
 import { eq, and, isNull } from 'drizzle-orm'
 import { withTenant, writeAuditEvent } from '../services/base.js'
 import { getBullRedis } from './redis.js'
+import { getEmailService, buildNotificationEmail } from '../email/email-service.js'
 
 // ── data:export ───────────────────────────────────────────────────────────────
 
@@ -224,16 +227,57 @@ async function processNotificationDispatch(
 
   await job.updateProgress(20)
 
+  // Fetch the notification record (needed by both channels)
+  const notif = await withTenant(tenantId, async (tx) => {
+    const rows = await tx
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.id, notificationId), eq(notifications.tenantId, tenantId)))
+      .limit(1)
+    return rows[0] ?? null
+  })
+
+  if (!notif) {
+    return { success: false, message: `Notification ${notificationId} not found` }
+  }
+
   if (channel === 'in-app') {
-    const { notifications } = await import('../db/schema/notifications.js')
     await withTenant(tenantId, async (tx) => {
       await tx
         .update(notifications)
-        .set({ read: true })
+        .set({ read: true, updatedAt: new Date() })
         .where(and(eq(notifications.tenantId, tenantId), eq(notifications.id, notificationId)))
     })
+  } else {
+    // channel === 'email'
+    // Look up the recipient's email address from tenantUsers
+    const userRow = await withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({ email: tenantUsers.email, displayName: tenantUsers.displayName })
+        .from(tenantUsers)
+        .where(
+          and(
+            eq(tenantUsers.id, userId),
+            eq(tenantUsers.orgId, tenantId),
+            isNull(tenantUsers.deletedAt),
+          ),
+        )
+        .limit(1)
+      return rows[0] ?? null
+    })
+
+    if (!userRow) {
+      return { success: false, message: `Recipient user ${userId} not found or suspended` }
+    }
+
+    const emailMessage = buildNotificationEmail({
+      recipientEmail: userRow.email,
+      notificationTitle: notif.title,
+      notificationBody: notif.body ?? null,
+    })
+
+    await getEmailService().send(emailMessage)
   }
-  // email channel: would call external email service here
 
   await writeAuditEvent({
     tenantId,
