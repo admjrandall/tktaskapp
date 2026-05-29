@@ -17,6 +17,7 @@ export default tseslint.config(
       'taskapp.html',
       'tests/**',
       'vitest.config.ts',
+      'server/vitest.config.ts',
       // Non-workspace root directories — not source code, not in the TS project graph.
       // See TECHNICAL-REFERENCE.md §15 for what each contains.
       'verifier/**',

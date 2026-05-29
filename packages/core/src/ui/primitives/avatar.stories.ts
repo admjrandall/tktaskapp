@@ -4,7 +4,7 @@ import { renderAvatar, renderAvatarGroup } from './avatar.js'
 const meta: Meta = {
   title: 'Primitives/Avatar',
   tags: ['autodocs'],
-  render: (args) => renderAvatar(args as Parameters<typeof renderAvatar>[0]),
+  render: (args) => renderAvatar(args),
   argTypes: {
     size: {
       control: 'select',
