@@ -57,7 +57,7 @@ export async function writeAuditEvent(input: AuditEventInput): Promise<string> {
       resourceId: input.resourceId ?? null,
       userId: input.userId,
     }
-    const signedDigest = createHash('sha256').update(_canonicalJson(digestPayload)).digest('hex')
+    const signedDigest = computeAuditDigest(digestPayload)
 
     const [event] = await tx
       .insert(auditEvents)
@@ -112,13 +112,22 @@ export function verifyAuditChain(
           : null,
       userId: event.userId,
     }
-    const expected: string = createHash('sha256')
-      .update(_canonicalJson(digestPayload))
-      .digest('hex')
+    const expected: string = computeAuditDigest(digestPayload)
     if (expected !== event.signedDigest) return false
     prevHash = event.signedDigest
   }
   return true
+}
+
+/**
+ * Compute the SHA-256 hex digest of an audit event payload using the canonical
+ * JSON encoding. This is the single authoritative implementation shared by
+ * `writeAuditEvent` (when sealing a new event) and `verifyAuditChain` (when
+ * re-deriving the expected digest). Exported so the hash-chain integrity logic
+ * can be unit-tested without a live database.
+ */
+export function computeAuditDigest(payload: Record<string, unknown>): string {
+  return createHash('sha256').update(_canonicalJson(payload)).digest('hex')
 }
 
 function _canonicalJson(value: unknown): string {

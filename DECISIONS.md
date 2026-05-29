@@ -269,3 +269,51 @@ Build speed may be reduced in environments without a pre-seeded esbuild binary. 
 ### Alternatives considered
 
 Allowing the postinstall script (`allowBuilds: esbuild: true`) would restore native-speed builds unconditionally but exposes the install pipeline to any code the esbuild postinstall script runs. Rejected for security-sensitive CI environments.
+
+---
+
+## ADR-M-015 — Migrate the frontend to React (single-file offline build preserved)
+
+**Status:** Accepted (migration not yet started)
+**Date:** 2026-05-29
+
+### Decision
+
+The shared core UI (`packages/core/src/`), currently vanilla TypeScript rendering
+through string-template `innerHTML` with a hand-rolled pub/sub store (`state.ts`),
+will migrate to **React**. The offline-web target continues to emit a **single
+inlined HTML file** for `file://` use via `vite-plugin-singlefile`; enterprise-web
+and Dataverse use normal multi-asset builds.
+
+### Context
+
+The most-requested enterprise grid capabilities — virtual scrolling, inline edit,
+bulk selection, column state, and server-side data binding (roadmap items F1–F6) —
+fight the current `innerHTML`-templating model, which handles complex incremental
+DOM state the worst. See `ENTERPRISE-ROADMAP.md` Phase 2.
+
+### Alternatives considered
+
+- **Stay vanilla, add a headless virtual-grid + chart library** — lowest
+  disruption, preserves the offline build trivially, but leaves complex grid
+  state hand-built.
+- **Lightweight reactive layer (Lit / Preact / Svelte)** — smaller bundle than
+  React, but a smaller component/data-grid ecosystem for the enterprise grid work.
+- **Hybrid: framework only for heavy views** — two rendering models to maintain.
+
+React was chosen for the maturity of its data-grid, table, and collaboration
+component ecosystem, and to standardize on one rendering model across views.
+
+### Consequences and invariants to preserve
+
+- **Single-file offline build is non-negotiable** — `vite-plugin-singlefile`
+  must continue to produce `dist/offline/index.html`; validate on `file://`.
+- **Trusted Types:** React reconciles the DOM itself, so the `patchInnerHTML()`
+  IIFE and `nexus-crm` policy assumptions change. React auto-escapes (reducing
+  XSS surface), but `dangerouslySetInnerHTML` becomes the new audit boundary and
+  must route through `createAuditedStaticHTML()`. `escH()` is retained for any
+  raw-HTML path.
+- **CSP hash regeneration** (`generate-csp.mjs`) must still run after every
+  offline build and be re-verified against the React bundle.
+- **Adapter boundary (ADR-M-002) holds** — the React layer must not import
+  concrete adapters; injection stays via `setAdapter()`.

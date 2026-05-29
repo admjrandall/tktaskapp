@@ -5,6 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 
 ---
 
+## [2026-05-29] — Enterprise-readiness roadmap + Phase 0 audit-chain tests
+
+### Added
+
+- **`ENTERPRISE-ROADMAP.md`**: source-audited gap analysis (frontend F1–F10,
+  backend B1–B10, P0 de-risk items) with a four-phase delivery plan and
+  current-source verification notes.
+- **`server/src/services/base.test.ts`**: first server test suite (19 tests).
+  Covers the audit hash-chain integrity verifier (`verifyAuditChain` — tamper,
+  reorder, broken-link, skipped-event, missing-digest detection), the
+  `computeAuditDigest` canonical-JSON digest, and `paginationValues` clamping
+  (the resource-exhaustion guard). Closes roadmap items P0-1 and P0-2.
+- **`DECISIONS.md` ADR-M-015**: decision to migrate the frontend to React while
+  preserving the single-file offline build.
+
+### Changed
+
+- **`server/src/services/base.ts`**: extracted the SHA-256 audit digest
+  computation (previously duplicated between `writeAuditEvent` and
+  `verifyAuditChain`) into the exported `computeAuditDigest()` helper.
+  Behavior-preserving; makes the hash-chain logic unit-testable without a
+  database. Verified by `pnpm typecheck` and the new test suite.
+
+---
+
 ## [2026-05-25 patch] — Post-audit gap closure (C-3c, S-1 items 1 & 3)
 
 ### Security
