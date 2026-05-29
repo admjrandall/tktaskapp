@@ -33,25 +33,33 @@ offline build currently passes (audit was source-read, not a build run).
 
 ## Priority 0 — De-risk (highest priority, blocks enterprise sale)
 
-The single largest gap is **test coverage**, which outranks every feature below.
-No security review or SOC 2 / ISO 27001 audit passes with an untested
-`withTenant()` isolation boundary.
+**Correction (2026-05-29):** an initial pass mistakenly reported the server as
+having "zero tests." That was wrong — it only inspected the `server/` package
+directory and missed the root **`tests/`** workspace, which runs as a separate
+Vitest project. The suite is substantial: **~376 passing tests across 33 files**,
+including server coverage for `withTenant`, `paginationValues`, `writeAuditEvent`,
+`verifyAuditChain`, OPA policy, auth, auth-state, BOLA/IDOR, GDPR erasure, and
+security headers (`tests/security/*`, `tests/unit/services/*`). The real gap is
+**narrower and more specific** than first stated: most service-layer tests mock
+the database, so true Postgres-backed RLS isolation is only partially exercised.
 
-| ID   | Item                                                 | State at audit                                                     | Target                                          |
-| ---- | ---------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------- |
-| P0-1 | Audit hash-chain unit tests                          | ✅ Done 2026-05-29 — `server/src/services/base.test.ts` (19 tests) | Lock in tamper/reorder/break detection          |
-| P0-2 | Pagination clamp tests                               | ✅ Done 2026-05-29 (same file)                                     | Guard the resource-exhaustion limit             |
-| P0-3 | `withTenant()` RLS isolation integration tests       | ❌ Not covered — needs Postgres harness                            | testcontainers-backed cross-tenant denial tests |
-| P0-4 | `writeAuditEvent` persistence + chain-on-write tests | ❌ Not covered — needs Postgres harness                            | Same harness as P0-3                            |
-| P0-5 | Token revocation / step-up integration tests         | ❌ Not covered                                                     | Redis + DB harness                              |
-| P0-6 | Frontend render/component tests                      | ❌ Zero view render tests today                                    | Vitest + Testing Library per view               |
-| P0-7 | E2E golden-path coverage                             | ⚠️ Only 4 Playwright specs (3 a11y + 1 mobile)                     | Login → CRUD → sync → logout                    |
-| P0-8 | Dependency/CVE scanning in CI                        | ⚠️ Not verified present                                            | Automated SCA gate                              |
+| ID   | Item                                                 | State at audit                                                                                                                      | Target                                       |
+| ---- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| P0-1 | Audit hash-chain verification tests                  | ✅ Pre-existing (`tests/security/server-audit-chain.test.ts`), edge cases expanded 2026-05-29 in `server/src/services/base.test.ts` | Keep tamper/reorder/break detection green    |
+| P0-2 | Pagination clamp tests                               | ✅ Pre-existing (`tests/unit/services/base.service.test.ts`)                                                                        | Already guards the resource-exhaustion limit |
+| P0-3 | `withTenant()` **DB-backed** RLS isolation tests     | ⚠️ Scaffolded but skipped — `tests/security/server-rls-coverage.test.ts` runs only when `POSTGRES_TEST_URL` is set                  | Wire a Postgres service container into CI    |
+| P0-4 | `writeAuditEvent` persistence + chain-on-write tests | ⚠️ Mocked only (`base.service.test.ts`); no real-DB persistence test                                                                | Add to the same CI Postgres harness as P0-3  |
+| P0-5 | Token revocation / step-up integration tests         | ⚠️ Unit/mocked coverage exists (`server-auth-state.test.ts`); no Redis+DB e2e                                                       | Redis + DB harness                           |
+| P0-6 | Frontend **render/component** tests                  | ⚠️ A11y tests render some UI (`tests/accessibility/*`), but no per-view render/interaction tests                                    | Vitest + Testing Library per view            |
+| P0-7 | E2E golden-path coverage                             | ⚠️ Only 4 Playwright specs (3 a11y + 1 mobile)                                                                                      | Login → CRUD → sync → logout                 |
+| P0-8 | Dependency/CVE scanning in CI                        | ⚠️ Not verified present                                                                                                             | Automated SCA gate                           |
 
-**P0-1 / P0-2 are complete.** They required a small behavior-preserving refactor:
-the SHA-256 digest computation, previously duplicated between `writeAuditEvent`
-and `verifyAuditChain`, was extracted into the exported `computeAuditDigest()`
-helper so the hash-chain integrity logic is unit-testable without a database.
+The highest-value remaining work is **P0-3**: stand up a Postgres service
+container in CI and set `POSTGRES_TEST_URL` so the already-written RLS regression
+tests actually run. Without that, cross-tenant isolation is verified only against
+mocks. A small behavior-preserving refactor on 2026-05-29 extracted the SHA-256
+digest computation (previously duplicated between `writeAuditEvent` and
+`verifyAuditChain`) into the exported `computeAuditDigest()` helper.
 
 ---
 

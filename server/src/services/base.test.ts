@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { computeAuditDigest, paginationValues, verifyAuditChain } from './base.js'
+import { computeAuditDigest, verifyAuditChain } from './base.js'
 
 /**
- * Phase 0 security regression tests for the audit hash chain and pagination
- * clamping (see ENTERPRISE-ROADMAP.md). These cover the pure, DB-free logic
- * only. Integration coverage of `withTenant()` row-level-security isolation and
- * `writeAuditEvent` persistence requires a live Postgres test harness
- * (testcontainers) and is tracked as a separate Phase 0 follow-up.
+ * Expanded edge-case coverage for the audit hash chain, complementing the
+ * existing tests:
+ *   - `tests/security/server-audit-chain.test.ts` (single tamper-detection case)
+ *   - `tests/unit/services/base.service.test.ts` (withTenant, paginationValues,
+ *     writeAuditEvent — all mocked)
+ *
+ * This file adds the chain cases those do not cover (reorder tolerance, broken
+ * link, skipped middle event, missing digest, non-null first prevHash) and
+ * exercises the newly-extracted `computeAuditDigest` export directly. All cases
+ * are pure / DB-free. Integration coverage of `withTenant()` RLS isolation
+ * against a real database lives in `tests/security/server-rls-coverage.test.ts`,
+ * which is skipped unless `POSTGRES_TEST_URL` is set (see ENTERPRISE-ROADMAP.md
+ * item P0-3: wire that DB into CI).
  */
 
 type ChainEvent = {
@@ -163,35 +171,5 @@ describe('computeAuditDigest', () => {
   it('changes when any field changes', () => {
     const base = computeAuditDigest({ action: 'a', chainPosition: 1 })
     expect(computeAuditDigest({ action: 'a', chainPosition: 2 })).not.toBe(base)
-  })
-})
-
-describe('paginationValues', () => {
-  it('applies defaults: page 1, pageSize 20', () => {
-    expect(paginationValues({})).toEqual({ limit: 20, offset: 0, page: 1, pageSize: 20 })
-  })
-
-  it('clamps pageSize above the 100 maximum (resource-exhaustion guard)', () => {
-    expect(paginationValues({ pageSize: 5000 }).pageSize).toBe(100)
-    expect(paginationValues({ pageSize: 5000 }).limit).toBe(100)
-  })
-
-  it('clamps pageSize below 1 up to 1', () => {
-    expect(paginationValues({ pageSize: 0 }).pageSize).toBe(1)
-    expect(paginationValues({ pageSize: -10 }).pageSize).toBe(1)
-  })
-
-  it('clamps page below 1 up to 1', () => {
-    expect(paginationValues({ page: 0 }).page).toBe(1)
-    expect(paginationValues({ page: -3 }).offset).toBe(0)
-  })
-
-  it('computes offset from page and pageSize', () => {
-    expect(paginationValues({ page: 3, pageSize: 25 })).toEqual({
-      limit: 25,
-      offset: 50,
-      page: 3,
-      pageSize: 25,
-    })
   })
 })

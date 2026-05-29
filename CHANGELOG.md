@@ -12,11 +12,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventi
 - **`ENTERPRISE-ROADMAP.md`**: source-audited gap analysis (frontend F1–F10,
   backend B1–B10, P0 de-risk items) with a four-phase delivery plan and
   current-source verification notes.
-- **`server/src/services/base.test.ts`**: first server test suite (19 tests).
-  Covers the audit hash-chain integrity verifier (`verifyAuditChain` — tamper,
-  reorder, broken-link, skipped-event, missing-digest detection), the
-  `computeAuditDigest` canonical-JSON digest, and `paginationValues` clamping
-  (the resource-exhaustion guard). Closes roadmap items P0-1 and P0-2.
+- **`server/src/services/base.test.ts`**: expanded edge-case coverage for the
+  audit hash-chain verifier (`verifyAuditChain` — reorder tolerance, broken-link,
+  skipped-event, missing-digest, non-null first prevHash) and direct tests for
+  the new `computeAuditDigest` export. Complements the pre-existing
+  `tests/security/server-audit-chain.test.ts` and `tests/unit/services/base.service.test.ts`
+  (which already cover single-tamper detection, `withTenant`, and
+  `paginationValues`).
 - **`DECISIONS.md` ADR-M-015**: decision to migrate the frontend to React while
   preserving the single-file offline build.
 
