@@ -18,31 +18,61 @@
     "build:offline": {
       "description": "Build the offline single-file HTML bundle (browser-ai profile) and regenerate CSP hashes in the output.",
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "vite.config.ts", "tsconfig.json", "../../config/**"],
+      "inputs": [
+        "src/**",
+        "vite.config.ts",
+        "tsconfig.json",
+        "../../config/**",
+        "../../packages/*/src/**"
+      ],
       "outputs": ["../../dist/offline/**"]
     },
     "build:offline:no-ai": {
       "description": "Build offline single-file bundle (no-ai profile) and regenerate CSP hashes",
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "vite.no-ai.config.ts", "tsconfig.json", "../../config/**"],
+      "inputs": [
+        "src/**",
+        "vite.no-ai.config.ts",
+        "tsconfig.json",
+        "../../config/**",
+        "../../packages/*/src/**"
+      ],
       "outputs": ["../../dist/offline-no-ai/**"]
     },
     "build:offline:internal-ai": {
       "description": "Build offline single-file bundle (internal-ai profile) and regenerate CSP hashes",
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "vite.internal-ai.config.ts", "tsconfig.json", "../../config/**"],
+      "inputs": [
+        "src/**",
+        "vite.internal-ai.config.ts",
+        "tsconfig.json",
+        "../../config/**",
+        "../../packages/*/src/**"
+      ],
       "outputs": ["../../dist/offline-internal-ai/**"]
     },
     "build:enterprise": {
       "description": "Build enterprise PWA bundle for HTTPS deployment",
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "vite.config.ts", "tsconfig.json", "../../config/**"],
+      "inputs": [
+        "src/**",
+        "vite.config.ts",
+        "tsconfig.json",
+        "../../config/**",
+        "../../packages/*/src/**"
+      ],
       "outputs": ["../../dist/enterprise/**"]
     },
     "build:dataverse": {
       "description": "Build Power Platform Code App bundle (flat naming, no hashes)",
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "vite.config.ts", "tsconfig.json", "../../config/**"],
+      "inputs": [
+        "src/**",
+        "vite.config.ts",
+        "tsconfig.json",
+        "../../config/**",
+        "../../packages/*/src/**"
+      ],
       "outputs": ["../../dist/dataverse/**"]
     },
     "//#typecheck": {

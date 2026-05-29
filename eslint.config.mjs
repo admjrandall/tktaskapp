@@ -11,6 +11,7 @@ export default tseslint.config(
       'apps/*/index.html',
       'apps/*/public/**/*.js',
       'server/drizzle.config.ts',
+      'server/vitest.config.ts',
       'server/dist/**',
       'scripts/**/*.mjs',
       'generate-csp.mjs',

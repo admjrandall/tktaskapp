@@ -4,7 +4,7 @@ import { renderInput, renderTextarea, renderSelect } from './input.js'
 const meta: Meta = {
   title: 'Primitives/Input',
   tags: ['autodocs'],
-  render: (args) => renderInput(args as Parameters<typeof renderInput>[0]),
+  render: (args) => renderInput(args),
   argTypes: {
     type: {
       control: 'select',

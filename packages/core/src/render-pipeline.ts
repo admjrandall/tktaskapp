@@ -39,6 +39,7 @@ import {
 } from './ai/ai-settings.js'
 import { aiRuntime } from './ai/ai-runtime.js'
 import { auditedStaticHtml } from './render-utils.js'
+import { isReactView, reactMountHtml, syncReactView } from './react/host.js'
 import type { AppState } from './state.js'
 
 const _appElRaw = document.getElementById('app')
@@ -83,7 +84,7 @@ export function appRenderWorkspace(view: string): void {
       html = renderCommunications(state)
       break
     case 'reports':
-      html = renderReports(state)
+      html = isReactView('reports') ? reactMountHtml() : renderReports(state)
       break
     case 'ai':
       html = renderAIChatWorkspace()
@@ -124,7 +125,7 @@ export function appRenderWorkspace(view: string): void {
       bindCommunications(state)
       break
     case 'reports':
-      bindReports(state)
+      if (!isReactView('reports')) bindReports(state)
       break
     case 'ai':
       bindAIChatWorkspace()
@@ -139,6 +140,8 @@ export function appRenderWorkspace(view: string): void {
       bindTrash()
       break
   }
+
+  syncReactView(view)
 }
 
 // ── fullRender ────────────────────────────────────────────────────────────────
@@ -181,7 +184,7 @@ export function fullRender(state: AppState): void {
       wsHtml = renderCommunications(state)
       break
     case 'reports':
-      wsHtml = renderReports(state)
+      wsHtml = isReactView('reports') ? reactMountHtml() : renderReports(state)
       break
     case 'ai':
       wsHtml = renderAIChatWorkspace()
@@ -265,7 +268,7 @@ export function fullRender(state: AppState): void {
         bindCommunications(state)
         break
       case 'reports':
-        bindReports(state)
+        if (!isReactView('reports')) bindReports(state)
         break
       case 'ai':
         bindAIChatWorkspace()
@@ -308,6 +311,10 @@ export function fullRender(state: AppState): void {
       toast: { id: Date.now(), message: 'UI error — please reload.', type: 'error' },
     })
   }
+
+  // Reconcile any React-hosted view into the freshly rendered DOM. Tears down the
+  // React root when the current view is not a React view.
+  syncReactView(currentView)
 
   if (notifPanelOpen) {
     document.getElementById('mark-all-read')?.addEventListener('click', async () => {

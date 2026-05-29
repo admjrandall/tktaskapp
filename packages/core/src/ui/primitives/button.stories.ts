@@ -4,7 +4,7 @@ import { renderButton, renderIconButton } from './button.js'
 const meta: Meta = {
   title: 'Primitives/Button',
   tags: ['autodocs'],
-  render: (args) => renderButton(args as Parameters<typeof renderButton>[0]),
+  render: (args) => renderButton(args),
   argTypes: {
     variant: {
       control: 'select',
