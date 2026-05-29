@@ -57,6 +57,13 @@
       "when": 1748131620000,
       "tag": "0008_token_revocation",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1748131680000,
+      "tag": "0009_cursor_pagination_indexes",
+      "breakpoints": true
     }
   ]
 }

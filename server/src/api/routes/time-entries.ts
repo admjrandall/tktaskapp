@@ -24,13 +24,19 @@ timeEntriesRouter.get(
   async (c) => {
     const tenantId = c.get('tenantId')
     try {
-      const { page, pageSize, taskId, userId } = c.req.query()
+      const { page, pageSize, taskId, userId, cursor } = c.req.query()
+      const shared = {
+        ...(taskId !== undefined ? { taskId } : {}),
+        ...(userId !== undefined ? { userId } : {}),
+        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
+      }
+      if (cursor !== undefined) {
+        return c.json(await timeEntriesService.listCursor(tenantId, { ...shared, cursor }), 200)
+      }
       return c.json(
         await timeEntriesService.list(tenantId, {
-          ...(taskId !== undefined ? { taskId } : {}),
-          ...(userId !== undefined ? { userId } : {}),
+          ...shared,
           ...(page !== undefined ? { page: Number(page) } : {}),
-          ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
         }),
         200,
       )

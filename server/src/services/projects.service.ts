@@ -1,6 +1,14 @@
 import { projects } from '../db/schema/projects.js'
-import { eq, and, isNull, ilike, count } from 'drizzle-orm'
-import { withTenant, writeAuditEvent, paginationValues, type PaginatedResult } from './base.js'
+import { eq, and, isNull, ilike, count, or, lt, desc } from 'drizzle-orm'
+import {
+  withTenant,
+  writeAuditEvent,
+  paginationValues,
+  cursorValues,
+  encodeCursor,
+  type PaginatedResult,
+  type CursorPaginatedResult,
+} from './base.js'
 import type { Project, NewProject } from '../db/schema/projects.js'
 
 export type CreateProjectInput = Omit<
@@ -46,6 +54,46 @@ export class ProjectsService {
           total: countRows[0]?.value ?? 0,
           totalPages: Math.ceil((countRows[0]?.value ?? 0) / pageSize),
         },
+      }
+    })
+  }
+
+  async listCursor(
+    tenantId: string,
+    filters: {
+      search?: string
+      clientId?: string
+      stage?: string
+      priority?: string
+      cursor?: string
+      pageSize?: number
+    },
+  ): Promise<CursorPaginatedResult<Project>> {
+    const { limit, pageSize, cursor } = cursorValues(filters)
+    return withTenant(tenantId, async (tx) => {
+      const conditions = [isNull(projects.deletedAt), eq(projects.tenantId, tenantId)]
+      if (filters.search) conditions.push(ilike(projects.name, `%${filters.search}%`))
+      if (filters.clientId) conditions.push(eq(projects.clientId, filters.clientId))
+      if (cursor) {
+        const cond = or(
+          lt(projects.createdAt, new Date(cursor.at)),
+          and(eq(projects.createdAt, new Date(cursor.at)), lt(projects.id, cursor.id)),
+        )
+        if (cond) conditions.push(cond)
+      }
+      const rows = await tx
+        .select()
+        .from(projects)
+        .where(and(...conditions))
+        .orderBy(desc(projects.createdAt), desc(projects.id))
+        .limit(limit)
+      const hasMore = rows.length > pageSize
+      const data = hasMore ? rows.slice(0, pageSize) : rows
+      const last = data.at(-1)
+      return {
+        data,
+        nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
+        hasMore,
       }
     })
   }

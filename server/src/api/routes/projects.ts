@@ -24,15 +24,21 @@ projectsRouter.get(
   async (c) => {
     const tenantId = c.get('tenantId')
     try {
-      const { page, pageSize, search, clientId, stage, priority } = c.req.query()
+      const { page, pageSize, search, clientId, stage, priority, cursor } = c.req.query()
+      const shared = {
+        ...(search !== undefined ? { search } : {}),
+        ...(clientId !== undefined ? { clientId } : {}),
+        ...(stage !== undefined ? { stage } : {}),
+        ...(priority !== undefined ? { priority } : {}),
+        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
+      }
+      if (cursor !== undefined) {
+        return c.json(await projectsService.listCursor(tenantId, { ...shared, cursor }), 200)
+      }
       return c.json(
         await projectsService.list(tenantId, {
-          ...(search !== undefined ? { search } : {}),
-          ...(clientId !== undefined ? { clientId } : {}),
-          ...(stage !== undefined ? { stage } : {}),
-          ...(priority !== undefined ? { priority } : {}),
+          ...shared,
           ...(page !== undefined ? { page: Number(page) } : {}),
-          ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
         }),
         200,
       )

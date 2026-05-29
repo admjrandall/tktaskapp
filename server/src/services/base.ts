@@ -169,3 +169,56 @@ export function paginationValues(params: PaginationParams): {
   const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20))
   return { limit: pageSize, offset: (page - 1) * pageSize, page, pageSize }
 }
+
+// ── Cursor (keyset) pagination ────────────────────────────────────────────────
+
+export interface CursorPaginationParams {
+  cursor?: string
+  pageSize?: number
+}
+
+export interface CursorPaginatedResult<T> {
+  data: T[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+
+interface CursorPayload {
+  at: string
+  id: string
+}
+
+export function encodeCursor(createdAt: Date, id: string): string {
+  const payload: CursorPayload = { at: createdAt.toISOString(), id }
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
+}
+
+export function decodeCursor(cursor: string): CursorPayload | null {
+  try {
+    const json = Buffer.from(cursor, 'base64url').toString('utf8')
+    const parsed: unknown = JSON.parse(json)
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      'at' in parsed &&
+      'id' in parsed &&
+      typeof (parsed as Record<string, unknown>)['at'] === 'string' &&
+      typeof (parsed as Record<string, unknown>)['id'] === 'string'
+    ) {
+      return parsed as CursorPayload
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+export function cursorValues(params: CursorPaginationParams): {
+  limit: number
+  pageSize: number
+  cursor: CursorPayload | null
+} {
+  const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20))
+  const cursor = params.cursor ? decodeCursor(params.cursor) : null
+  return { limit: pageSize + 1, pageSize, cursor }
+}

@@ -21,17 +21,26 @@ tasksRouter.get(
     const tenantId = c.get('tenantId')
     try {
       const q = c.req.query()
+      const shared = {
+        ...(q['search'] !== undefined ? { search: q['search'] } : {}),
+        ...(q['projectId'] !== undefined ? { projectId: q['projectId'] } : {}),
+        ...(q['status'] !== undefined ? { status: q['status'] } : {}),
+        ...(q['priority'] !== undefined ? { priority: q['priority'] } : {}),
+        ...(q['assigneeId'] !== undefined ? { assigneeId: q['assigneeId'] } : {}),
+        overdue: q['overdue'] === 'true',
+        dueToday: q['dueToday'] === 'true',
+        ...(q['pageSize'] !== undefined ? { pageSize: Number(q['pageSize']) } : {}),
+      }
+      if (q['cursor'] !== undefined) {
+        return c.json(
+          await tasksService.listCursor(tenantId, { ...shared, cursor: q['cursor'] }),
+          200,
+        )
+      }
       return c.json(
         await tasksService.list(tenantId, {
-          ...(q['search'] !== undefined ? { search: q['search'] } : {}),
-          ...(q['projectId'] !== undefined ? { projectId: q['projectId'] } : {}),
-          ...(q['status'] !== undefined ? { status: q['status'] } : {}),
-          ...(q['priority'] !== undefined ? { priority: q['priority'] } : {}),
-          ...(q['assigneeId'] !== undefined ? { assigneeId: q['assigneeId'] } : {}),
-          overdue: q['overdue'] === 'true',
-          dueToday: q['dueToday'] === 'true',
+          ...shared,
           ...(q['page'] !== undefined ? { page: Number(q['page']) } : {}),
-          ...(q['pageSize'] !== undefined ? { pageSize: Number(q['pageSize']) } : {}),
         }),
         200,
       )

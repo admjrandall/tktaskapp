@@ -20,14 +20,20 @@ peopleRouter.get(
   async (c) => {
     const tenantId = c.get('tenantId')
     try {
-      const { page, pageSize, search, clientId, departmentId } = c.req.query()
+      const { page, pageSize, search, clientId, departmentId, cursor } = c.req.query()
+      const shared = {
+        ...(search !== undefined ? { search } : {}),
+        ...(clientId !== undefined ? { clientId } : {}),
+        ...(departmentId !== undefined ? { departmentId } : {}),
+        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
+      }
+      if (cursor !== undefined) {
+        return c.json(await peopleService.listCursor(tenantId, { ...shared, cursor }), 200)
+      }
       return c.json(
         await peopleService.list(tenantId, {
-          ...(search !== undefined ? { search } : {}),
-          ...(clientId !== undefined ? { clientId } : {}),
-          ...(departmentId !== undefined ? { departmentId } : {}),
+          ...shared,
           ...(page !== undefined ? { page: Number(page) } : {}),
-          ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
         }),
         200,
       )

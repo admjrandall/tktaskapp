@@ -1,6 +1,14 @@
 import { tasks } from '../db/schema/tasks.js'
-import { eq, and, isNull, ilike, count, lt, ne } from 'drizzle-orm'
-import { withTenant, writeAuditEvent, paginationValues, type PaginatedResult } from './base.js'
+import { eq, and, isNull, ilike, count, lt, ne, or, desc } from 'drizzle-orm'
+import {
+  withTenant,
+  writeAuditEvent,
+  paginationValues,
+  cursorValues,
+  encodeCursor,
+  type PaginatedResult,
+  type CursorPaginatedResult,
+} from './base.js'
 import type { Task, NewTask } from '../db/schema/tasks.js'
 
 export type CreateTaskInput = Omit<NewTask, 'tenantId' | 'createdAt' | 'updatedAt' | 'deletedAt'>
@@ -56,6 +64,58 @@ export class TasksService {
           total: countRows[0]?.value ?? 0,
           totalPages: Math.ceil((countRows[0]?.value ?? 0) / pageSize),
         },
+      }
+    })
+  }
+
+  async listCursor(
+    tenantId: string,
+    filters: {
+      search?: string
+      projectId?: string
+      status?: string
+      assigneeId?: string
+      overdue?: boolean
+      dueToday?: boolean
+      cursor?: string
+      pageSize?: number
+    },
+  ): Promise<CursorPaginatedResult<Task>> {
+    const { limit, pageSize, cursor } = cursorValues(filters)
+    return withTenant(tenantId, async (tx) => {
+      const conditions = [isNull(tasks.deletedAt), eq(tasks.tenantId, tenantId)]
+      if (filters.search) conditions.push(ilike(tasks.title, `%${filters.search}%`))
+      if (filters.projectId) conditions.push(eq(tasks.projectId, filters.projectId))
+      if (filters.assigneeId) conditions.push(eq(tasks.assigneeId, filters.assigneeId))
+      if (filters.overdue) {
+        const today = new Date().toISOString().slice(0, 10)
+        conditions.push(lt(tasks.dueDate, today))
+        conditions.push(ne(tasks.status, 'Done' as never))
+      }
+      if (filters.dueToday) {
+        const today = new Date().toISOString().slice(0, 10)
+        conditions.push(eq(tasks.dueDate, today))
+      }
+      if (cursor) {
+        const cond = or(
+          lt(tasks.createdAt, new Date(cursor.at)),
+          and(eq(tasks.createdAt, new Date(cursor.at)), lt(tasks.id, cursor.id)),
+        )
+        if (cond) conditions.push(cond)
+      }
+      const rows = await tx
+        .select()
+        .from(tasks)
+        .where(and(...conditions))
+        .orderBy(desc(tasks.createdAt), desc(tasks.id))
+        .limit(limit)
+      const hasMore = rows.length > pageSize
+      const data = hasMore ? rows.slice(0, pageSize) : rows
+      const last = data.at(-1)
+      return {
+        data,
+        nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
+        hasMore,
       }
     })
   }

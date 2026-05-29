@@ -1,6 +1,14 @@
 import { clients } from '../db/schema/clients.js'
-import { eq, and, isNull, ilike, count } from 'drizzle-orm'
-import { withTenant, writeAuditEvent, paginationValues, type PaginatedResult } from './base.js'
+import { eq, and, isNull, ilike, count, or, lt, desc } from 'drizzle-orm'
+import {
+  withTenant,
+  writeAuditEvent,
+  paginationValues,
+  cursorValues,
+  encodeCursor,
+  type PaginatedResult,
+  type CursorPaginatedResult,
+} from './base.js'
 import type { Client, NewClient } from '../db/schema/clients.js'
 
 export type CreateClientInput = Omit<
@@ -41,6 +49,38 @@ export class ClientsService {
           total: countRows[0]?.value ?? 0,
           totalPages: Math.ceil((countRows[0]?.value ?? 0) / pageSize),
         },
+      }
+    })
+  }
+
+  async listCursor(
+    tenantId: string,
+    filters: { search?: string; stage?: string; cursor?: string; pageSize?: number },
+  ): Promise<CursorPaginatedResult<Client>> {
+    const { limit, pageSize, cursor } = cursorValues(filters)
+    return withTenant(tenantId, async (tx) => {
+      const conditions = [isNull(clients.deletedAt), eq(clients.tenantId, tenantId)]
+      if (filters.search) conditions.push(ilike(clients.name, `%${filters.search}%`))
+      if (cursor) {
+        const cond = or(
+          lt(clients.createdAt, new Date(cursor.at)),
+          and(eq(clients.createdAt, new Date(cursor.at)), lt(clients.id, cursor.id)),
+        )
+        if (cond) conditions.push(cond)
+      }
+      const rows = await tx
+        .select()
+        .from(clients)
+        .where(and(...conditions))
+        .orderBy(desc(clients.createdAt), desc(clients.id))
+        .limit(limit)
+      const hasMore = rows.length > pageSize
+      const data = hasMore ? rows.slice(0, pageSize) : rows
+      const last = data.at(-1)
+      return {
+        data,
+        nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
+        hasMore,
       }
     })
   }

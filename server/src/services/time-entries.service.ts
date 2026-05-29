@@ -1,6 +1,14 @@
 import { timeEntries } from '../db/schema/time-entries.js'
-import { eq, and, isNull, count } from 'drizzle-orm'
-import { withTenant, writeAuditEvent, paginationValues, type PaginatedResult } from './base.js'
+import { eq, and, isNull, count, or, lt, desc } from 'drizzle-orm'
+import {
+  withTenant,
+  writeAuditEvent,
+  paginationValues,
+  cursorValues,
+  encodeCursor,
+  type PaginatedResult,
+  type CursorPaginatedResult,
+} from './base.js'
 import type { TimeEntry, NewTimeEntry } from '../db/schema/time-entries.js'
 
 export type CreateTimeEntryInput = Omit<
@@ -39,6 +47,39 @@ export class TimeEntriesService {
           total: countRows[0]?.value ?? 0,
           totalPages: Math.ceil((countRows[0]?.value ?? 0) / pageSize),
         },
+      }
+    })
+  }
+
+  async listCursor(
+    tenantId: string,
+    filters: { taskId?: string; userId?: string; cursor?: string; pageSize?: number },
+  ): Promise<CursorPaginatedResult<TimeEntry>> {
+    const { limit, pageSize, cursor } = cursorValues(filters)
+    return withTenant(tenantId, async (tx) => {
+      const conditions = [isNull(timeEntries.deletedAt), eq(timeEntries.tenantId, tenantId)]
+      if (filters.taskId) conditions.push(eq(timeEntries.taskId, filters.taskId))
+      if (filters.userId) conditions.push(eq(timeEntries.userId, filters.userId))
+      if (cursor) {
+        const cond = or(
+          lt(timeEntries.createdAt, new Date(cursor.at)),
+          and(eq(timeEntries.createdAt, new Date(cursor.at)), lt(timeEntries.id, cursor.id)),
+        )
+        if (cond) conditions.push(cond)
+      }
+      const rows = await tx
+        .select()
+        .from(timeEntries)
+        .where(and(...conditions))
+        .orderBy(desc(timeEntries.createdAt), desc(timeEntries.id))
+        .limit(limit)
+      const hasMore = rows.length > pageSize
+      const data = hasMore ? rows.slice(0, pageSize) : rows
+      const last = data.at(-1)
+      return {
+        data,
+        nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
+        hasMore,
       }
     })
   }

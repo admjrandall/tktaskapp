@@ -28,14 +28,20 @@ communicationsRouter.get(
   async (c) => {
     const tenantId = c.get('tenantId')
     try {
-      const { page, pageSize, relatedStore, relatedId, clientId } = c.req.query()
+      const { page, pageSize, relatedStore, relatedId, clientId, cursor } = c.req.query()
+      const shared = {
+        ...(relatedStore !== undefined ? { relatedStore } : {}),
+        ...(relatedId !== undefined ? { relatedId } : {}),
+        ...(clientId !== undefined ? { clientId } : {}),
+        ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
+      }
+      if (cursor !== undefined) {
+        return c.json(await communicationsService.listCursor(tenantId, { ...shared, cursor }), 200)
+      }
       return c.json(
         await communicationsService.list(tenantId, {
-          ...(relatedStore !== undefined ? { relatedStore } : {}),
-          ...(relatedId !== undefined ? { relatedId } : {}),
-          ...(clientId !== undefined ? { clientId } : {}),
+          ...shared,
           ...(page !== undefined ? { page: Number(page) } : {}),
-          ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
         }),
         200,
       )

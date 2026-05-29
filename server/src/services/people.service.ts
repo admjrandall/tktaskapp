@@ -1,6 +1,14 @@
 import { people } from '../db/schema/people.js'
-import { eq, and, isNull, ilike, count } from 'drizzle-orm'
-import { withTenant, writeAuditEvent, paginationValues, type PaginatedResult } from './base.js'
+import { eq, and, isNull, ilike, count, or, lt, desc } from 'drizzle-orm'
+import {
+  withTenant,
+  writeAuditEvent,
+  paginationValues,
+  cursorValues,
+  encodeCursor,
+  type PaginatedResult,
+  type CursorPaginatedResult,
+} from './base.js'
 import type { Person, NewPerson } from '../db/schema/people.js'
 
 export type CreatePersonInput = Omit<
@@ -46,6 +54,46 @@ export class PeopleService {
           total: countRows[0]?.value ?? 0,
           totalPages: Math.ceil((countRows[0]?.value ?? 0) / pageSize),
         },
+      }
+    })
+  }
+
+  async listCursor(
+    tenantId: string,
+    filters: {
+      search?: string
+      clientId?: string
+      departmentId?: string
+      cursor?: string
+      pageSize?: number
+    },
+  ): Promise<CursorPaginatedResult<Person>> {
+    const { limit, pageSize, cursor } = cursorValues(filters)
+    return withTenant(tenantId, async (tx) => {
+      const conditions = [isNull(people.deletedAt), eq(people.tenantId, tenantId)]
+      if (filters.search) conditions.push(ilike(people.name, `%${filters.search}%`))
+      if (filters.clientId) conditions.push(eq(people.clientId, filters.clientId))
+      if (filters.departmentId) conditions.push(eq(people.departmentId, filters.departmentId))
+      if (cursor) {
+        const cond = or(
+          lt(people.createdAt, new Date(cursor.at)),
+          and(eq(people.createdAt, new Date(cursor.at)), lt(people.id, cursor.id)),
+        )
+        if (cond) conditions.push(cond)
+      }
+      const rows = await tx
+        .select()
+        .from(people)
+        .where(and(...conditions))
+        .orderBy(desc(people.createdAt), desc(people.id))
+        .limit(limit)
+      const hasMore = rows.length > pageSize
+      const data = hasMore ? rows.slice(0, pageSize) : rows
+      const last = data.at(-1)
+      return {
+        data,
+        nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
+        hasMore,
       }
     })
   }

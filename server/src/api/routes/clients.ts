@@ -20,7 +20,16 @@ clientsRouter.get(
   async (c) => {
     const tenantId = c.get('tenantId')
     try {
-      const { page, pageSize, search, stage } = c.req.query()
+      const { page, pageSize, search, stage, cursor } = c.req.query()
+      if (cursor !== undefined) {
+        const result = await clientsService.listCursor(tenantId, {
+          ...(search !== undefined ? { search } : {}),
+          ...(stage !== undefined ? { stage } : {}),
+          ...(pageSize !== undefined ? { pageSize: Number(pageSize) } : {}),
+          cursor,
+        })
+        return c.json(result, 200)
+      }
       const result = await clientsService.list(tenantId, {
         ...(search !== undefined ? { search } : {}),
         ...(stage !== undefined ? { stage } : {}),
