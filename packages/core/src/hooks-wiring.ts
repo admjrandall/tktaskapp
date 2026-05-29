@@ -10,6 +10,7 @@ import { _idbLoadStore, _idbPutRecord, _idbDeleteRecord } from './storage/idb-da
 import { isFsReady, getFsLastSave, fsPickFile, fsWriteVault, fsUnlink } from './storage/fs.js'
 import {
   auditLog,
+  setAuditWriteFailHook,
   loadAuditLog,
   exportAuditCSV,
   exportAuditJSON,
@@ -73,6 +74,18 @@ import { setComponentsAIHooks } from './ui/components.js'
 export function wireHooks(): void {
   setDbAuditHook((event, details) => {
     auditLog(event as Parameters<typeof auditLog>[0], details)
+  })
+
+  // AU-12 / AU-10 compliance: surface a visible alert when an audit event cannot
+  // be persisted after all retry attempts. Never silent (NIST AU-12 requirement).
+  setAuditWriteFailHook((entry) => {
+    setState({
+      toast: {
+        id: Date.now(),
+        message: `⚠️ Audit write failed (${entry.event}). Check storage and reload.`,
+        type: 'error',
+      },
+    })
   })
 
   setAIHooks(aiNeedsOnboarding, openAIWizard)
